@@ -16,7 +16,7 @@ export default function ProductOrderWireframe() {
   const [products, setProducts] = useState<Product[]>([])
   const [tags, setTags] = useState<string[]>([])
   const [orders, setOrders] = useState<Order[]>([])
-  const [currentOrder, setCurrentOrder] = useState<{ details: Order, items: OrderItem[] } | null>()
+  const [currentOrder, setCurrentOrder] = useState<{ details: Order, items: OrderItem[] } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
 
@@ -48,6 +48,14 @@ export default function ProductOrderWireframe() {
     startTransition(async () => {
       await handleUpdateOrderItem(formData)
       const details = await getOrder(currentOrder.details.id);
+      const items = await getOrderItemsDetailed(details.id);
+      setCurrentOrder({ details, items })
+    })
+  }
+
+  const setCurrentOrderDetails = async (order: Order) => {
+    startTransition(async () => {
+      const details = await getOrder(order.id);
       const items = await getOrderItemsDetailed(details.id);
       setCurrentOrder({ details, items })
     })
@@ -98,28 +106,24 @@ export default function ProductOrderWireframe() {
       setTags(tags);
       setOrders(orders);
     }
+    fetchAll();
   },[])
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
       <header className="flex justify-between items-center">
-        <div className="flex items-center space-x-2">
-          {currentOrder && (
-            <>
-              <Badge variant="outline">#{currentOrder.details.id} | {currentOrder.details.total}</Badge>
-              <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
-            </>
-          )}
-        </div>
-        <Button onClick={addOrder} disabled={isPending || currentOrder !== null}>New Order</Button>
+          {currentOrder && 
+            <Badge variant="outline">#{currentOrder.details.id} | {currentOrder.details.total}</Badge>
+          }
+        <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
       </header>
 
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
+        <Badge onClick={addOrder}>New Order</Badge>
         {orders.map(order =>
-          <Badge key={order.id} variant="secondary">#{order.position} | ${order.total} </Badge>)
+          <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | ${order.total} </Badge>)
         }
       </div>
-
       <form onSubmit={searchOrder} className="space-y-2">
         <div className="relative">
           <Input

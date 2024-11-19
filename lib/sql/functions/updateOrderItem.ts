@@ -1,9 +1,10 @@
-import { Selectable } from "kysely";
+"use server"
+
 import { db } from "../database";
-import { Database } from "../types";
+import { OrderItemTable } from "@/lib/types";
 
 // Function to add an item to an order
-export async function updateOrderItem(orderId: string, productId: string, quantity: number): Promise<Selectable<Database['order_items']> | null> {
+export async function updateOrderItem(orderId: OrderItemTable['order_id'], productId: OrderItemTable['product_id'], quantity: OrderItemTable['quantity']): Promise<OrderItemTable | null> {
     return await db.transaction().execute(async (trx) => {
       if (quantity === 0) {
         // Delete the order item if quantity is zero

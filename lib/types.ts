@@ -3,11 +3,9 @@ import { Database } from "./sql/types";
 
 export type Order = Selectable<Database["orders"]>;
 export type Product = Selectable<Database["products"]>;
+export type OrderItemTable = Selectable<Database['order_items']>
 
-export interface OrderItem {
-    id: number
-    product_id: string
-    quantity: number
+export interface OrderItem extends OrderItemTable {
     productName: string
-    price: number
+    productPrice: number
 }

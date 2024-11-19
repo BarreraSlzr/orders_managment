@@ -1,0 +1,494 @@
+{
+    "Products": [
+        {
+            "Producto": "Ensalada Pollo o Atún",
+            "Precio": "$135",
+            "Tags": "ensalada, proteína"
+        },
+        {
+            "Producto": "Ensalada Panela o Jamón",
+            "Precio": "$105",
+            "Tags": "ensalada, proteína"
+        },
+        {
+            "Producto": "Ensalada Panela y Jamón",
+            "Precio": "$110",
+            "Tags": "ensalada, proteína"
+        },
+        {
+            "Producto": "Ensalada Combinada Panela y Pollo",
+            "Precio": "$140",
+            "Tags": "ensalada, proteína"
+        },
+        {
+            "Producto": "Ensalada Combinada Atún y Pollo",
+            "Precio": "$150",
+            "Tags": "ensalada, proteína"
+        },
+        {
+            "Producto": "Aderezo (Extra)",
+            "Precio": "$16",
+            "Tags": "ensalada, extra, aderezo"
+        },
+        {
+            "Producto": "Ingrediente Extra",
+            "Precio": "$12",
+            "Tags": "ensalada, extra"
+        },
+        {
+            "Producto": "Expresso (Chico)",
+            "Precio": "$35",
+            "Tags": "bebida, café, chico"
+        },
+        {
+            "Producto": "Americano (Chico)",
+            "Precio": "$40",
+            "Tags": "bebida, café, chico"
+        },
+        {
+            "Producto": "Americano (Grande)",
+            "Precio": "$45",
+            "Tags": "bebida, café, grande"
+        },
+        {
+            "Producto": "Taro o Matcha (Chico)",
+            "Precio": "$55",
+            "Tags": "bebida, té, chico"
+        },
+        {
+            "Producto": "Taro o Matcha (Grande)",
+            "Precio": "$60",
+            "Tags": "bebida, té, grande"
+        },
+        {
+            "Producto": "Té Clásico o Nescafé (Chico)",
+            "Precio": "$28",
+            "Tags": "bebida, té, café, chico"
+        },
+        {
+            "Producto": "Té Clásico o Nescafé (Grande)",
+            "Precio": "$33",
+            "Tags": "bebida, té, café, grande"
+        },
+        {
+            "Producto": "Moka o Leche Dorada (Chico)",
+            "Precio": "$55",
+            "Tags": "bebida, café, leche, chico, extra"
+        },
+        {
+            "Producto": "Moka o Leche Dorada (Grande)",
+            "Precio": "$60",
+            "Tags": "bebida, café, leche, grande, extra"
+        },
+        {
+            "Producto": "Tisana o Infusión",
+            "Precio": "$45",
+            "Tags": "bebida, té"
+        },
+        {
+            "Producto": "Latte o Capuchino (Chico)",
+            "Precio": "$45",
+            "Tags": "bebida, café, leche, chico, extra"
+        },
+        {
+            "Producto": "Latte o Capuchino (Grande)",
+            "Precio": "$50",
+            "Tags": "bebida, café, leche, grande, extra"
+        },
+        {
+            "Producto": "Chai o Chocolate (Chico)",
+            "Precio": "$45",
+            "Tags": "bebida, leche, chico, extra"
+        },
+        {
+            "Producto": "Chai o Chocolate (Grande)",
+            "Precio": "$50",
+            "Tags": "bebida, leche, grande, extra"
+        },
+        {
+            "Producto": "Moka Frío",
+            "Precio": "$65",
+            "Tags": "bebida, café, frío"
+        },
+        {
+            "Producto": "Americano Frío",
+            "Precio": "$50",
+            "Tags": "bebida, café, frío"
+        },
+        {
+            "Producto": "Chocomilk",
+            "Precio": "$35",
+            "Tags": "bebida, leche, extra"
+        },
+        {
+            "Producto": "Licuado de Fruta",
+            "Precio": "$50",
+            "Tags": "bebida, licuado"
+        },
+        {
+            "Producto": "Taro o Matcha Frío",
+            "Precio": "$70",
+            "Tags": "bebida, té, frío"
+        },
+        {
+            "Producto": "Latte Frío + Sabor",
+            "Precio": "$64",
+            "Tags": "bebida, café, leche, frío, extra"
+        },
+        {
+            "Producto": "Latte Caliente + Sabor (Chico)",
+            "Precio": "$54",
+            "Tags": "bebida, café, leche, caliente, extra"
+        },
+        {
+            "Producto": "Latte Caliente + Sabor (Grande)",
+            "Precio": "$59",
+            "Tags": "bebida, café, leche, caliente, extra"
+        },
+        {
+            "Producto": "Frappe Caramelo o Vainilla",
+            "Precio": "$60",
+            "Tags": "bebida, frappé"
+        },
+        {
+            "Producto": "Frappe Taro o Matcha",
+            "Precio": "$75",
+            "Tags": "bebida, frappé"
+        },
+        {
+            "Producto": "Frappe Moka",
+            "Precio": "$70",
+            "Tags": "bebida, frappé, café"
+        },
+        {
+            "Producto": "Frappe Oreo",
+            "Precio": "$65",
+            "Tags": "bebida, frappé"
+        },
+        {
+            "Producto": "Smoothie Fresa, Mango, Kiwi, etc.",
+            "Precio": "$60",
+            "Tags": "bebida, smoothie, frutas"
+        },
+        {
+            "Producto": "Soda Italiana (Chico)",
+            "Precio": "$43",
+            "Tags": "bebida, soda, chico"
+        },
+        {
+            "Producto": "Soda Italiana (Grande)",
+            "Precio": "$47",
+            "Tags": "bebida, soda, grande"
+        },
+        {
+            "Producto": "Shot de Leche",
+            "Precio": "$5",
+            "Tags": "bebida, leche, extra"
+        },
+        {
+            "Producto": "Carga de Café",
+            "Precio": "$16",
+            "Tags": "bebida, extra, café"
+        },
+        {
+            "Producto": "Leche de Soya",
+            "Precio": "$16",
+            "Tags": "bebida, leche, soya, extra"
+        },
+        {
+            "Producto": "Leche de Coco",
+            "Precio": "$17",
+            "Tags": "bebida, leche, coco, extra"
+        },
+        {
+            "Producto": "Leche de Almendra",
+            "Precio": "$17",
+            "Tags": "bebida, leche, almendra, extra"
+        },
+        {
+            "Producto": "Sabor Extra",
+            "Precio": "$9",
+            "Tags": "bebida, extra, sabor"
+        },
+        {
+            "Producto": "Lonche Jamón",
+            "Precio": "$60",
+            "Tags": "alimento, lonche, jamón"
+        },
+        {
+            "Producto": "Lonche Panela",
+            "Precio": "$60",
+            "Tags": "alimento, lonche, panela"
+        },
+        {
+            "Producto": "Lonche Salami",
+            "Precio": "$60",
+            "Tags": "alimento, lonche, salami"
+        },
+        {
+            "Producto": "Lonche Lomo Canadiense",
+            "Precio": "$80",
+            "Tags": "alimento, lonche, lomo"
+        },
+        {
+            "Producto": "Lonche Selvanegra",
+            "Precio": "$80",
+            "Tags": "alimento, lonche, selvanegra"
+        },
+        {
+            "Producto": "Lonche Atún",
+            "Precio": "$80",
+            "Tags": "alimento, lonche, atún"
+        },
+        {
+            "Producto": "Lonche Pierna",
+            "Precio": "$85",
+            "Tags": "alimento, lonche, pierna"
+        },
+        {
+            "Producto": "Lonche Pollo",
+            "Precio": "$85",
+            "Tags": "alimento, lonche, pollo"
+        },
+        {
+            "Producto": "Lonche Jamón Serrano",
+            "Precio": "$85",
+            "Tags": "alimento, lonche, jamón serrano"
+        },
+        {
+            "Producto": "Sándwich Jamón",
+            "Precio": "$80",
+            "Tags": "alimento, sándwich, jamón"
+        },
+        {
+            "Producto": "Sándwich Panela",
+            "Precio": "$80",
+            "Tags": "alimento, sándwich, panela"
+        },
+        {
+            "Producto": "Sándwich Salami",
+            "Precio": "$80",
+            "Tags": "alimento, sándwich, salami"
+        },
+        {
+            "Producto": "Sándwich Lomo Canadiense",
+            "Precio": "$90",
+            "Tags": "alimento, sándwich, lomo"
+        },
+        {
+            "Producto": "Sándwich Selvanegra",
+            "Precio": "$90",
+            "Tags": "alimento, sándwich, selvanegra"
+        },
+        {
+            "Producto": "Sándwich Atún",
+            "Precio": "$90",
+            "Tags": "alimento, sándwich, atún"
+        },
+        {
+            "Producto": "Sándwich Pierna",
+            "Precio": "$100",
+            "Tags": "alimento, sándwich, pierna"
+        },
+        {
+            "Producto": "Sándwich Pollo",
+            "Precio": "$100",
+            "Tags": "alimento, sándwich, pollo"
+        },
+        {
+            "Producto": "Sándwich Jamón Serrano",
+            "Precio": "$105",
+            "Tags": "alimento, sándwich, jamón serrano"
+        },
+        {
+            "Producto": "Baguette Jamón",
+            "Precio": "$85",
+            "Tags": "alimento, baguette, jamón"
+        },
+        {
+            "Producto": "Baguette Panela",
+            "Precio": "$85",
+            "Tags": "alimento, baguette, panela"
+        },
+        {
+            "Producto": "Baguette Salami",
+            "Precio": "$85",
+            "Tags": "alimento, baguette, salami"
+        },
+        {
+            "Producto": "Baguette Lomo Canadiense",
+            "Precio": "$95",
+            "Tags": "alimento, baguette, lomo"
+        },
+        {
+            "Producto": "Baguette Selvanegra",
+            "Precio": "$95",
+            "Tags": "alimento, baguette, selvanegra"
+        },
+        {
+            "Producto": "Baguette Atún",
+            "Precio": "$95",
+            "Tags": "alimento, baguette, atún"
+        },
+        {
+            "Producto": "Baguette Pierna",
+            "Precio": "$100",
+            "Tags": "alimento, baguette, pierna"
+        },
+        {
+            "Producto": "Baguette Pollo",
+            "Precio": "$100",
+            "Tags": "alimento, baguette, pollo"
+        },
+        {
+            "Producto": "Baguette Jamón Serrano",
+            "Precio": "$105",
+            "Tags": "alimento, baguette, jamón serrano"
+        },
+        {
+            "Producto": "Panini Jamón",
+            "Precio": "$95",
+            "Tags": "alimento, panini, jamón"
+        },
+        {
+            "Producto": "Panini Panela",
+            "Precio": "$95",
+            "Tags": "alimento, panini, panela"
+        },
+        {
+            "Producto": "Panini Salami",
+            "Precio": "$95",
+            "Tags": "alimento, panini, salami"
+        },
+        {
+            "Producto": "Panini Lomo Canadiense",
+            "Precio": "$105",
+            "Tags": "alimento, panini, lomo"
+        },
+        {
+            "Producto": "Panini Selvanegra",
+            "Precio": "$105",
+            "Tags": "alimento, panini, selvanegra"
+        },
+        {
+            "Producto": "Panini Atún",
+            "Precio": "$105",
+            "Tags": "alimento, panini, atún"
+        },
+        {
+            "Producto": "Panini Pierna",
+            "Precio": "$110",
+            "Tags": "alimento, panini, pierna"
+        },
+        {
+            "Producto": "Panini Pollo",
+            "Precio": "$110",
+            "Tags": "alimento, panini, pollo"
+        },
+        {
+            "Producto": "Panini Jamón Serrano",
+            "Precio": "$115",
+            "Tags": "alimento, panini, jamón serrano"
+        },
+        {
+            "Producto": "Ensalada con Lechuga y Aderezo",
+            "Precio": "$55",
+            "Tags": "ensalada"
+        },
+        {
+            "Producto": "Sincronizada Jamón",
+            "Precio": "$60",
+            "Tags": "alimento, sincronizada, jamón"
+        },
+        {
+            "Producto": "Sincronizada Pollo o Pierna",
+            "Precio": "$75",
+            "Tags": "alimento, sincronizada, pollo, pierna"
+        },
+        {
+            "Producto": "Quesadilla",
+            "Precio": "$40",
+            "Tags": "alimento, quesadilla"
+        },
+        {
+            "Producto": "Molletes Salados o Mixtos",
+            "Precio": "$65",
+            "Tags": "alimento, molletes"
+        },
+        {
+            "Producto": "Molletes + Jamón",
+            "Precio": "$70",
+            "Tags": "alimento, molletes, jamón"
+        },
+        {
+            "Producto": "Molletes + Chistorra",
+            "Precio": "$75",
+            "Tags": "alimento, molletes, chistorra"
+        },
+        {
+            "Producto": "Sándwich de Huevo",
+            "Precio": "$55",
+            "Tags": "alimento, sándwich, huevo"
+        },
+        {
+            "Producto": "Omelette",
+            "Precio": "$80",
+            "Tags": "alimento, huevo, omelette"
+        },
+        {
+            "Producto": "Omelette + Chilaquiles",
+            "Precio": "$100",
+            "Tags": "alimento, huevo, chilaquiles"
+        },
+        {
+            "Producto": "Omelette + Chilaquiles + Frijoles",
+            "Precio": "$120",
+            "Tags": "alimento, huevo, chilaquiles, frijoles"
+        },
+        {
+            "Producto": "Huevos al Gusto",
+            "Precio": "$75",
+            "Tags": "alimento, huevo"
+        },
+        {
+            "Producto": "Lonche de Huevo",
+            "Precio": "$65",
+            "Tags": "alimento, lonche, huevo"
+        },
+        {
+            "Producto": "Chilaquiles",
+            "Precio": "$70",
+            "Tags": "alimento, chilaquiles"
+        },
+        {
+            "Producto": "Chilaquiles + Frijoles",
+            "Precio": "$120",
+            "Tags": "alimento, huevo, chilaquiles, frijoles"
+        },
+        {
+            "Producto": "Huevos al Gusto",
+            "Precio": "$75",
+            "Tags": "alimento, huevo"
+        },
+        {
+            "Producto": "Lonche de Huevo",
+            "Precio": "$65",
+            "Tags": "alimento, lonche, huevo"
+        },
+        {
+            "Producto": "Chilaquiles",
+            "Precio": "$70",
+            "Tags": "alimento, chilaquiles"
+        },
+        {
+            "Producto": "Chilaquiles + Frijoles",
+            "Precio": "$90",
+            "Tags": "alimento, chilaquiles, frijoles"
+        },
+        {
+            "Producto": "Extra Jamón",
+            "Precio": "$16",
+            "Tags": ""
+        }
+    ]
+}

@@ -1,17 +1,20 @@
+"use server"
+
 import { sql } from "kysely"
 import { db } from "../database";
 
 const selectUniqueTags = `
-SELECT DISTINCT unnest(string_to_array(tags, \',\')) AS tag FROM product;
+SELECT DISTINCT unnest(tags) AS tag
+FROM products;
 `
 
 interface Tag {
-    tag: string
+  tag: string
 }
 
 export async function getUniqueTags() {
-    const result = await sql`${selectUniqueTags}`.execute(db)
-    return result.rows as Tag[];
+  const result = await sql`${selectUniqueTags}`.execute(db)
+  return result.rows as Tag[];
 }
 
 /* 

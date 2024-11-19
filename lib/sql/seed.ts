@@ -1,4 +1,5 @@
 import { db, sql } from "./database";
+import { importProductsFromJson } from "./functions/importProductsFromJSON";
 
 function createProductTable() {
   return db.schema
@@ -10,10 +11,10 @@ function createProductTable() {
     .addColumn('updated', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
     .addColumn('name', 'varchar', (col) => col.notNull())
     .addColumn('price', 'integer', (col) => col.notNull()) // price in cents
-    .addColumn('tags', 'varchar', (col) => col.notNull())
+    .addColumn('tags', sql`varchar[]`, (col) => col.notNull())
     .execute()
     .then(() =>
-      console.log(`Create "product" table`)
+      console.info(`Create "product" table`)
     );
 }
 
@@ -31,7 +32,7 @@ function createOrderTable() {
     .addColumn('total', 'integer', (col) => col.notNull().defaultTo(0)) // total in cents
     .execute()
     .then(() =>
-      console.log(`Create "order" table`)
+      console.info(`Create "order" table`)
     );
 }
 
@@ -40,10 +41,13 @@ function createOrderItemsTable() {
     .createTable('order_items')
     .ifNotExists()
     .addColumn('id', 'serial', (col) => col.primaryKey())
-    .addColumn('order_id', 'uuid', (col) => col.notNull().references('order.id').onDelete('cascade'))
-    .addColumn('product_id', 'uuid', (col) => col.notNull().references('product.id'))
+    .addColumn('order_id', 'uuid', (col) => col.notNull().references('orders.id').onDelete('cascade'))
+    .addColumn('product_id', 'uuid', (col) => col.notNull().references('products.id'))
     .addColumn('quantity', 'integer', (col) => col.notNull().defaultTo(1))
-    .execute();
+    .execute()
+    .then(() =>
+      console.info(`Create "order_items" table`)
+    );
 }
 
 const calculateOrderTotal = `
@@ -69,9 +73,17 @@ EXECUTE FUNCTION calculate_order_total();
 `;
 
 export async function seed() {
+  console.info('Start schema creation')
   await createProductTable();
   await createOrderTable();
   await createOrderItemsTable();
-  await sql`${calculateOrderTotal}`.execute(db);
-  await sql`${updateOrderTotal}`.execute(db);
+  await sql`${calculateOrderTotal}`.execute(db)
+    .then(() =>
+      console.info(`Create "calculate_order_total" function`)
+    );
+  await sql`${updateOrderTotal}`.execute(db)
+    .then(() =>
+      console.info(`Create "update_order_total" trigger for "calculate_order_total"`)
+    );
+  await importProductsFromJson();
 }  

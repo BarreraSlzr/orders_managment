@@ -6,7 +6,7 @@ export async function GET() {
     const orders = await getOpenOrders();
     return NextResponse.json(orders)
   } catch (error) {
-    console.error('Error fetching tags:', error)
-    return NextResponse.json({ error: 'Failed to fetch tags' }, { status: 500 })
+    console.error('Error fetching open orders:', error)
+    return NextResponse.json({ error: 'Failed to fetch open orders' }, { status: 500 })
   }
 }

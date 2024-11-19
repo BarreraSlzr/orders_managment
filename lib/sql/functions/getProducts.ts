@@ -1,9 +1,12 @@
+"use server"
+
 import { Selectable } from "kysely"
 import { Database } from "../types"
 import { db } from "../database"
+import { Product } from "@/lib/types"
 
 // Function to get products based on search and tags
-export async function getProducts(search: string = '', tags: string[] = []): Promise<Selectable<Database['products']>[]> {
+export async function getProducts(search: string = '', tags: string[] = []): Promise<Product[]> {
     let query = db.selectFrom('products')
 
     if (!!search) {

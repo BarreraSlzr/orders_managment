@@ -28,7 +28,7 @@ export async function handleUpdateOrderItem(formData: FormData) {
 }
 
 export async function handleCloseOrder(formData: FormData) {
-    const orderIdValue = parseInt(`${formData.get('orderId')}`);
+    const orderIdValue = `${formData.get('orderId')}`;
     const order = await closeOrder(orderIdValue);
     return order;
 }
