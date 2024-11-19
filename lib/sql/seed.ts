@@ -1,3 +1,4 @@
+import { CompiledQuery } from "kysely";
 import { db, sql } from "./database";
 import { importProductsFromJson } from "./functions/importProductsFromJSON";
 
@@ -77,11 +78,11 @@ export async function seed() {
   await createProductTable();
   await createOrderTable();
   await createOrderItemsTable();
-  await sql`${calculateOrderTotal}`.execute(db)
+  await db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
     .then(() =>
       console.info(`Create "calculate_order_total" function`)
     );
-  await sql`${updateOrderTotal}`.execute(db)
+  await db.executeQuery(CompiledQuery.raw(`${updateOrderTotal}`, []))
     .then(() =>
       console.info(`Create "update_order_total" trigger for "calculate_order_total"`)
     );

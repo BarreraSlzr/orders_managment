@@ -43,3 +43,26 @@ export async function importProductsFromJson(): Promise<void> {
         console.error('Error importing products:', error);
     }
 }
+
+
+
+export const sqlSeedProductsFromJSON = `
+-- Define your JSON data
+DO $$
+DECLARE
+    json_data jsonb := '${JSON.stringify(productsSeed)}';
+product jsonb; -- Declare a variable to hold each JSON object
+BEGIN
+    -- Loop through each product in the JSON array
+    FOR product IN SELECT * FROM jsonb_array_elements(json_data->'Products')
+    LOOP
+        -- Insert data into the products table
+        INSERT INTO products (name, price, tags)
+        VALUES (
+            product->>'Producto',                       -- Product name
+            REPLACE(product->>'Precio', '$', '')::int * 100, -- Convert price to cents
+            string_to_array(product->>'Tags', ', ')     -- Convert comma-separated string to an array
+        );
+    END LOOP;
+END $$;
+`

@@ -1,6 +1,6 @@
 "use server"
 
-import { sql } from "kysely"
+import { CompiledQuery, sql } from "kysely"
 import { db } from "../database";
 
 const selectUniqueTags = `
@@ -13,8 +13,8 @@ interface Tag {
 }
 
 export async function getUniqueTags() {
-  const result = await sql`${selectUniqueTags}`.execute(db)
-  return result.rows as Tag[];
+  const result = await db.executeQuery<Tag[]>(CompiledQuery.raw(selectUniqueTags, []));
+  return result.rows as unknown as Tag[];
 }
 
 /* 
