@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState, useTransition } from 'react'
+import React, { useEffect, useMemo, useState, useTransition } from 'react'
 import { Search, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,6 +20,32 @@ export default function ProductOrderWireframe() {
   const [currentOrder, setCurrentOrder] = useState<{ details: Order, items: OrderItem[] } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
+  const visibleProducts = useMemo(() => {
+    function filterAndSortProducts() {
+      return products
+        .map((product) => {
+          const productTags = product.tags.split(',').map((tag) => tag.trim());
+          const nameMatch = searchQuery
+            ? product.name.toLowerCase().includes(searchQuery.toLowerCase())
+            : false;
+          const matchedTags = selectedTags.size > 0
+            ? productTags.filter((tag) => selectedTags.has(tag))
+            : [];
+          const weight =
+            (nameMatch ? searchQuery.length : 0) + matchedTags.length * 10;
+
+          return { product, weight };
+        })
+        .filter(({ weight }) => weight > 0)
+        .sort((a, b) => b.weight - a.weight)
+        .map(({ product }) => product);
+    }
+    if (!searchQuery && selectedTags.size === 0) {
+      return products; // No filtering if both are empty
+    } else {
+      return filterAndSortProducts()
+    }
+  }, [searchQuery, selectedTags, products])
 
   const searchOrder = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -165,7 +191,7 @@ export default function ProductOrderWireframe() {
         <Button type="submit" disabled={isPending}>Search</Button>
       </form>
 
-      {products.map((product) => (
+      {visibleProducts.map((product) => (
         <Card key={product.id}>
           <CardContent className="p-4 flex justify-between items-center">
             <div>
