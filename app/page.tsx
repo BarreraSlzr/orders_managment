@@ -91,13 +91,6 @@ export default function ProductOrderWireframe() {
   }
 
   // Fetching tags
-  const fetchTags = async () => {
-    const response = await fetch('/api/tags')
-    if (!response.ok) throw new Error('Failed to fetch tags')
-    return response.json() as unknown as string[]
-  }
-
-  // Fetching tags
   const fetchOrders = async () => {
     const response = await fetch('/api/orders')
     if (!response.ok) throw new Error('Failed to fetch tags')
@@ -107,7 +100,6 @@ export default function ProductOrderWireframe() {
   useEffect(() => {
     async function fetchAll() {
       const products = await fetchProducts();
-      const tags = await fetchTags();
       const orders = await fetchOrders();
       setProducts(products);
       const combinedTags = new Set(products.map(p => p.tags));
@@ -156,7 +148,6 @@ export default function ProductOrderWireframe() {
             <X />
           </Button>
         </div>
-
         <div className="flex flex-wrap gap-2">
           {Array.from(tags).map((tag) => (
             <Badge

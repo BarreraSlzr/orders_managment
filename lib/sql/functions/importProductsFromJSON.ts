@@ -1,7 +1,7 @@
 "use server"
 
 import fs from 'fs/promises';
-import { db } from '../database';
+import { db, sql } from '../database';
 import productsSeed from '@/lib/sql/productsSeed.json'
 import { CompiledQuery } from 'kysely';
 
@@ -24,9 +24,9 @@ BEGIN
         -- Insert data into the products table
         INSERT INTO products (name, price, tags)
         VALUES (
-            product->>'Producto',
-            NULLIF(product->>'Precio', '')::int,
-            product->>'Tags',
+            product->>'name',
+            NULLIF(product->>'price', '')::int,
+            product->>'tags',
         );
     END LOOP;
 END $$;
@@ -34,7 +34,9 @@ END $$;
 
 export async function importProductsFromJson(): Promise<void> {
     try {
-        await db.executeQuery(CompiledQuery.raw(`${sqlSeedProductsFromJSON}`, []));
+        if( (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM products`))).rows.at(0)?.count === 0){
+            await db.executeQuery(CompiledQuery.raw(`${sqlSeedProductsFromJSON}`, []));
+        }
         console.info(`Table "products" populated`)
     } catch (error) {
         console.error('Error importing products:', error);
