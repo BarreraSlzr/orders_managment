@@ -29,7 +29,6 @@ function createOrderTable() {
     .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
     .addColumn('deleted', 'timestamp', (col) => col.defaultTo(null))
     .addColumn('updated', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
-    .addColumn('products', 'varchar', (col) => col.notNull()) // UUID CSV
     .addColumn('total', 'integer', (col) => col.notNull().defaultTo(0)) // total in cents
     .execute()
     .then(() =>
