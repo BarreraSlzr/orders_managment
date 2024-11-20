@@ -3,54 +3,19 @@
 import fs from 'fs/promises';
 import { db } from '../database';
 import productsSeed from '@/lib/sql/productsSeed.json'
+import { CompiledQuery } from 'kysely';
 
-export async function importProductsFromJson(): Promise<void> {
-    try {
-        // Read and parse the JSON file
-        const jsonData = productsSeed;
-
-        if (!jsonData.Products || !Array.isArray(jsonData.Products)) {
-            throw new Error('Invalid JSON structure: Expected a "Products" array.');
-        }
-
-        // Process and insert each product
-        for await(const product of jsonData.Products) {
-            const { Producto, Precio, Tags } = product;
-
-            if (!Producto || !Precio || !Tags) {
-                console.warn('Skipping invalid product:', product);
-                continue;
-            }
-
-            // Convert price from string to integer (assuming it's in the format "$123")
-            const priceInCents = parseInt(Precio.replace('$', '').trim()) * 100;
-
-            await db
-                .insertInto('products')
-                .values({
-                    name: Producto,
-                    price: priceInCents,
-                    tags: Tags.split(',').map(v => v.trim()),
-                })
-                .execute()
-                .then(() =>
-                  console.info(`Insert "${Producto}"`)
-                );
-        }
-
-        console.log('Products imported successfully!');
-    } catch (error) {
-        console.error('Error importing products:', error);
-    }
-}
-
-
-
-export const sqlSeedProductsFromJSON = `
+const sqlSeedProductsFromJSON = `
 -- Define your JSON data
 DO $$
 DECLARE
-    json_data jsonb := '${JSON.stringify(productsSeed)}';
+    json_data jsonb := '${JSON.stringify({
+    Products: productsSeed.Products.map((v) => ({
+        name: v.Producto,
+        price: parseInt(v.Precio.replace('$', '').trim()) * 100,
+        tags: v.Tags.split(',').map(t => t.trim()).join(',')
+    }))
+})}';
 product jsonb; -- Declare a variable to hold each JSON object
 BEGIN
     -- Loop through each product in the JSON array
@@ -59,10 +24,19 @@ BEGIN
         -- Insert data into the products table
         INSERT INTO products (name, price, tags)
         VALUES (
-            product->>'Producto',                       -- Product name
-            REPLACE(product->>'Precio', '$', '')::int * 100, -- Convert price to cents
+            product->>'Producto',
+            NULLIF(product->>'Precio', '')::int,
             product->>'Tags',
         );
     END LOOP;
 END $$;
 `
+
+export async function importProductsFromJson(): Promise<void> {
+    try {
+        await db.executeQuery(CompiledQuery.raw(`${sqlSeedProductsFromJSON}`, []));
+        console.info(`Table "products" populated`)
+    } catch (error) {
+        console.error('Error importing products:', error);
+    }
+}
