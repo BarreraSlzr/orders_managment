@@ -11,26 +11,22 @@ import { Order, OrderItem, Product } from '@/lib/types'
 import { getOrderItemsDetailed } from '@/lib/sql/functions/getOrderItemsDetailed'
 import { getOrder } from '@/lib/sql/functions/getOrder'
 
-const getTagsSorted = (productTagsSet: Set<string>): string[]  => {
+const getTagsSorted = (productTagsSet: Set<string>): string[] => {
   const tagIndices: Record<string, number> = {};
 
   // Iterate through each tag string in the Set
-  Array.from(productTagsSet).forEach((tags, productIndex) => {
+  Array.from(productTagsSet).forEach((tags) => {
     // Split the tags string and trim whitespace
-    const individualTags = tags.split(',').map((tag) => tag.trim());
-
-    individualTags.forEach((tag, tagIndex) => {
-      // Calculate a global index using productIndex and tagIndex
-      const globalIndex = productIndex + tagIndex / 10; // Prioritize product order with fine granularity
+    tags.split(',').forEach((tag, tagIndex) => {
       // Update the tag's index if it's not present or the new index is smaller
-      if (!(tag in tagIndices) || tagIndices[tag] > globalIndex) {
-        tagIndices[tag] = globalIndex;
+      if (!(tag in tagIndices) || tagIndices[tag] > tagIndex) {
+        tagIndices[tag] = tagIndex;
       }
     });
   });
   return Object.entries(tagIndices)
-  .sort(([, indexA], [, indexB]) => indexA - indexB)
-  .map(([tag]) => tag);;
+    .sort(([, indexA], [, indexB]) => indexA - indexB)
+    .map(([tag]) => tag);;
 }
 
 const getProductTagsSet = (products: Product[]) => new Set(products.map(p => p.tags));
@@ -38,7 +34,6 @@ const getProductTagsSet = (products: Product[]) => new Set(products.map(p => p.t
 export default function ProductOrderWireframe() {
   const [isPending, startTransition] = useTransition()
   const [products, setProducts] = useState<Product[]>([])
-  const [visibleTags, setVisibleTags] = useState<string[]>([])
   const [tagsSorted, setTagsSorted] = useState<string[]>([])
   const [combinedTags, setCombinedTags] = useState<Set<string>>(new Set)
   const [orders, setOrders] = useState<Order[]>([])
@@ -71,6 +66,14 @@ export default function ProductOrderWireframe() {
       return filterAndSortProducts()
     }
   }, [searchQuery, selectedTags, products])
+  const visibleTags = useMemo(() => {
+    if (selectedTags.size === 0) {
+      return tagsSorted;
+    } else {
+      const combinedTagsRelated = new Set(Array.from(combinedTags).filter(ct => Array.from(selectedTags).some(tag => ct.includes(tag))).join(',').split(','));
+      return tagsSorted.filter(ts => combinedTagsRelated.has(ts));
+    }
+  }, [selectedTags, tagsSorted])
 
   const searchOrder = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -125,12 +128,6 @@ export default function ProductOrderWireframe() {
 
   const handleTagToggle = (tag: string) => {
     selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
-    if (selectedTags.size === 0) {
-      setVisibleTags(tagsSorted);
-    } else {
-      const combinedTagsRelated = new Set(Array.from(combinedTags).filter(ct => Array.from(selectedTags).some(tag => ct.includes(tag))).join(',').split(','));
-      setVisibleTags(tagsSorted.filter( ts => combinedTagsRelated.has(ts)));
-    }
     setSelectedTags(new Set(selectedTags));
   }
 
@@ -157,7 +154,6 @@ export default function ProductOrderWireframe() {
         setProducts(products);
         setCombinedTags(combinedTags);
         setTagsSorted(tagsSorted)
-        setVisibleTags(tagsSorted);
         setOrders(orders);
       })
     }
