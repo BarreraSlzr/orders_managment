@@ -14,9 +14,9 @@ export async function getProducts(search: string = '', tags: string[] = []): Pro
     }
 
     if (tags.length > 0) {
-        query = query.where((eb) => eb.or(
+        query = query.where((eb) => eb.and(
             tags.map(
-                tag => eb('tags', '@>', [tag])
+                tag => eb('tags', 'ilike', `%${tag}%`)
             )
         ))
     }

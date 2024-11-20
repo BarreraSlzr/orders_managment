@@ -12,7 +12,7 @@ function createProductTable() {
     .addColumn('updated', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
     .addColumn('name', 'varchar', (col) => col.notNull())
     .addColumn('price', 'integer', (col) => col.notNull()) // price in cents
-    .addColumn('tags', sql`varchar[]`, (col) => col.notNull())
+    .addColumn('tags', sql`varchar`, (col) => col.notNull())
     .execute()
     .then(() =>
       console.info(`Create "product" table`)
@@ -78,13 +78,13 @@ export async function seed() {
   await createProductTable();
   await createOrderTable();
   await createOrderItemsTable();
-  await db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
+  /* await db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
     .then(() =>
       console.info(`Create "calculate_order_total" function`)
     );
   await db.executeQuery(CompiledQuery.raw(`${updateOrderTotal}`, []))
     .then(() =>
       console.info(`Create "update_order_total" trigger for "calculate_order_total"`)
-    );
+    ); */
   await importProductsFromJson();
 }  

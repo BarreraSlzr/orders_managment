@@ -61,7 +61,7 @@ BEGIN
         VALUES (
             product->>'Producto',                       -- Product name
             REPLACE(product->>'Precio', '$', '')::int * 100, -- Convert price to cents
-            string_to_array(product->>'Tags', ', ')     -- Convert comma-separated string to an array
+            product->>'Tags',
         );
     END LOOP;
 END $$;

@@ -15,7 +15,7 @@ interface BaseTable {
 interface ProductTable extends BaseTable{
   name: string
   price: number
-  tags: string[]
+  tags: string
 }
 
 interface OrderTable extends BaseTable{

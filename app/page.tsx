@@ -14,7 +14,8 @@ import { getOrder } from '@/lib/sql/functions/getOrder'
 export default function ProductOrderWireframe() {
   const [isPending, startTransition] = useTransition()
   const [products, setProducts] = useState<Product[]>([])
-  const [tags, setTags] = useState<string[]>([])
+  const [tags, setTags] = useState<Set<string>>(new Set)
+  const [combinedTags, setCombinedTags] = useState<Set<string>>(new Set)
   const [orders, setOrders] = useState<Order[]>([])
   const [currentOrder, setCurrentOrder] = useState<{ details: Order, items: OrderItem[] } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -72,7 +73,13 @@ export default function ProductOrderWireframe() {
   }
 
   const handleTagToggle = (tag: string) => {
-    selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag)
+    selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
+    if (selectedTags.size === 0) {
+      setTags(new Set(getUniqueTags()));
+    } else {
+      const combinedTagsRelated = Array.from(combinedTags).filter(ct => Array.from(selectedTags).some(tag => ct.includes(tag)));
+      setTags(getUniqueTags(combinedTagsRelated));
+    }
     setSelectedTags(new Set(selectedTags));
   }
 
@@ -98,26 +105,31 @@ export default function ProductOrderWireframe() {
   }
 
   useEffect(() => {
-    async function fetchAll(){
+    async function fetchAll() {
       const products = await fetchProducts();
       const tags = await fetchTags();
       const orders = await fetchOrders();
       setProducts(products);
-      setTags(tags);
+      const combinedTags = new Set(products.map(p => p.tags));
+      const uniqueTags = getUniqueTags(combinedTags);
+      setCombinedTags(combinedTags);
+      setTags(uniqueTags);
       setOrders(orders);
     }
     fetchAll();
-  },[])
+  }, [])
+
+  const getUniqueTags = (tags: string[] | Set<string> = combinedTags) => new Set(Array.from(tags).join(','));
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
       <header className="flex justify-between items-center">
-          {currentOrder && 
-            <Badge variant="outline">#{currentOrder.details.id} | {currentOrder.details.total}</Badge>
-          }
-        <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
+        {currentOrder && <>
+          <Badge variant="outline">#{currentOrder.details.id} | {currentOrder.details.total}</Badge>
+          <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
+        </>
+        }
       </header>
-
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
         <Badge onClick={addOrder}>New Order</Badge>
         {orders.map(order =>
@@ -146,7 +158,7 @@ export default function ProductOrderWireframe() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {tags.map((tag) => (
+          {Array.from(tags).map((tag) => (
             <Badge
               key={tag}
               variant={selectedTags.has(tag) ? "default" : "outline"}
