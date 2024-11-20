@@ -26,7 +26,7 @@ BEGIN
         VALUES (
             product->>'name',
             NULLIF(product->>'price', '')::int,
-            product->>'tags',
+            REPLACE(product->>'tags', ', ', ','),
         );
     END LOOP;
 END $$;
