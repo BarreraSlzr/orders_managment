@@ -111,7 +111,7 @@ export default function ProductOrderWireframe() {
     fetchAll();
   }, [])
 
-  const getUniqueTags = (tags: string[] | Set<string> = combinedTags) => new Set(Array.from(tags).join(','));
+  const getUniqueTags = (tags: string[] | Set<string> = combinedTags) => new Set(Array.from(tags).join(',').split(','));
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
