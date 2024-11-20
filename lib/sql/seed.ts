@@ -15,7 +15,7 @@ function createProductTable() {
     .addColumn('tags', sql`varchar`, (col) => col.notNull())
     .execute()
     .then(() =>
-      console.info(`Create "product" table`)
+      console.info(`Created "product" table`)
     );
 }
 
@@ -33,7 +33,7 @@ function createOrderTable() {
     .addColumn('total', 'integer', (col) => col.notNull().defaultTo(0)) // total in cents
     .execute()
     .then(() =>
-      console.info(`Create "order" table`)
+      console.info(`Created "order" table`)
     );
 }
 
@@ -47,7 +47,7 @@ function createOrderItemsTable() {
     .addColumn('quantity', 'integer', (col) => col.notNull().defaultTo(1))
     .execute()
     .then(() =>
-      console.info(`Create "order_items" table`)
+      console.info(`Created "order_items" table`)
     );
 }
 
@@ -78,13 +78,13 @@ export async function seed() {
   await createProductTable();
   await createOrderTable();
   await createOrderItemsTable();
-  /* await db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
+  await db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
     .then(() =>
-      console.info(`Create "calculate_order_total" function`)
+      console.info(`Created "calculate_order_total" function`)
     );
   await db.executeQuery(CompiledQuery.raw(`${updateOrderTotal}`, []))
     .then(() =>
-      console.info(`Create "update_order_total" trigger for "calculate_order_total"`)
-    ); */
+      console.info(`Created "update_order_total" trigger for "calculate_order_total"`)
+    );
   await importProductsFromJson();
 }  

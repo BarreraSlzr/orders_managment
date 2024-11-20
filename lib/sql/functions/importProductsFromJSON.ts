@@ -34,10 +34,10 @@ END $$;
 
 export async function importProductsFromJson(): Promise<void> {
     try {
-        if( (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM products`))).rows.at(0)?.count === 0){
+        if( (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM products`))).rows.pop()?.count === 0){
             await db.executeQuery(CompiledQuery.raw(`${sqlSeedProductsFromJSON}`, []));
+            console.info(`Table "products" populated`)
         }
-        console.info(`Table "products" populated`)
     } catch (error) {
         console.error('Error importing products:', error);
     }
