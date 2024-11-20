@@ -11,10 +11,35 @@ import { Order, OrderItem, Product } from '@/lib/types'
 import { getOrderItemsDetailed } from '@/lib/sql/functions/getOrderItemsDetailed'
 import { getOrder } from '@/lib/sql/functions/getOrder'
 
+const getTagsSorted = (productTagsSet: Set<string>): string[]  => {
+  const tagIndices: Record<string, number> = {};
+
+  // Iterate through each tag string in the Set
+  Array.from(productTagsSet).forEach((tags, productIndex) => {
+    // Split the tags string and trim whitespace
+    const individualTags = tags.split(',').map((tag) => tag.trim());
+
+    individualTags.forEach((tag, tagIndex) => {
+      // Calculate a global index using productIndex and tagIndex
+      const globalIndex = productIndex + tagIndex / 10; // Prioritize product order with fine granularity
+      // Update the tag's index if it's not present or the new index is smaller
+      if (!(tag in tagIndices) || tagIndices[tag] > globalIndex) {
+        tagIndices[tag] = globalIndex;
+      }
+    });
+  });
+  return Object.entries(tagIndices)
+  .sort(([, indexA], [, indexB]) => indexA - indexB)
+  .map(([tag]) => tag);;
+}
+
+const getProductTagsSet = (products: Product[]) => new Set(products.map(p => p.tags));
+
 export default function ProductOrderWireframe() {
   const [isPending, startTransition] = useTransition()
   const [products, setProducts] = useState<Product[]>([])
-  const [tags, setTags] = useState<Set<string>>(new Set)
+  const [visibleTags, setVisibleTags] = useState<string[]>([])
+  const [tagsSorted, setTagsSorted] = useState<string[]>([])
   const [combinedTags, setCombinedTags] = useState<Set<string>>(new Set)
   const [orders, setOrders] = useState<Order[]>([])
   const [currentOrder, setCurrentOrder] = useState<{ details: Order, items: OrderItem[] } | null>(null)
@@ -101,10 +126,10 @@ export default function ProductOrderWireframe() {
   const handleTagToggle = (tag: string) => {
     selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
     if (selectedTags.size === 0) {
-      setTags(new Set(getUniqueTags()));
+      setVisibleTags(tagsSorted);
     } else {
-      const combinedTagsRelated = Array.from(combinedTags).filter(ct => Array.from(selectedTags).some(tag => ct.includes(tag)));
-      setTags(getUniqueTags(combinedTagsRelated));
+      const combinedTagsRelated = new Set(Array.from(combinedTags).filter(ct => Array.from(selectedTags).some(tag => ct.includes(tag))).join(',').split(','));
+      setVisibleTags(tagsSorted.filter( ts => combinedTagsRelated.has(ts)));
     }
     setSelectedTags(new Set(selectedTags));
   }
@@ -125,19 +150,19 @@ export default function ProductOrderWireframe() {
 
   useEffect(() => {
     async function fetchAll() {
-      const products = await fetchProducts();
-      const orders = await fetchOrders();
-      setProducts(products);
-      const combinedTags = new Set(products.map(p => p.tags));
-      const uniqueTags = getUniqueTags(combinedTags);
-      setCombinedTags(combinedTags);
-      setTags(uniqueTags);
-      setOrders(orders);
+      const [products, orders] = await Promise.all([fetchProducts(), await fetchOrders()]);
+      startTransition(() => {
+        const combinedTags = getProductTagsSet(products)
+        const tagsSorted = getTagsSorted(combinedTags);
+        setProducts(products);
+        setCombinedTags(combinedTags);
+        setTagsSorted(tagsSorted)
+        setVisibleTags(tagsSorted);
+        setOrders(orders);
+      })
     }
     fetchAll();
   }, [])
-
-  const getUniqueTags = (tags: string[] | Set<string> = combinedTags) => new Set(Array.from(tags).join(',').split(','));
 
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
@@ -154,7 +179,12 @@ export default function ProductOrderWireframe() {
           <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | ${order.total} </Badge>)
         }
       </div>
-      <form onSubmit={searchOrder} className="space-y-2">
+      <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() => {
+        startTransition(() => {
+          setSearchQuery('');
+          setSelectedTags(new Set());
+        })
+      }}>
         <div className="relative">
           <Input
             name="search"
@@ -175,7 +205,7 @@ export default function ProductOrderWireframe() {
           </Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {Array.from(tags).map((tag) => (
+          {visibleTags.map((tag) => (
             <Badge
               key={tag}
               variant={selectedTags.has(tag) ? "default" : "outline"}
@@ -187,8 +217,7 @@ export default function ProductOrderWireframe() {
             </Badge>
           ))}
         </div>
-
-        <Button type="submit" disabled={isPending}>Search</Button>
+        <Button type="reset">Limpiar</Button>
       </form>
 
       {visibleProducts.map((product) => (
