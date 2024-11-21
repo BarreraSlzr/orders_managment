@@ -164,7 +164,7 @@ export default function ProductOrderWireframe() {
     <div className="max-w-md mx-auto p-4 space-y-4">
       <header className="flex justify-between items-center">
         {currentOrder && <>
-          <Badge variant="outline">#{currentOrder.details.id} | {currentOrder.details.total}</Badge>
+          <Badge variant="outline">#{currentOrder.details.position} | ${currentOrder.details.total}</Badge>
           <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
         </>
         }
