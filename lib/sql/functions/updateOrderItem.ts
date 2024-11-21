@@ -1,7 +1,6 @@
 "use server"
 
 import { db } from "../database";
-import { database } from 
 import { OrderItemTable } from "@/lib/types";
 
 export async function updateOrderItem(
