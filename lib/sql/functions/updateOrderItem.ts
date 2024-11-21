@@ -6,7 +6,7 @@ import { OrderItemTable } from "@/lib/types";
 export async function updateOrderItem(
   orderId: string,
   productId: string,
-  type: 'INSERT' | 'DELETE'
+  type: string //'INSERT' | 'DELETE'
 ): Promise< OrderItemTable | null> {
   if (type === 'DELETE') {
     // Perform DELETE operation
