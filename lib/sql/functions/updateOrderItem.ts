@@ -1,40 +1,41 @@
 "use server"
 
 import { db } from "../database";
+import { database } from 
 import { OrderItemTable } from "@/lib/types";
 
-// Function to add an item to an order
-export async function updateOrderItem(orderId: OrderItemTable['order_id'], productId: OrderItemTable['product_id'], type: string  ): Promise<OrderItemTable | null> {
-  const INSERT = "INSERT";
-  const DELETE = "DELETE";
-  if ( ![DELETE, INSERT].some(action => action === type) ) throw new Error(`UNEXPECTED action type: ${type}`);
-  
-  return await db.transaction().execute(async (trx) => {
-      if (type === DELETE) {
-        // Delete the order item
-        await trx
-          .deleteFrom('order_items')
-          .where('id', 'in', 
-            trx.selectFrom('order_items')
-            .select('id')
-            .limit(1)
-            .where('order_id', '=', orderId)
-            .where('product_id', '=', productId)
-          )
-          .execute()
-        return null
-      } else {
-        // Insert the order item
-        const result = await trx
-          .insertInto('order_items')
-          .values({
-            order_id: orderId,
-            product_id: productId,
-          })
-          .returningAll()
-          .executeTakeFirstOrThrow()
-  
-        return result
-      }
-    })
+export async function updateOrderItem(
+  orderId: string,
+  productId: string,
+  type: 'INSERT' | 'DELETE'
+): Promise< OrderItemTable | null> {
+  if (type === 'DELETE') {
+    // Perform DELETE operation
+    await db
+      .deleteFrom('order_items')
+      .where('id', 'in',
+        db
+          .selectFrom('order_items')
+          .select('id')
+          .limit(1) // Deletes only one matching item
+          .where('order_id', '=', orderId)
+          .where('product_id', '=', productId)
+      )
+      .execute();
+    return null;
+  } else if (type === 'INSERT') {
+    // Perform INSERT operation
+    const result = await db
+      .insertInto('order_items')
+      .values({
+        order_id: orderId,
+        product_id: productId,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    return result;
   }
+
+  throw new Error(`Unexpected type: ${type}`);
+}
