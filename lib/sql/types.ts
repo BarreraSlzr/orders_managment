@@ -26,9 +26,9 @@ interface OrderTable extends BaseTable{
 
 interface OrderItemTable {
   id: Generated<number>
+  created: ColumnType<Date, string | undefined, never>
   order_id: string
   product_id: string
-  quantity: number
 }
 
 // Keys of this interface are table names.

@@ -5,6 +5,8 @@ import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { getOrder } from "@/lib/sql/functions/getOrder";
+import { getOrderItemsDetailed } from "@/lib/sql/functions/getOrderItemsDetailed";
+import { OrderItems } from "@/lib/types";
 
 export async function handleGetProducts(formData: FormData) {
     const searchValue = `${formData.get('search')}`;
@@ -18,13 +20,19 @@ export async function handleCreateOrder(formData: FormData) {
     return addOrder(positionValue);
 }
 
-export async function handleUpdateOrderItem(formData: FormData) {
-    const quantityValue = parseInt(`${formData.get('quantity')}`);
+export async function handleUpdateOrderItem(formData: FormData): Promise<OrderItems> {
+    const typeValue = `${formData.get('type')}`;
     const orderIdValue = `${formData.get('orderId')}`;
     const productIdValue = `${formData.get('productId')}`;
-    const orderItem = await updateOrderItem(orderIdValue, productIdValue, quantityValue);
+    await updateOrderItem(orderIdValue, productIdValue, typeValue);
+    return GetOrderItems(formData)
+}
+
+export async function GetOrderItems(formData: FormData): Promise<OrderItems> {
+    const orderIdValue = `${formData.get('orderId')}`;
     const order = await getOrder(orderIdValue);
-    return {order};
+    const items = await getOrderItemsDetailed(order.id);
+    return {order, items};
 }
 
 export async function handleCloseOrder(formData: FormData) {

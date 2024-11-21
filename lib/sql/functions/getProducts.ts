@@ -1,7 +1,5 @@
 "use server"
 
-import { Selectable } from "kysely"
-import { Database } from "../types"
 import { db } from "../database"
 import { Product } from "@/lib/types"
 

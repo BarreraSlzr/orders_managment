@@ -6,10 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { handleCloseOrder, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
-import { Order, OrderItem, Product } from '@/lib/types'
-import { getOrderItemsDetailed } from '@/lib/sql/functions/getOrderItemsDetailed'
-import { getOrder } from '@/lib/sql/functions/getOrder'
+import { GetOrderItems, handleCloseOrder, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
+import { Order, OrderItems, Product } from '@/lib/types'
 
 const getTagsSorted = (productTagsSet: Set<string>): string[] => {
   const tagIndices: Record<string, number> = {};
@@ -26,7 +24,7 @@ const getTagsSorted = (productTagsSet: Set<string>): string[] => {
   });
   return Object.entries(tagIndices)
     .sort(([, indexA], [, indexB]) => indexA - indexB)
-    .map(([tag]) => tag);;
+    .map(([tag]) => tag);
 }
 
 const getProductTagsSet = (products: Product[]) => new Set(products.map(p => p.tags));
@@ -37,7 +35,7 @@ export default function ProductOrderWireframe() {
   const [tagsSorted, setTagsSorted] = useState<string[]>([])
   const [combinedTags, setCombinedTags] = useState<Set<string>>(new Set)
   const [orders, setOrders] = useState<Order[]>([])
-  const [currentOrder, setCurrentOrder] = useState<{ details: Order, items: OrderItem[] } | null>(null)
+  const [currentOrder, setCurrentOrder] = useState<OrderItems | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
   const visibleProducts = useMemo(() => {
@@ -89,37 +87,34 @@ export default function ProductOrderWireframe() {
     formData.append('position', `${orders.length}`)
     startTransition(async () => {
       const newOrder = await handleCreateOrder(formData)
-      setCurrentOrder({ details: newOrder, items: [] });
+      setCurrentOrder({ order: newOrder, items: [] });
     })
   }
 
-  const addToOrder = async (productId: string, quantity: number) => {
+  const updateOrderItems = async (productId: string, type: "INSERT" | "DELETE") => {
     if (!currentOrder) return
     const formData = new FormData()
-    formData.append('orderId', currentOrder.details.id)
+    formData.append('orderId', currentOrder.order.id)
     formData.append('productId', productId)
-    formData.append('quantity', `${quantity}`)
+    formData.append('type', type)
 
     startTransition(async () => {
-      await handleUpdateOrderItem(formData)
-      const details = await getOrder(currentOrder.details.id);
-      const items = await getOrderItemsDetailed(details.id);
-      setCurrentOrder({ details, items })
+      setCurrentOrder(await handleUpdateOrderItem(formData))
     })
   }
 
   const setCurrentOrderDetails = async (order: Order) => {
+    const formData = new FormData()
+    formData.append('orderId', order.id)
     startTransition(async () => {
-      const details = await getOrder(order.id);
-      const items = await getOrderItemsDetailed(details.id);
-      setCurrentOrder({ details, items })
+      setCurrentOrder(await GetOrderItems(formData))
     })
   }
 
   const closeOrder = async () => {
     if (!currentOrder) return
     const formData = new FormData()
-    formData.append('orderId', currentOrder.details.id)
+    formData.append('orderId', currentOrder.order.id)
     startTransition(async () => {
       await handleCloseOrder(formData);
       setCurrentOrder(null)
@@ -164,7 +159,7 @@ export default function ProductOrderWireframe() {
     <div className="max-w-md mx-auto p-4 space-y-4">
       <header className="flex justify-between items-center">
         {currentOrder && <>
-          <Badge variant="outline">#{currentOrder.details.position} | ${currentOrder.details.total}</Badge>
+          <Badge variant="outline">#{currentOrder.order.position} | ${currentOrder.order.total}</Badge>
           <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
         </>
         }
@@ -225,7 +220,7 @@ export default function ProductOrderWireframe() {
             </div>
             <Button
               size="sm"
-              onClick={() => addToOrder(product.id, 1)}
+              onClick={() => updateOrderItems(product.id, "INSERT")}
               disabled={isPending || !currentOrder}
             >
               Add to Order

@@ -43,7 +43,7 @@ function createOrderItemsTable() {
     .addColumn('id', 'serial', (col) => col.primaryKey())
     .addColumn('order_id', 'uuid', (col) => col.notNull().references('orders.id').onDelete('cascade'))
     .addColumn('product_id', 'uuid', (col) => col.notNull().references('products.id'))
-    .addColumn('quantity', 'integer', (col) => col.notNull().defaultTo(1))
+    .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
     .execute()
     .then(() =>
       console.info(`Created "order_items" table`)
@@ -54,9 +54,9 @@ const calculateOrderTotal = `
 CREATE OR REPLACE FUNCTION calculate_order_total() RETURNS TRIGGER AS $$
   BEGIN
     NEW.total := (
-      SELECT COALESCE(SUM(p.price * oi.quantity), 0)
+      SELECT COALESCE(SUM(p.price), 0)
       FROM order_items oi
-      JOIN products p ON oi.product_id = p.id
+      JOIN product p ON oi.product_id = p.id
       WHERE oi.order_id = NEW.id
     );
     RETURN NEW;
@@ -66,7 +66,7 @@ $$ LANGUAGE plpgsql;
 
 const updateOrderTotal = `
 CREATE TRIGGER update_order_total
-  AFTER INSERT OR UPDATE OR DELETE
+  AFTER INSERT OR DELETE
   ON order_items
   FOR EACH ROW
 EXECUTE FUNCTION calculate_order_total();
