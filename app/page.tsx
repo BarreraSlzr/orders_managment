@@ -77,8 +77,8 @@ export default function ProductOrderWireframe() {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {
-      const foundProducts = await handleGetProducts(formData)
-      setProducts(foundProducts)
+      const { message, success, result: foundProducts } = await handleGetProducts(formData);
+      if (success) setProducts(foundProducts)
     })
   }
 
@@ -86,8 +86,8 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('position', `${orders.length}`)
     startTransition(async () => {
-      const newOrder = await handleCreateOrder(formData)
-      setCurrentOrder({ order: newOrder, items: [] });
+      const { message, success, result: newOrder } = await handleCreateOrder(formData);
+      if (success) setCurrentOrder({ order: newOrder, items: [] });
     })
   }
 
@@ -99,7 +99,8 @@ export default function ProductOrderWireframe() {
     formData.append('type', type)
 
     startTransition(async () => {
-      setCurrentOrder(await handleUpdateOrderItem(formData))
+      const { result } = await handleUpdateOrderItem(formData);
+      if( result ) setCurrentOrder(result)
     })
   }
 
