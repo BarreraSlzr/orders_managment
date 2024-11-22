@@ -79,8 +79,8 @@ export default function ProductOrderWireframe() {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
     startTransition(async () => {
-      const foundProducts = await handleGetProducts(formData)
-      setProducts(foundProducts)
+      const { message, success, result: foundProducts } = await handleGetProducts(formData);
+      if (success) setProducts(foundProducts)
     })
   }
 
@@ -88,8 +88,8 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('position', `${orders.length}`)
     startTransition(async () => {
-      const newOrder = await handleCreateOrder(formData)
-      setCurrentOrder({ details: newOrder, items: [] });
+      const { message, success, result: newOrder } = await handleCreateOrder(formData);
+      if (success) setCurrentOrder({ details: newOrder, items: [] });
     })
   }
 
@@ -101,7 +101,7 @@ export default function ProductOrderWireframe() {
     formData.append('quantity', `${quantity}`)
 
     startTransition(async () => {
-      await handleUpdateOrderItem(formData)
+      await handleUpdateOrderItem(formData);
       const details = await getOrder(currentOrder.details.id);
       const items = await getOrderItemsDetailed(details.id);
       setCurrentOrder({ details, items })
@@ -225,7 +225,7 @@ export default function ProductOrderWireframe() {
             </div>
             <Button
               size="sm"
-              onClick={() => addToOrder(product.id, 1)}
+              onClick={() => addToOrder(product.id, )}
               disabled={isPending || !currentOrder}
             >
               Add to Order
