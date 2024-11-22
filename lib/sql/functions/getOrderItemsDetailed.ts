@@ -14,7 +14,7 @@ export async function getOrderItemsDetailed(orderId: Order['id']): Promise<Order
     FROM
       order_items oi
     INNER JOIN
-      product p
+      products p
       ON oi.product_id = p.id
     WHERE
       oi.order_id = $1

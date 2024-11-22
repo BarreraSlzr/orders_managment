@@ -9,7 +9,7 @@ import { Order } from "@/lib/types"
 export async function getOrder(id: string): Promise<Order> {
     return await db
       .selectFrom('orders')
-      .where('id', 'like', id)
+      .where('id', '=', id)
       .selectAll()
       .executeTakeFirstOrThrow()
 }

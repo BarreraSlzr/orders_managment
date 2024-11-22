@@ -7,19 +7,18 @@ export async function updateOrderItem(
   orderId: string,
   productId: string,
   type: string //'INSERT' | 'DELETE'
-): Promise< OrderItemTable | null> {
+): Promise<OrderItemTable | null> {
   if (type === 'DELETE') {
     // Perform DELETE operation
     await db
       .deleteFrom('order_items')
-      .where('id', 'in',
-        db
-          .selectFrom('order_items')
-          .select('id')
-          .limit(1) // Deletes only one matching item
-          .where('order_id', '=', orderId)
-          .where('product_id', '=', productId)
-      )
+      .where('id', '=', eb => eb
+        .selectFrom('order_items')
+        .select('id')
+        .limit(1) // Deletes only one matching item
+        .where('order_id', '=', orderId)
+        .where('product_id', '=', productId)
+        )
       .execute();
     return null;
   } else if (type === 'INSERT') {

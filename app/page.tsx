@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { GetOrderItems, handleCloseOrder, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
+import { handleGetOrderItems, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
 import { Order, OrderItems, Product } from '@/lib/types'
 
 const getTagsSorted = (productTagsSet: Set<string>): string[] => {
@@ -100,7 +100,7 @@ export default function ProductOrderWireframe() {
 
     startTransition(async () => {
       const { result } = await handleUpdateOrderItem(formData);
-      if( result ) setCurrentOrder(result)
+      if (result) setCurrentOrder(result)
     })
   }
 
@@ -108,7 +108,8 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('orderId', order.id)
     startTransition(async () => {
-      setCurrentOrder(await GetOrderItems(formData))
+      const { success, result } = await handleGetOrderItems(formData);
+      if (success) setCurrentOrder(result)
     })
   }
 
@@ -117,7 +118,7 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('orderId', currentOrder.order.id)
     startTransition(async () => {
-      await handleCloseOrder(formData);
+      // await handleCloseOrder(formData);
       setCurrentOrder(null)
     })
   }

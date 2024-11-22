@@ -14,8 +14,7 @@ export async function handleGetProducts(formData: FormData) {
     async callback() {
       const searchValue = `${formData.get('search')}`;
       const tagsValue = formData.getAll('tags').map(v => `${v}`);
-      const products = await getProducts(searchValue, tagsValue);
-      return products;
+      return getProducts(searchValue, tagsValue);
     },
     formData
   })
@@ -33,16 +32,18 @@ export async function handleCreateOrder(formData: FormData) {
 }
 
 export async function handleUpdateOrderItem(formData: FormData) {
-  return errorHandler({
-    actionName: 'handleCloseOrder',
+  return await errorHandler({
+    actionName: 'handleUpdateOrderItem',
     async callback() {
       const typeValue = `${formData.get('type')}`;
       const orderIdValue = `${formData.get('orderId')}`;
       const productIdValue = `${formData.get('productId')}`;
-      const orderItem = await updateOrderItem(orderIdValue, productIdValue, typeValue);
-      return GetOrderItems(formData);
+      return updateOrderItem(orderIdValue, productIdValue, typeValue);
     },
     formData
+  }).then((response) => {
+    if (response.success) return handleGetOrderItems(formData);
+    return response;
   });
 }
 
@@ -51,18 +52,23 @@ export async function handleCloseOrder(formData: FormData) {
     actionName: 'handleCloseOrder',
     async callback() {
       const orderIdValue = `${formData.get('orderId')}`;
-      const order = await closeOrder(orderIdValue);
-      return order;
+      return closeOrder(orderIdValue);
     },
     formData
   });
 }
 
-export async function GetOrderItems(formData: FormData): Promise<OrderItems> {
-  const orderIdValue = `${formData.get('orderId')}`;
-  const order = await getOrder(orderIdValue);
-  const items = await getOrderItemsDetailed(order.id);
-  return { order, items };
+export async function handleGetOrderItems(formData: FormData) {
+  return errorHandler({
+    actionName: 'getOrderItems',
+    async callback() {
+      const orderIdValue = `${formData.get('orderId')}`;
+      const order = await getOrder(orderIdValue);
+      const items = await getOrderItemsDetailed(order.id);
+      return { order, items };
+    },
+    formData
+  });
 }
 
 type ServerActionCallback<T> = () => Promise<T>;
