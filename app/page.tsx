@@ -250,6 +250,7 @@ export default function ProductOrderWireframe() {
                       onClick={() => updateOrderItems(product.id, "INSERT")}
                       aria-label="Insert"
                       className="rounded-l-md px-2 h-8"
+                      disabled={isPending}
                     >
                       <Plus className="h-3 w-3" />
                     </Button>
@@ -261,7 +262,7 @@ export default function ProductOrderWireframe() {
                       size="sm"
                       onClick={() => updateOrderItems(product.id, "DELETE")}
                       aria-label="Delete"
-                      disabled={currentOrder.items.get(product.id)?.quantity === 0}
+                      disabled={currentOrder.items.get(product.id)?.quantity === 0 || isPending}
                       className="rounded-r-md px-2 h-8"
                     >
                       <Minus className="h-3 w-3" />
@@ -270,7 +271,7 @@ export default function ProductOrderWireframe() {
                   : <Button
                     size="sm"
                     onClick={() => updateOrderItems(product.id, "INSERT")}
-                    disabled={isPending || !currentOrder}
+                    disabled={isPending}
                   >
                     Agregar
                   </Button>
@@ -282,7 +283,7 @@ export default function ProductOrderWireframe() {
                     await updateOrderItems(product.id, "INSERT")
                   })
                   }
-                  disabled={isPending || !currentOrder}
+                  disabled={isPending}
                 >
                   Crear orden
                 </Button>
