@@ -8,8 +8,8 @@ export async function getOrderItemsDetailed(orderId: Order['id']): Promise<Order
   const sqlQuery = `
     SELECT
       p.id AS product_id,
-      p.name AS productName,
-      p.price AS productPrice,
+      p.name,
+      p.price,
       COUNT(oi.product_id) AS quantity
     FROM
       order_items oi
@@ -26,7 +26,7 @@ export async function getOrderItemsDetailed(orderId: Order['id']): Promise<Order
   return results.rows.map((row) => ({
     product_id: row.product_id,
     quantity: Number(row.quantity), // Ensure quantity is a number
-    productName: row.productName,
-    productPrice: row.productPrice,
+    name: row.name,
+    price: row.price,
   }));
 }
