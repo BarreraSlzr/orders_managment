@@ -189,7 +189,7 @@ export default function ProductOrderWireframe() {
         }
       </header>
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
-        <Badge onClick={addOrder}>Nueva orden (#${orders.size + 1})</Badge>
+        <Badge onClick={addOrder}>Nueva orden (#{orders.size + 1})</Badge>
         {Array.from(orders.values()).map(order =>
           <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | {fp(order.total)} </Badge>)
         }
@@ -214,7 +214,6 @@ export default function ProductOrderWireframe() {
             variant="ghost"
             size="sm"
             className="absolute right-1 top-1/2 transform -translate-y-1/2"
-            onClick={() => setSearchQuery('')}
           >
             <X />
           </Button>
