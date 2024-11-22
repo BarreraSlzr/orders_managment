@@ -34,7 +34,7 @@ export default function ProductOrderWireframe() {
   const [products, setProducts] = useState<Product[]>([])
   const [tagsSorted, setTagsSorted] = useState<string[]>([])
   const [combinedTags, setCombinedTags] = useState<Set<string>>(new Set)
-  const [orders, setOrders] = useState<Order[]>([])
+  const [orders, setOrders] = useState<Map<Order['id'], Order>>(new Map)
   const [currentOrder, setCurrentOrder] = useState<OrderItems | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
@@ -73,6 +73,15 @@ export default function ProductOrderWireframe() {
     }
   }, [selectedTags, tagsSorted])
 
+
+  function updateOrder(value: OrderItems | null) {
+    if (value !== null) {
+      orders.set(value.order.id, value.order);
+      setOrders(new Map(orders));
+    }
+    setCurrentOrder(value);
+  }
+
   const searchOrder = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const formData = new FormData(event.currentTarget)
@@ -84,10 +93,10 @@ export default function ProductOrderWireframe() {
 
   const addOrder = async () => {
     const formData = new FormData()
-    formData.append('position', `${orders.length}`)
+    formData.append('position', `${orders.size + 1}`)
     startTransition(async () => {
       const { message, success, result: newOrder } = await handleCreateOrder(formData);
-      if (success) setCurrentOrder({ order: newOrder, items: [] });
+      if (success) updateOrder({ order: newOrder, items: [] });
     })
   }
 
@@ -99,8 +108,8 @@ export default function ProductOrderWireframe() {
     formData.append('type', type)
 
     startTransition(async () => {
-      const { result } = await handleUpdateOrderItem(formData);
-      if (result) setCurrentOrder(result)
+      const { success, result: orderUpdated } = await handleUpdateOrderItem(formData);
+      if (success) updateOrder(orderUpdated)
     })
   }
 
@@ -108,8 +117,8 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('orderId', order.id)
     startTransition(async () => {
-      const { success, result } = await handleGetOrderItems(formData);
-      if (success) setCurrentOrder(result)
+      const { success, result: orderUpdated } = await handleGetOrderItems(formData);
+      if (success) updateOrder(orderUpdated)
     })
   }
 
@@ -119,7 +128,7 @@ export default function ProductOrderWireframe() {
     formData.append('orderId', currentOrder.order.id)
     startTransition(async () => {
       // await handleCloseOrder(formData);
-      setCurrentOrder(null)
+      updateOrder(null)
     })
   }
 
@@ -144,14 +153,14 @@ export default function ProductOrderWireframe() {
 
   useEffect(() => {
     async function fetchAll() {
-      const [products, orders] = await Promise.all([fetchProducts(), await fetchOrders()]);
+      const [products, orders] = await Promise.all([fetchProducts(), await fetchOrders()])
       startTransition(() => {
         const combinedTags = getProductTagsSet(products)
-        const tagsSorted = getTagsSorted(combinedTags);
-        setProducts(products);
-        setCombinedTags(combinedTags);
+        const tagsSorted = getTagsSorted(combinedTags)
+        setProducts(products)
+        setCombinedTags(combinedTags)
         setTagsSorted(tagsSorted)
-        setOrders(orders);
+        setOrders(new Map(orders.map(o => [o.id, o])))
       })
     }
     fetchAll();
@@ -168,7 +177,7 @@ export default function ProductOrderWireframe() {
       </header>
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
         <Badge onClick={addOrder}>New Order</Badge>
-        {orders.map(order =>
+        {Array.from(orders.values()).map(order =>
           <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | ${order.total} </Badge>)
         }
       </div>
