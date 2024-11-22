@@ -71,6 +71,7 @@ export default function ProductOrderWireframe() {
       return filterAndSortProducts()
     }
   }, [searchQuery, selectedTags, products])
+
   const visibleTags = useMemo(() => {
     if (selectedTags.size === 0) {
       return tagsSorted;
@@ -93,15 +94,6 @@ export default function ProductOrderWireframe() {
     } else {
       setCurrentOrder(null);
     }
-  }
-
-  const searchOrder = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const formData = new FormData(event.currentTarget)
-    startTransition(async () => {
-      const { message, success, result: foundProducts } = await handleGetProducts(formData);
-      if (success) setProducts(foundProducts)
-    })
   }
 
   const addOrder = async () => {
@@ -191,7 +183,7 @@ export default function ProductOrderWireframe() {
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
         <Badge onClick={addOrder}>Nueva orden (#{orders.size + 1})</Badge>
         {Array.from(orders.values()).map(order =>
-          <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | {fp(order.total)} </Badge>)
+          <Badge key={order.id} hidden={(currentOrder?.order.id || 'x') === order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | {fp(order.total)} </Badge>)
         }
       </div>
       <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() => {
@@ -223,15 +215,14 @@ export default function ProductOrderWireframe() {
             <Badge
               key={tag}
               variant={selectedTags.has(tag) ? "default" : "outline"}
-              className={selectedTags.has(tag) ? `
+              className={"cursor-pointer"
+                /* selectedTags.has(tag) ? `
                 bg-${colorsByIndex[tagIndex]}-500 hover:bg-${colorsByIndex[tagIndex]}-600
                 text-white
-              ` : `
-                cursor-pointer
-                border-${colorsByIndex[tagIndex]}-500
+              ` : `border-${colorsByIndex[tagIndex]}-500
                 text-${colorsByIndex[tagIndex]}-700 dark:text-${colorsByIndex[tagIndex]}-300
-                hover:bg-${colorsByIndex[tagIndex]}-100 dark:hover:bg-${colorsByIndex[tagIndex]}-900
-              `}
+                hover:bg-${colorsByIndex[tagIndex]}-100 dark:hover:bg-${colorsByIndex[tagIndex]}-900` */
+              }
               onClick={() => handleTagToggle(tag)}
             >
               {tag}
