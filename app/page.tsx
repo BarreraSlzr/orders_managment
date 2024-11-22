@@ -173,12 +173,12 @@ export default function ProductOrderWireframe() {
       <header className="flex justify-between items-center">
         {currentOrder && <>
           <Badge variant="outline">#{currentOrder.order.position} | {fp(currentOrder.order.total)}</Badge>
-          <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
+          <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Cerrar</Button>
         </>
         }
       </header>
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
-        <Badge onClick={addOrder}>New Order</Badge>
+        <Badge onClick={addOrder}>Nueva orden (#${orders.size + 1})</Badge>
         {Array.from(orders.values()).map(order =>
           <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | {fp(order.total)} </Badge>)
         }
@@ -236,7 +236,7 @@ export default function ProductOrderWireframe() {
               onClick={() => updateOrderItems(product.id, "INSERT")}
               disabled={isPending || !currentOrder}
             >
-              Add to Order
+              Agregar orden
             </Button>
           </CardContent>
         </Card>
