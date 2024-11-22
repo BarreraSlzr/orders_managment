@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { handleGetOrderItems, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
 import { Order, OrderItems, Product } from '@/lib/types'
+import { formatPrice } from '@/lib/util/formatPrice'
 
 const getTagsSorted = (productTagsSet: Set<string>): string[] => {
   const tagIndices: Record<string, number> = {};
@@ -73,6 +74,7 @@ export default function ProductOrderWireframe() {
     }
   }, [selectedTags, tagsSorted])
 
+  const fp = (value?: number) => formatPrice(value || 0, navigator?.language || 'es-MX', 'MXN')
 
   function updateOrder(value: OrderItems | null) {
     if (value !== null) {
@@ -170,7 +172,7 @@ export default function ProductOrderWireframe() {
     <div className="max-w-md mx-auto p-4 space-y-4">
       <header className="flex justify-between items-center">
         {currentOrder && <>
-          <Badge variant="outline">#{currentOrder.order.position} | ${currentOrder.order.total}</Badge>
+          <Badge variant="outline">#{currentOrder.order.position} | {fp(currentOrder.order.total)}</Badge>
           <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Close</Button>
         </>
         }
@@ -178,7 +180,7 @@ export default function ProductOrderWireframe() {
       <div className="flex items-center space-x-2 overflow-x-auto py-2">
         <Badge onClick={addOrder}>New Order</Badge>
         {Array.from(orders.values()).map(order =>
-          <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | ${order.total} </Badge>)
+          <Badge key={order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | {fp(order.total)} </Badge>)
         }
       </div>
       <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() => {
@@ -227,7 +229,7 @@ export default function ProductOrderWireframe() {
           <CardContent className="p-4 flex justify-between items-center">
             <div>
               <h2 className="font-semibold">{product.name}</h2>
-              <p className="text-sm text-gray-500">${product.price}</p>
+              <p className="text-sm text-gray-500">{fp(product.price)}</p>
             </div>
             <Button
               size="sm"
