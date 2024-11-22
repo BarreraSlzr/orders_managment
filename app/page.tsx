@@ -1,16 +1,21 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, useTransition } from 'react'
-import { Search, X } from 'lucide-react'
+import { Minus, Plus, Search, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { handleGetOrderItems, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
-import { Order, OrderItems, Product } from '@/lib/types'
+import { Order, OrderItem, OrderItems, Product } from '@/lib/types'
 import { formatPrice } from '@/lib/util/formatPrice'
 
-const getTagsSorted = (productTagsSet: Set<string>): string[] => {
+interface OrderItemsFE {
+  order: Order,
+  items: Map<OrderItem['product_id'], OrderItem>
+}
+
+const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
   const tagIndices: Record<string, number> = {};
 
   // Iterate through each tag string in the Set
@@ -24,19 +29,20 @@ const getTagsSorted = (productTagsSet: Set<string>): string[] => {
     });
   });
   return Object.entries(tagIndices)
-    .sort(([, indexA], [, indexB]) => indexA - indexB)
-    .map(([tag]) => tag);
+    .sort(([, indexA], [, indexB]) => indexA - indexB);
 }
 
 const getProductTagsSet = (products: Product[]) => new Set(products.map(p => p.tags));
 
+const colorsByIndex = ["indigo", "blue", "sky", "cyan"]
+
 export default function ProductOrderWireframe() {
   const [isPending, startTransition] = useTransition()
   const [products, setProducts] = useState<Product[]>([])
-  const [tagsSorted, setTagsSorted] = useState<string[]>([])
+  const [tagsSorted, setTagsSorted] = useState<[string, number][]>([])
   const [combinedTags, setCombinedTags] = useState<Set<string>>(new Set)
   const [orders, setOrders] = useState<Map<Order['id'], Order>>(new Map)
-  const [currentOrder, setCurrentOrder] = useState<OrderItems | null>(null)
+  const [currentOrder, setCurrentOrder] = useState<OrderItemsFE | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
   const visibleProducts = useMemo(() => {
@@ -70,7 +76,7 @@ export default function ProductOrderWireframe() {
       return tagsSorted;
     } else {
       const combinedTagsRelated = new Set(Array.from(combinedTags).filter(ct => Array.from(selectedTags).some(tag => ct.includes(tag))).join(',').split(','));
-      return tagsSorted.filter(ts => combinedTagsRelated.has(ts));
+      return tagsSorted.filter(([ts]) => combinedTagsRelated.has(ts));
     }
   }, [selectedTags, tagsSorted])
 
@@ -80,8 +86,13 @@ export default function ProductOrderWireframe() {
     if (value !== null) {
       orders.set(value.order.id, value.order);
       setOrders(new Map(orders));
+      setCurrentOrder({
+        order: value.order,
+        items: new Map(value.items.map(it => [it.product_id, it]))
+      })
+    } else {
+      setCurrentOrder(null);
     }
-    setCurrentOrder(value);
   }
 
   const searchOrder = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -199,7 +210,7 @@ export default function ProductOrderWireframe() {
           />
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Button
-            type="button"
+            type="reset"
             variant="ghost"
             size="sm"
             className="absolute right-1 top-1/2 transform -translate-y-1/2"
@@ -209,11 +220,19 @@ export default function ProductOrderWireframe() {
           </Button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {visibleTags.map((tag) => (
+          {visibleTags.map(([tag, tagIndex]) => (
             <Badge
               key={tag}
               variant={selectedTags.has(tag) ? "default" : "outline"}
-              className="cursor-pointer"
+              className={selectedTags.has(tag) ? `
+                bg-${colorsByIndex[tagIndex]}-500 hover:bg-${colorsByIndex[tagIndex]}-600
+                text-white
+              ` : `
+                cursor-pointer
+                border-${colorsByIndex[tagIndex]}-500
+                text-${colorsByIndex[tagIndex]}-700 dark:text-${colorsByIndex[tagIndex]}-300
+                hover:bg-${colorsByIndex[tagIndex]}-100 dark:hover:bg-${colorsByIndex[tagIndex]}-900
+              `}
               onClick={() => handleTagToggle(tag)}
             >
               {tag}
@@ -231,13 +250,53 @@ export default function ProductOrderWireframe() {
               <h2 className="font-semibold">{product.name}</h2>
               <p className="text-sm text-gray-500">{fp(product.price)}</p>
             </div>
-            <Button
-              size="sm"
-              onClick={() => updateOrderItems(product.id, "INSERT")}
-              disabled={isPending || !currentOrder}
-            >
-              Agregar orden
-            </Button>
+            {
+              currentOrder ?
+                !!currentOrder.items.get(product.id) ?
+                  <div className="inline-flex items-center rounded-md border border-input bg-background shadow-sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateOrderItems(product.id, "INSERT")}
+                      aria-label="Insert"
+                      className="rounded-l-md px-2 h-8"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <div className="w-8 h-8 flex items-center justify-center border-l border-r border-input text-xs font-medium">
+                      {currentOrder.items.get(product.id)?.quantity}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => updateOrderItems(product.id, "DELETE")}
+                      aria-label="Delete"
+                      disabled={currentOrder.items.get(product.id)?.quantity === 0}
+                      className="rounded-r-md px-2 h-8"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  : <Button
+                    size="sm"
+                    onClick={() => updateOrderItems(product.id, "INSERT")}
+                    disabled={isPending || !currentOrder}
+                  >
+                    Agregar
+                  </Button>
+                :
+                <Button
+                  size="sm"
+                  onClick={() => startTransition(async () => {
+                    await addOrder()
+                    await updateOrderItems(product.id, "INSERT")
+                  })
+                  }
+                  disabled={isPending || !currentOrder}
+                >
+                  Crear orden
+                </Button>
+            }
           </CardContent>
         </Card>
       ))}
