@@ -247,12 +247,12 @@ export default function ProductOrderWireframe() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => updateOrderItems(product.id, "INSERT")}
-                      aria-label="Insert"
-                      className="rounded-l-md px-2 h-8"
-                      disabled={isPending}
+                      onClick={() => updateOrderItems(product.id, "DELETE")}
+                      aria-label="Delete"
+                      disabled={currentOrder.items.get(product.id)?.quantity === 0 || isPending}
+                      className="rounded-r-md px-2 h-8"
                     >
-                      <Plus className="h-3 w-3" />
+                      <Minus className="h-3 w-3" />
                     </Button>
                     <div className="w-8 h-8 flex items-center justify-center border-l border-r border-input text-xs font-medium">
                       {currentOrder.items.get(product.id)?.quantity}
@@ -260,12 +260,12 @@ export default function ProductOrderWireframe() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => updateOrderItems(product.id, "DELETE")}
-                      aria-label="Delete"
-                      disabled={currentOrder.items.get(product.id)?.quantity === 0 || isPending}
-                      className="rounded-r-md px-2 h-8"
+                      onClick={() => updateOrderItems(product.id, "INSERT")}
+                      aria-label="Insert"
+                      className="rounded-l-md px-2 h-8"
+                      disabled={isPending}
                     >
-                      <Minus className="h-3 w-3" />
+                      <Plus className="h-3 w-3" />
                     </Button>
                   </div>
                   : <Button
@@ -285,7 +285,7 @@ export default function ProductOrderWireframe() {
                   }
                   disabled={isPending}
                 >
-                  Crear orden
+                  Nueva orden
                 </Button>
             }
           </CardContent>
