@@ -1,14 +1,14 @@
 "use server"
 
-import { addOrder } from "@/lib/sql/functions/addOrder";
+import { insertOrder } from "@/lib/sql/functions/insertOrder";
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { getOrder } from "@/lib/sql/functions/getOrder";
 import { getOrderItemsDetailed } from "@/lib/sql/functions/getOrderItemsDetailed";
-import { OrderItems } from "@/lib/types";
+import { errorHandler } from "@/lib/util/errorHandler";
 
-export async function handleGetProducts(formData: FormData) {
+export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
     actionName: 'handleGetProducts',
     async callback() {
@@ -20,15 +20,23 @@ export async function handleGetProducts(formData: FormData) {
   })
 }
 
-export async function handleCreateOrder(formData: FormData) {
+export async function handleInsertOrder(formData: FormData) {
   return errorHandler({
     actionName: 'handleCreateOrder',
-    callback() {
-      const positionValue = parseInt(`${formData.get('position')}`);
-      return addOrder(positionValue);
+    async callback () {
+      const order = await insertOrder("America/Mexico_City");
+      formData.append('orderId', order.id)
+      if( formData.has('productId') ){
+        const orderIdValue = order.id;
+        const productIdValue = `${formData.get('productId')}`;
+        await updateOrderItem(orderIdValue, productIdValue, 'INSERT');
+      }
     },
     formData
-  })
+  }).then((response) => {
+    if (response.success) return handleSelectOrderItems(formData);
+    return response;
+  });
 }
 
 export async function handleUpdateOrderItem(formData: FormData) {
@@ -42,7 +50,7 @@ export async function handleUpdateOrderItem(formData: FormData) {
     },
     formData
   }).then((response) => {
-    if (response.success) return handleGetOrderItems(formData);
+    if (response.success) return handleSelectOrderItems(formData);
     return response;
   });
 }
@@ -58,7 +66,7 @@ export async function handleCloseOrder(formData: FormData) {
   });
 }
 
-export async function handleGetOrderItems(formData: FormData) {
+export async function handleSelectOrderItems(formData: FormData) {
   return errorHandler({
     actionName: 'getOrderItems',
     async callback() {
@@ -69,47 +77,4 @@ export async function handleGetOrderItems(formData: FormData) {
     },
     formData
   });
-}
-
-type ServerActionCallback<T> = () => Promise<T>;
-
-interface ErrorHandlerProps<T> {
-  actionName: string;
-  callback: ServerActionCallback<T>;
-  formData: FormData;
-}
-
-async function errorHandler<T>({ actionName, callback, formData }: ErrorHandlerProps<T>): Promise<
-  { success: true, message: string, result: T } |
-  { success: false, message: string, result: null }
-> {
-  try {
-    // Log the formData for inspection
-    console.log(`Action: ${actionName} - Form Data: `, formData);
-
-    // Execute the server action callback
-    const result = await callback() as T;
-    console.log(`Action: ${actionName} - Result: `, result);
-
-    // Return success response
-    return { success: true, message: `${actionName} successed`, result };
-  } catch (error) {
-    // Log the error for debugging
-    console.error(`Error in ${actionName}: `, error);
-
-    // You can provide custom error handling depending on the error type
-    if (error instanceof Error) {
-      // Handle database or known errors
-      if (JSON.stringify(error).includes('23505')) {
-        // Example: Handle unique constraint violations (PostgreSQL)
-        return { success: false, message: 'Duplicate entry detected.', result: null };
-      }
-
-      // Generic database or unknown errors
-      return { success: false, message: 'Database error occurred.', result: null };
-    }
-
-    // If the error is not an instance of Error, provide a fallback message
-    return { success: false, message: 'An unknown error occurred.', result: null };
-  }
 }

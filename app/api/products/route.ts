@@ -6,7 +6,7 @@ export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
   try {
-    // await seed();
+    //await seed();
     let products = await getProducts();
     return NextResponse.json(products)
   } catch (error) {

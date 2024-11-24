@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const orders = await getOpenOrders();
+    const orders = await getOpenOrders("America/Mexico_City");
     return NextResponse.json(orders)
   } catch (error) {
     console.error('Error fetching open orders:', error)

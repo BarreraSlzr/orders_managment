@@ -1,7 +1,6 @@
 "use server"
 
-import fs from 'fs/promises';
-import { db, sql } from '../database';
+import { db } from '../database';
 import productsSeed from '@/lib/sql/productsSeed.json'
 import { CompiledQuery } from 'kysely';
 

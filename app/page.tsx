@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { handleGetOrderItems, handleCreateOrder, handleGetProducts, handleUpdateOrderItem } from './actions'
+import { handleSelectOrderItems, handleInsertOrder, handleUpdateOrderItem, handleCloseOrder } from './actions'
 import { Order, OrderItem, OrderItems, Product } from '@/lib/types'
 import { formatPrice } from '@/lib/util/formatPrice'
 
@@ -45,6 +45,7 @@ export default function ProductOrderWireframe() {
   const [currentOrder, setCurrentOrder] = useState<OrderItemsFE | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
+
   const visibleProducts = useMemo(() => {
     function filterAndSortProducts() {
       return products
@@ -81,7 +82,7 @@ export default function ProductOrderWireframe() {
     }
   }, [selectedTags, tagsSorted])
 
-  const fp = (value?: number) => formatPrice(value || 0, navigator?.language || 'es-MX', 'MXN')
+  const fp = (value?: number) => formatPrice(value || 0)
 
   function updateOrder(value: OrderItems | null) {
     if (value !== null) {
@@ -96,16 +97,16 @@ export default function ProductOrderWireframe() {
     }
   }
 
-  const addOrder = async () => {
+  const addOrder = (withProduct?: string) => () => {
     const formData = new FormData()
-    formData.append('position', `${orders.size + 1}`)
+    if( withProduct ) formData.append('productId', withProduct)
     startTransition(async () => {
-      const { message, success, result: newOrder } = await handleCreateOrder(formData);
-      if (success) updateOrder({ order: newOrder, items: [] });
+      const { message, success, result: orderUpdated } = await handleInsertOrder(formData);
+      if (success) updateOrder(orderUpdated);
     })
   }
 
-  const updateOrderItems = async (productId: string, type: "INSERT" | "DELETE") => {
+  const updateOrderItems = (productId: string, type: "INSERT" | "DELETE") => () => {
     if (!currentOrder) return
     const formData = new FormData()
     formData.append('orderId', currentOrder.order.id)
@@ -118,11 +119,11 @@ export default function ProductOrderWireframe() {
     })
   }
 
-  const setCurrentOrderDetails = async (order: Order) => {
+  const setCurrentOrderDetails = (order: Order) => () => {
     const formData = new FormData()
     formData.append('orderId', order.id)
     startTransition(async () => {
-      const { success, result: orderUpdated } = await handleGetOrderItems(formData);
+      const { success, result: orderUpdated } = await handleSelectOrderItems(formData);
       if (success) updateOrder(orderUpdated)
     })
   }
@@ -132,7 +133,11 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('orderId', currentOrder.order.id)
     startTransition(async () => {
-      // await handleCloseOrder(formData);
+      const {success} = await handleCloseOrder(formData)
+      if(success){
+        orders.delete(currentOrder.order.id);
+        setOrders(new Map(orders));
+      } 
       updateOrder(null)
     })
   }
@@ -152,7 +157,7 @@ export default function ProductOrderWireframe() {
   // Fetching tags
   const fetchOrders = async () => {
     const response = await fetch('/api/orders')
-    if (!response.ok) throw new Error('Failed to fetch tags')
+    if (!response.ok) throw new Error('Failed to fetch open orders')
     return response.json() as unknown as Order[]
   }
 
@@ -174,24 +179,42 @@ export default function ProductOrderWireframe() {
   return (
     <div className="max-w-md mx-auto p-4 space-y-4">
       <header className="flex justify-between items-center">
+        <Button className='whitespace-nowrap' onClick={addOrder()}>Crear orden</Button>
         {currentOrder && <>
+        <div className="flex gap-2">
           <Badge variant="outline">#{currentOrder.order.position} | {fp(currentOrder.order.total)}</Badge>
-          <Button variant="ghost" size="sm" disabled={isPending} onClick={closeOrder}>Cerrar</Button>
+          <Button variant='destructive' size="sm" disabled={isPending} onClick={closeOrder}>Cerrar orden</Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => updateOrder(null)}
+          >
+            <X />
+          </Button>
+        </div>
         </>
         }
       </header>
-      <div className="flex items-center space-x-2 overflow-x-auto py-2">
-        <Badge onClick={addOrder}>Nueva orden (#{orders.size + 1})</Badge>
+      <div className="flex flex-wrap gap-2 py-2">
         {Array.from(orders.values()).map(order =>
-          <Badge key={order.id} hidden={(currentOrder?.order.id || 'x') === order.id} variant="secondary" onClick={() => setCurrentOrderDetails(order)}>#{order.position} | {fp(order.total)} </Badge>)
+          <Badge key={order.id} 
+          variant="secondary" 
+          onClick={setCurrentOrderDetails(order)}
+          hidden={(currentOrder?.order.id || 'x') === order.id}
+          className='flex flex-col text-right'
+          >
+            <span>#{order.position}</span>
+            <span className='whitespace-nowrap'>{fp(order.total)}</span>
+          </Badge>)
         }
       </div>
-      <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() => {
+      <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() => 
         startTransition(() => {
           setSearchQuery('');
           setSelectedTags(new Set());
         })
-      }}>
+      }>
         <div className="relative">
           <Input
             name="search"
@@ -226,13 +249,12 @@ export default function ProductOrderWireframe() {
               onClick={() => handleTagToggle(tag)}
             >
               {tag}
-              <input type="checkbox" name="tags" value={tag} checked={selectedTags.has(tag)} className="sr-only" />
+              <input type="checkbox" name="tags" value={tag} readOnly checked={selectedTags.has(tag)} className="sr-only" />
             </Badge>
           ))}
         </div>
         <Button type="reset">Limpiar</Button>
       </form>
-
       {visibleProducts.map((product) => (
         <Card key={product.id}>
           <CardContent className="p-4 flex justify-between items-center">
@@ -247,7 +269,7 @@ export default function ProductOrderWireframe() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => updateOrderItems(product.id, "DELETE")}
+                      onClick={updateOrderItems(product.id, "DELETE")}
                       aria-label="Delete"
                       disabled={currentOrder.items.get(product.id)?.quantity === 0 || isPending}
                       className="rounded-r-md px-2 h-8"
@@ -260,7 +282,7 @@ export default function ProductOrderWireframe() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => updateOrderItems(product.id, "INSERT")}
+                      onClick={updateOrderItems(product.id, "INSERT")}
                       aria-label="Insert"
                       className="rounded-l-md px-2 h-8"
                       disabled={isPending}
@@ -270,7 +292,7 @@ export default function ProductOrderWireframe() {
                   </div>
                   : <Button
                     size="sm"
-                    onClick={() => updateOrderItems(product.id, "INSERT")}
+                    onClick={updateOrderItems(product.id, "INSERT")}
                     disabled={isPending}
                   >
                     Agregar
@@ -278,19 +300,16 @@ export default function ProductOrderWireframe() {
                 :
                 <Button
                   size="sm"
-                  onClick={() => startTransition(async () => {
-                    await addOrder()
-                    await updateOrderItems(product.id, "INSERT")
-                  })
-                  }
+                  onClick={addOrder(product.id)}
                   disabled={isPending}
                 >
-                  Nueva orden
+                  Crear orden
                 </Button>
             }
-          </CardContent>
+            </CardContent>
         </Card>
-      ))}
+      ))
+      }
     </div>
   )
 }

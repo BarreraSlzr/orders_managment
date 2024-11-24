@@ -7,9 +7,9 @@ function createProductTable() {
     .createTable('products')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
-    .addColumn('deleted', 'timestamp', (col) => col.defaultTo(null))
-    .addColumn('updated', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
     .addColumn('name', 'varchar', (col) => col.notNull())
     .addColumn('price', 'integer', (col) => col.notNull()) // price in cents
     .addColumn('tags', sql`varchar`, (col) => col.notNull())
@@ -25,10 +25,10 @@ function createOrderTable() {
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('position', 'integer', (col) => col.notNull()) // Order number by day
-    .addColumn('closed', 'timestamp', (col) => col.defaultTo(null))
-    .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
-    .addColumn('deleted', 'timestamp', (col) => col.defaultTo(null))
-    .addColumn('updated', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('closed', 'timestamptz', (col) => col.defaultTo(null))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
     .addColumn('total', 'integer', (col) => col.notNull().defaultTo(0)) // total in cents
     .execute()
     .then(() =>
