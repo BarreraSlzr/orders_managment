@@ -1,19 +1,16 @@
 'use client'
 
 import React, { useEffect, useMemo, useState, useTransition } from 'react'
-import { Minus, Plus, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Minus, Plus, Search, X } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { handleSelectOrderItems, handleInsertOrder, handleUpdateOrderItem, handleCloseOrder } from './actions'
-import { Order, OrderItem, OrderItems, Product } from '@/lib/types'
-import { formatPrice } from '@/lib/util/formatPrice'
+import { Order, OrderItem, OrderItems, OrderItemsFE, Product } from '@/lib/types'
+import { formatPrice } from '@/lib/utils/formatPrice'
+import { ProductCard } from '@/components/ProductCard'
 
-interface OrderItemsFE {
-  order: Order,
-  items: Map<OrderItem['product_id'], OrderItem>
-}
 
 const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
   const tagIndices: Record<string, number> = {};
@@ -45,6 +42,11 @@ export default function ProductOrderWireframe() {
   const [currentOrder, setCurrentOrder] = useState<OrderItemsFE | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set);
+  const [ShowDetail, setShowDetail] = useState(false)
+
+  function toggleDetail() {
+    setShowDetail(!ShowDetail)
+  }
 
   const visibleProducts = useMemo(() => {
     function filterAndSortProducts() {
@@ -99,7 +101,7 @@ export default function ProductOrderWireframe() {
 
   const addOrder = (withProduct?: string) => () => {
     const formData = new FormData()
-    if( withProduct ) formData.append('productId', withProduct)
+    if (withProduct) formData.append('productId', withProduct)
     startTransition(async () => {
       const { message, success, result: orderUpdated } = await handleInsertOrder(formData);
       if (success) updateOrder(orderUpdated);
@@ -133,11 +135,11 @@ export default function ProductOrderWireframe() {
     const formData = new FormData()
     formData.append('orderId', currentOrder.order.id)
     startTransition(async () => {
-      const {success} = await handleCloseOrder(formData)
-      if(success){
+      const { success } = await handleCloseOrder(formData)
+      if (success) {
         orders.delete(currentOrder.order.id);
         setOrders(new Map(orders));
-      } 
+      }
       updateOrder(null)
     })
   }
@@ -181,35 +183,35 @@ export default function ProductOrderWireframe() {
       <header className="flex justify-between items-center">
         <Button className='whitespace-nowrap' onClick={addOrder()}>Crear orden</Button>
         {currentOrder && <>
-        <div className="flex gap-2">
-          <Badge variant="outline">#{currentOrder.order.position} | {fp(currentOrder.order.total)}</Badge>
-          <Button variant='destructive' size="sm" disabled={isPending} onClick={closeOrder}>Cerrar orden</Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => updateOrder(null)}
-          >
-            <X />
-          </Button>
-        </div>
+          <div className="flex gap-2">
+            <Badge variant="outline">#{currentOrder.order.position} | {fp(currentOrder.order.total)}</Badge>
+            <Button variant='destructive' size="sm" disabled={isPending} onClick={closeOrder}>Cerrar orden</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => updateOrder(null)}
+            >
+              <X />
+            </Button>
+          </div>
         </>
         }
       </header>
       <div className="flex flex-wrap gap-2 py-2">
         {Array.from(orders.values()).map(order =>
-          <Badge key={order.id} 
-          variant="secondary" 
-          onClick={setCurrentOrderDetails(order)}
-          hidden={(currentOrder?.order.id || 'x') === order.id}
-          className='flex flex-col text-right'
+          <Badge key={order.id}
+            variant="secondary"
+            onClick={setCurrentOrderDetails(order)}
+            hidden={(currentOrder?.order.id || 'x') === order.id}
+            className='flex flex-col text-right'
           >
             <span>#{order.position}</span>
             <span className='whitespace-nowrap'>{fp(order.total)}</span>
           </Badge>)
         }
       </div>
-      <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() => 
+      <form onSubmit={(ev) => ev.preventDefault()} className="space-y-2" onReset={() =>
         startTransition(() => {
           setSearchQuery('');
           setSelectedTags(new Set());
@@ -258,58 +260,83 @@ export default function ProductOrderWireframe() {
       {visibleProducts.map((product) => (
         <Card key={product.id}>
           <CardContent className="p-4 flex justify-between items-center">
-            <div>
-              <h2 className="font-semibold">{product.name}</h2>
-              <p className="text-sm text-gray-500">{fp(product.price)}</p>
-            </div>
-            {
-              currentOrder ?
-                !!currentOrder.items.get(product.id) ?
-                  <div className="inline-flex items-center rounded-md border border-input bg-background shadow-sm">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={updateOrderItems(product.id, "DELETE")}
-                      aria-label="Delete"
-                      disabled={currentOrder.items.get(product.id)?.quantity === 0 || isPending}
-                      className="rounded-r-md px-2 h-8"
-                    >
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <div className="w-8 h-8 flex items-center justify-center border-l border-r border-input text-xs font-medium">
-                      {currentOrder.items.get(product.id)?.quantity}
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={updateOrderItems(product.id, "INSERT")}
-                      aria-label="Insert"
-                      className="rounded-l-md px-2 h-8"
-                      disabled={isPending}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  : <Button
-                    size="sm"
-                    onClick={updateOrderItems(product.id, "INSERT")}
-                    disabled={isPending}
-                  >
-                    Agregar
-                  </Button>
-                :
-                <Button
-                  size="sm"
-                  onClick={addOrder(product.id)}
-                  disabled={isPending}
-                >
-                  Crear orden
-                </Button>
-            }
-            </CardContent>
+            <ProductCard
+              key={product.id}
+              product={product}
+              currentOrder={currentOrder}
+              handleAddOrder={addOrder}
+              handleUpdateOrderItems={updateOrderItems}
+              isPending={isPending} />
+          </CardContent>
         </Card>
       ))
       }
+
+      <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
+        {!!currentOrder?.items &&
+          <Card className='py-4 translate-y-8'>
+            <CardHeader className='pt-1 px-4'>
+              <Button variant='ghost' size='sm' onClick={toggleDetail}>
+                <b> Productos seleccionados ({[currentOrder.items.values()].reduce((acc, its) => acc + its.toArray().reduce((acc2, its) => acc2 + its.quantity, 0), 0)})</b>
+                {
+                  ShowDetail ?
+                    <ArrowDown />
+                    :
+                    <ArrowUp />
+                }
+              </Button>
+            </CardHeader>
+            {ShowDetail &&
+              <CardContent className='flex flex-col' >
+                {products
+                  .filter(p => currentOrder?.items.has(p.id))
+                  .map(product => <ProductCard
+                    key={product.id}
+                    product={product}
+                    currentOrder={currentOrder}
+                    handleAddOrder={addOrder}
+                    handleUpdateOrderItems={updateOrderItems}
+                    isPending={isPending} />
+                  )
+                }
+              </CardContent>
+            }
+          </Card>}
+        <Card className='w-full sticky bottom-0'>
+          <CardContent className='flex flex-col'>
+            <div>
+              <div className="flex flex-wrap gap-2 py-2">
+                {Array.from(orders.values()).map(order => (
+                  <Badge
+                    key={order.id}
+                    variant="secondary"
+                    onClick={() => setCurrentOrderDetails(order)}
+                    hidden={currentOrder?.order.id === order.id}
+                    className="flex flex-col text-right"
+                  >
+                    <span>#{order.position}</span>
+                    <span>{formatPrice(order.total)}</span>
+                  </Badge>
+                ))}
+              </div>
+            </div>
+            <div className='flex justify-between items-center gap-2'>
+              <Button onClick={() => addOrder()}>Crear orden</Button>
+              {currentOrder?.order && (
+                <div className="flex gap-2">
+                  <Badge variant="outline">#{currentOrder.order.position} | {formatPrice(currentOrder.order.total)}</Badge>
+                  <Button variant="destructive" size="sm" disabled={isPending} onClick={closeOrder}>
+                    Cerrar orden
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentOrder(null)}>
+                    <X />
+                  </Button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </footer>
     </div>
   )
 }

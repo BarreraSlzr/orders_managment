@@ -51,29 +51,38 @@ function createOrderItemsTable() {
 }
 
 const calculateOrderTotal = `
-CREATE OR REPLACE FUNCTION update_order_total() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION calculate_order_total() RETURNS TRIGGER AS $$
 BEGIN
   -- Update the order total
-  UPDATE "order"
+  UPDATE orders
   SET total = (
     SELECT COALESCE(SUM(p.price), 0)
     FROM order_items oi
-    JOIN product p ON oi.product_id = p.id
-    WHERE oi.order_id = NEW.order_id
+    JOIN products p ON oi.product_id = p.id
+    WHERE oi.order_id = COALESCE(OLD.order_id, NEW.order_id)
   )
-  WHERE id = NEW.order_id;
+  WHERE id = COALESCE(OLD.order_id, NEW.order_id);
 
-  RETURN NEW;
+  RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
 `;
 
 const updateOrderTotal = `
-CREATE TRIGGER update_order_total
-  AFTER INSERT OR DELETE
-  ON order_items
-  FOR EACH ROW
-EXECUTE FUNCTION calculate_order_total();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_trigger 
+        WHERE tgname = 'update_order_total'
+    ) THEN
+        CREATE TRIGGER update_order_total
+        AFTER INSERT OR DELETE
+        ON order_items
+        FOR EACH ROW
+        EXECUTE FUNCTION calculate_order_total();
+    END IF;
+END $$;
 `;
 
 export async function seed() {
