@@ -31,9 +31,9 @@ export interface OrderContextState {
     selectedTags: Set<string>;
     visibleProducts: Product[];
     visibleTags: [string, number][];
-}
-
-export interface OrderContextActions {
+  }
+  
+  export interface OrderContextActions {
     handleAddOrder: (productId?: string) => void;
     handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => void;
     handleCloseOrder: () => void;
@@ -41,6 +41,7 @@ export interface OrderContextActions {
     setSelectedTags: (tags: Set<string>) => void;
     setCurrentOrderDetails: (order: Order | null) => void;
     resetFilters: () => void;
-}
-
-export type OrderContextType = OrderContextState & OrderContextActions;
+  }
+  
+  export type OrderContextType = OrderContextState & OrderContextActions;
+  
