@@ -6,7 +6,7 @@ import { closeOrder } from "@/lib/sql/functions/closeOrder";
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { getOrder } from "@/lib/sql/functions/getOrder";
 import { getOrderItemsDetailed } from "@/lib/sql/functions/getOrderItemsDetailed";
-import { errorHandler } from "@/lib/util/errorHandler";
+import { errorHandler } from "@/lib/utils/errorHandler";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
