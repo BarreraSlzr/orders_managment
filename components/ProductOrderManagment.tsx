@@ -32,10 +32,6 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
     } = useOrders({ products: p, orders: os});
     const [showDetail, setShowDetail] = [false, (b: boolean) => { }];
 
-    const toggleDetail = () => {
-        setShowDetail(!showDetail)
-    }
-
     return (
         <div className="max-w-md mx-auto space-y-4 h-screen flex flex-col justify-between">
             <main className='p-4 pb-10 flex flex-wrap gap-2'>
@@ -66,7 +62,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                 {currentOrder?.items && (
                     <Card className="py-4 translate-y-8">
                         <CardHeader className="pt-1 px-4">
-                            <Button variant="ghost" size="sm" onClick={toggleDetail}>
+                            <Button variant="ghost" size="sm" onClick={() => setShowDetail(!showDetail)}>
                                 <b>
                                     Productos seleccionados (
                                     {Array.from(currentOrder.items.values()).reduce(
