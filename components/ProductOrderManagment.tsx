@@ -9,6 +9,7 @@ import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Product, Order } from '@/lib/types';
 import { useState } from 'react';
+import Receipt from './ReceiptCard';
 
 export default function ProductOrderManagment({ products: p, orders: os }: {
     products: Product[],
@@ -58,7 +59,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                     </div>
                 ))}
             </main>
-            
+
             <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
                 {currentOrder?.items && (
                     <Card className="py-4 translate-y-8">
@@ -91,6 +92,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                                         />
                                     ))
                                 }
+                                <Receipt data={currentOrder}/>
                             </CardContent>
                         )}
                     </Card>

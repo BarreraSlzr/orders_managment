@@ -1,9 +1,11 @@
 "use client"
 
 import { format } from "date-fns"
+import { es } from "date-fns/locale/es";
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { OrderItemsFE } from "@/lib/types"
+import { formatPrice } from "@/lib/utils/formatPrice"
 
 interface ReceiptProps {
   data: OrderItemsFE
@@ -20,11 +22,11 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
   const total = itemsArray.reduce((acc, item) => acc + (item.price * item.quantity), 0)
 
   return (
-    <Card className="w-[380px] bg-white font-mono text-sm">
+    <Card className="w-full bg-white font-mono text-sm">
       <CardHeader className="text-center space-y-0 pb-3">
-        <h1 className="font-bold text-lg tracking-wide">GITHUB RECEIPT</h1>
-        <p className="text-xs">{format(order.created, "EEEE, MMMM dd, yyyy").toUpperCase()}</p>
-        <p className="text-xs">ORDER #{order.id.substring(0, 5)}</p>
+        <h1 className="font-bold text-lg tracking-wide">DETALLE DE ORDEN</h1>
+        <p className="text-xs">{format(order.created, "EEEE, MMMM dd, yyyy", {locale: es}).toUpperCase()}</p>
+        <p className="text-xs">ORDEN #{order.position }-{order.id.substring(0, 5).toUpperCase()}</p>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Customer Section 
@@ -40,15 +42,18 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
             <div key={item.product_id} className="flex justify-between">
               <div>
                 <p>{item.name}</p>
-                <p className="text-xs text-muted-foreground">Quantity: {item.quantity}</p>
+                <p className="text-xs text-muted-foreground">Cant: {item.quantity}</p>
               </div>
-              <p className="tabular-nums">{item.price.toFixed(2)}</p>
+              <div className="flex flex-col">
+                <p className="tabular-nums">{formatPrice(item.price)}</p>
+                <p className="text-xs text-muted-foreground mt-auto">{formatPrice(item.price * item.quantity)}</p>
+              </div>
             </div>
           ))}
           <Separator />
           <div className="flex justify-between font-bold">
             <p>TOTAL:</p>
-            <p className="tabular-nums">{total.toFixed(2)}</p>
+            <p className="tabular-nums">{formatPrice(total)}</p>
           </div>
         </div>
 
