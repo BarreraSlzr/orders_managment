@@ -8,6 +8,7 @@ import { formatPrice } from '@/lib/utils/formatPrice';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Product, Order } from '@/lib/types';
+import { useState } from 'react';
 
 export default function ProductOrderManagment({ products: p, orders: os }: {
     products: Product[],
@@ -29,8 +30,8 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
         setSelectedTags,
         setCurrentOrderDetails,
         resetFilters
-    } = useOrders({ products: p, orders: os});
-    const [showDetail, setShowDetail] = [false, (b: boolean) => { }];
+    } = useOrders({ products: p, orders: os });
+    const [showDetail, setShowDetail] = useState(false);
 
     return (
         <div className="max-w-md mx-auto space-y-4 h-screen flex flex-col justify-between">
@@ -62,7 +63,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                 {currentOrder?.items && (
                     <Card className="py-4 translate-y-8">
                         <CardHeader className="pt-1 px-4">
-                            <Button variant="ghost" size="sm" onClick={() => setShowDetail(!showDetail)}>
+                            <Button variant="outline" size="sm" onClick={() => setShowDetail(!showDetail)}>
                                 <b>
                                     Productos seleccionados (
                                     {Array.from(currentOrder.items.values()).reduce(
@@ -76,7 +77,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                             </Button>
                         </CardHeader>
                         {showDetail && (
-                            <CardContent className="flex flex-col">
+                            <CardContent className="flex flex-col gap-2">
                                 {products
                                     .filter((product) => currentOrder.items.has(product.id))
                                     .map((product) => (
@@ -88,7 +89,8 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                                             handleUpdateOrderItems={handleUpdateOrderItems}
                                             isPending={isPending}
                                         />
-                                    ))}
+                                    ))
+                                }
                             </CardContent>
                         )}
                     </Card>
