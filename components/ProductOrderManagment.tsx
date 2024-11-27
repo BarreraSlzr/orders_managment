@@ -8,8 +8,8 @@ import { formatPrice } from '@/lib/utils/formatPrice';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Product, Order } from '@/lib/types';
-import { getOpenOrders } from '@/lib/sql/functions/getOpenOrders';
-import { getProducts } from '@/lib/sql/functions/getProducts';
+import { useState } from 'react';
+import Receipt from './ReceiptCard';
 
 export default function ProductOrderManagment({ products: p, orders: os }: {
     products: Product[],
@@ -31,12 +31,8 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
         setSelectedTags,
         setCurrentOrderDetails,
         resetFilters
-    } = useOrders({ products: p, orders: os});
-    const [showDetail, setShowDetail] = [false, (b: boolean) => { }];
-
-    const toggleDetail = () => {
-        setShowDetail(!showDetail)
-    }
+    } = useOrders({ products: p, orders: os });
+    const [showDetail, setShowDetail] = useState(false);
 
     return (
         <div className="max-w-md mx-auto space-y-4 h-screen flex flex-col justify-between">
@@ -63,41 +59,49 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                     </div>
                 ))}
             </main>
+
             <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
-                {!!currentOrder?.items &&
-                    <Card className='py-4 translate-y-8'>
-                        <CardHeader className='pt-1 px-4'>
-                            <Button variant='ghost' size='sm' onClick={toggleDetail}>
-                                <b> Productos seleccionados ({[currentOrder.items.values()].reduce((acc, its) => acc + its.toArray().reduce((acc2, its) => acc2 + its.quantity, 0), 0)})</b>
-                                {
-                                    showDetail ?
-                                        <ArrowDown />
-                                        :
-                                        <ArrowUp />
-                                }
+                {currentOrder?.items && (
+                    <Card className="py-4 translate-y-8">
+                        <CardHeader className="pt-1 px-4">
+                            <Button variant="outline" size="sm" onClick={() => setShowDetail(!showDetail)}>
+                                <b>
+                                    Productos seleccionados (
+                                    {Array.from(currentOrder.items.values()).reduce(
+                                        (totalQuantity, items) =>
+                                            totalQuantity + items.quantity,
+                                        0
+                                    )}
+                                    )
+                                </b>
+                                {showDetail ? <ArrowDown /> : <ArrowUp />}
                             </Button>
                         </CardHeader>
-                        {showDetail &&
-                            <CardContent className='flex flex-col' >
+                        {showDetail && (
+                            <CardContent className="flex flex-col gap-2">
                                 {products
-                                    .filter(p => currentOrder?.items.has(p.id))
-                                    .map(product => <ProductCard
-                                        key={product.id}
-                                        product={product}
-                                        currentOrder={currentOrder}
-                                        handleAddOrder={handleAddOrder}
-                                        handleUpdateOrderItems={handleUpdateOrderItems}
-                                        isPending={isPending} />
-                                    )
+                                    .filter((product) => currentOrder.items.has(product.id))
+                                    .map((product) => (
+                                        <ProductCard
+                                            key={product.id}
+                                            product={product}
+                                            currentOrder={currentOrder}
+                                            handleAddOrder={handleAddOrder}
+                                            handleUpdateOrderItems={handleUpdateOrderItems}
+                                            isPending={isPending}
+                                        />
+                                    ))
                                 }
+                                <Receipt data={currentOrder}/>
                             </CardContent>
-                        }
-                    </Card>}
-                <Card className='w-full sticky bottom-0'>
-                    <CardContent className='flex flex-col'>
+                        )}
+                    </Card>
+                )}
+                <Card className="w-full sticky bottom-0">
+                    <CardContent className="flex flex-col">
                         <div>
                             <div className="flex flex-wrap gap-2 py-2">
-                                {Array.from(orders.values()).map(order => (
+                                {Array.from(orders.values()).map((order) => (
                                     <Badge
                                         key={order.id}
                                         variant="secondary"
@@ -111,15 +115,26 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                                 ))}
                             </div>
                         </div>
-                        <div className='flex justify-between items-center gap-2'>
+                        <div className="flex justify-between items-center gap-2">
                             <Button onClick={() => handleAddOrder()}>Crear orden</Button>
                             {currentOrder?.order && (
                                 <div className="flex gap-2">
-                                    <Badge variant="outline">#{currentOrder.order.position} | {formatPrice(currentOrder.order.total)}</Badge>
-                                    <Button variant="destructive" size="sm" disabled={isPending} onClick={handleCloseOrder}>
+                                    <Badge variant="outline">
+                                        #{currentOrder.order.position} | {formatPrice(currentOrder.order.total)}
+                                    </Badge>
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        disabled={isPending}
+                                        onClick={handleCloseOrder}
+                                    >
                                         Cerrar orden
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => setCurrentOrderDetails(null)}>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setCurrentOrderDetails(null)}
+                                    >
                                         <X />
                                     </Button>
                                 </div>
