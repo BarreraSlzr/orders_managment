@@ -165,6 +165,23 @@ export function useOrders({ products: p, orders: os }: {
     setSelectedTags(new Set());
   }
 
+  // Fetching tags
+  const fetchOrders = async () => {
+    const response = await fetch('/api/orders')
+    if (!response.ok) throw new Error('Failed to fetch open orders')
+    return response.json() as unknown as Order[]
+  }
+  
+  useEffect(() => {
+    async function fetchAll() {
+      const orders = await fetchOrders()
+      startTransition(() => {
+        setOrders(new Map(orders.map(o => [o.id, o])))
+      })
+    }
+    fetchAll();
+  }, [])
+
   return {
     isPending,
     products,
