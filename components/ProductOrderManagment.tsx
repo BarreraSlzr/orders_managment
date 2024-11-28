@@ -3,18 +3,14 @@ import { FilterControls } from '@/components/FilterControls';
 import { ProductCard } from '@/components/ProductCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useOrders } from '@/hooks/useOrders';
+import { useOrders } from '@/context/useOrders';
 import { formatPrice } from '@/lib/utils/formatPrice';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Product, Order } from '@/lib/types';
 import { useState } from 'react';
 import Receipt from './ReceiptCard';
 
-export default function ProductOrderManagment({ products: p, orders: os }: {
-    products: Product[],
-    orders: Order[]
-}) {
+export default function ProductOrderManagment() {
     const {
         products,
         isPending,
@@ -31,7 +27,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
         setSelectedTags,
         setCurrentOrderDetails,
         resetFilters
-    } = useOrders({ products: p, orders: os });
+    } = useOrders();
     const [showDetail, setShowDetail] = useState(false);
 
     return (
@@ -92,7 +88,7 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                                         />
                                     ))
                                 }
-                                <Receipt data={currentOrder}/>
+                                <Receipt data={currentOrder} />
                             </CardContent>
                         )}
                     </Card>
