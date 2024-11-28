@@ -3,17 +3,20 @@ import { Button } from '@/components/ui/button';
 import { Minus, Plus } from 'lucide-react';
 import { OrderContextType, Product } from '@/lib/types';
 import { formatPrice } from '@/lib/utils/formatPrice';
+import { useOrders } from '@/context/useOrders';
 
-interface Props extends Pick<OrderContextType, 'handleAddOrder'| 'handleUpdateOrderItems' | 'currentOrder' | 'isPending'> {
+interface Props {
   product: Product,
 }
 
-export function ProductCard({ 
-  product, 
-  currentOrder, 
-  handleAddOrder, 
-  handleUpdateOrderItems, 
-  isPending }: Props) {
+export function ProductCard({
+  product }: Props) {
+  const {
+    currentOrder,
+    handleAddOrder,
+    handleUpdateOrderItems,
+    isPending
+  } = useOrders()
   const productInOrder = currentOrder?.items.get(product.id);
 
   return (

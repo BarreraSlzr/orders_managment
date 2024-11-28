@@ -33,29 +33,17 @@ export default function ProductOrderManagment() {
     return (
         <div className="max-w-md mx-auto space-y-4 h-screen flex flex-col justify-between">
             <main className='p-4 pb-10 flex flex-wrap gap-2'>
-                <FilterControls
-                    searchQuery={searchQuery}
-                    visibleTags={visibleTags}
-                    selectedTags={selectedTags}
-                    setSearchQuery={setSearchQuery}
-                    setSelectedTags={setSelectedTags}
-                    resetFilters={resetFilters}
-                />
+                <FilterControls />
                 {visibleProducts.map(product => (
                     <div
                         className='flex-grow'
                         key={product.id}>
                         <ProductCard
                             product={product}
-                            currentOrder={currentOrder}
-                            handleAddOrder={handleAddOrder}
-                            handleUpdateOrderItems={handleUpdateOrderItems}
-                            isPending={isPending}
                         />
                     </div>
                 ))}
             </main>
-
             <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
                 {currentOrder?.items && (
                     <Card className="py-4 translate-y-8">
@@ -81,10 +69,6 @@ export default function ProductOrderManagment() {
                                         <ProductCard
                                             key={product.id}
                                             product={product}
-                                            currentOrder={currentOrder}
-                                            handleAddOrder={handleAddOrder}
-                                            handleUpdateOrderItems={handleUpdateOrderItems}
-                                            isPending={isPending}
                                         />
                                     ))
                                 }
