@@ -45,8 +45,8 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
                 <p className="text-xs text-muted-foreground">Cant: {item.quantity}</p>
               </div>
               <div className="flex flex-col">
-                <p className="tabular-nums">{formatPrice(item.price)}</p>
-                <p className="text-xs text-muted-foreground mt-auto">{formatPrice(item.price * item.quantity)}</p>
+                <p className="text-muted-foreground mt-auto">{formatPrice(item.price)}</p>
+                <p className="text-xs tabular-nums">{formatPrice(item.price * item.quantity)}</p>
               </div>
             </div>
           ))}
