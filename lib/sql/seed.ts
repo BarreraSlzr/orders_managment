@@ -50,6 +50,68 @@ function createOrderItemsTable() {
     );
 }
 
+function createPaymentOptionsTable() {
+  return db.schema
+    .createTable('payment_options')
+    .ifNotExists()
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('name', 'varchar', (col) => col.notNull()) // e.g., "cash", "transfer", etc.
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .execute()
+    .then(() => console.info(`Created "payment_options" table`));
+}
+
+async function populatePaymentOptionsIfEmpty() {
+  const paymentOptions = [
+    { name: 'Cash' },
+    { name: 'Transfer' },
+    { name: 'Credit Card' },
+    { name: 'Debit Card' },
+    { name: 'Mobile Payment' }, // e.g., Apple Pay, Google Pay
+    { name: 'Cryptocurrency' },
+  ];
+
+  const noRows = (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM payment_options`))).rows.pop()?.count === 0
+    
+  if (noRows) {
+    await db
+      .insertInto('payment_options')
+      .values(paymentOptions)
+      .execute();
+
+    console.info(`Populated "payment_options" table with default entries`);
+  } else {
+    console.info(`"payment_options" table already populated. Skipping.`);
+  }
+}
+
+
+// SCHEMA UPDATES
+
+function updateOrdersTable() {
+  return db.schema
+    .alterTable('orders')
+    .addColumn('payment_option_id', 'integer', (col) =>
+      col
+        .references('payment_options.id')
+        .notNull()
+        .defaultTo(1) // Default to "Cash"
+        .onDelete('set null')
+    )
+    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false)) // true: to-go, false: in-site
+    .execute()
+    .then(() => console.info(`Updated "orders" table with payment_option_id and is_takeaway columns`));
+}
+
+function updateOrderItemsTable() {
+  return db.schema
+    .alterTable('order_items')
+    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false)) // Allows item-level override
+    .execute()
+    .then(() => console.info(`Updated "order_items" table with is_takeaway column`));
+}
+
+
 const calculateOrderTotal = `
 CREATE OR REPLACE FUNCTION calculate_order_total() RETURNS TRIGGER AS $$
 BEGIN
