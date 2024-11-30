@@ -10,6 +10,7 @@ import { errorHandler } from "@/lib/utils/errorHandler";
 import { Product } from "@/lib/types";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
+import { splitOrder } from "@/lib/sql/functions/splitOrder";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -55,6 +56,21 @@ export async function handleUpdateOrderItem(formData: FormData) {
   }).then((response) => {
     if (response.success) return handleSelectOrderItems(formData);
     return response;
+  });
+}
+
+export async function handleSplitOrder(formData: FormData) {
+  return await errorHandler({
+    actionName: 'handleUpdateOrderItem',
+    async callback() {
+      const orderId =`${formData.get('orderId')}`;
+      const productIds = formData.getAll('product_id') as string[];
+      return await splitOrder({
+        orderId,
+        productIds
+      })
+    },
+    formData
   });
 }
 

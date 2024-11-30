@@ -1,5 +1,5 @@
 'use client'
-import { handleCloseOrder, handleInsertOrder, handleSelectOrderItems, handleUpdateOrderItem } from '@/app/actions';
+import { handleCloseOrder, handleInsertOrder, handleSelectOrderItems, handleSplitOrder, handleUpdateOrderItem } from '@/app/actions';
 import { Order, OrderItems, OrderItemsFE, Product } from '@/lib/types';
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from 'react';
 import { useProducts } from './useProducts';
@@ -137,6 +137,21 @@ export function useOrders({ products: p, orders: os }: {
     visibleTags,
     setSearchQuery,
     setSelectedTags,
+    handleSplitOrder: async function(formData: FormData) {
+      const updatedOrder = await handleSplitOrder(formData);
+      if (updatedOrder.success) {
+        startTransition(() => {
+          orders.set(updatedOrder.result.olderOrder.id, updatedOrder.result.olderOrder);
+          orders.set(updatedOrder.result.newOrder.id, updatedOrder.result.newOrder);
+          setOrders(new Map(orders));
+          setCurrentOrder({
+            order: updatedOrder.result.newOrder,
+            items: new Map(updatedOrder.result.items.map(it => [it.product_id, it]))
+          });
+        })
+      }
+      return updatedOrder.success
+    },
     handleAddOrder: async function (productId?: string) {
       const formData = new FormData()
       if (productId) formData.append('productId', productId)

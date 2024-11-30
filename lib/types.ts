@@ -33,6 +33,7 @@ export interface OrderContextState {
   }
   
   export interface OrderContextActions {
+    handleSplitOrder: (formData: FormData) => Promise<boolean>
     handleAddOrder: (productId?: string) => Promise<void>;
     handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => Promise<void>;
     handleCloseOrder: () => Promise<void>;
