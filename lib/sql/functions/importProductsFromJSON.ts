@@ -8,17 +8,12 @@ const sqlSeedProductsFromJSON = `
 -- Define your JSON data
 DO $$
 DECLARE
-    json_data jsonb := '${JSON.stringify({
-    Products: productsSeed.Products.map((v) => ({
-        name: v.Producto,
-        price: parseInt(v.Precio.replace('$', '').trim()) * 100,
-        tags: v.Tags.split(',').map(t => t.trim()).join(',')
-    }))
+    json_data jsonb := '${JSON.stringify(productsSeed)
 })}';
 product jsonb; -- Declare a variable to hold each JSON object
 BEGIN
     -- Loop through each product in the JSON array
-    FOR product IN SELECT * FROM jsonb_array_elements(json_data->'Products')
+    FOR product IN SELECT * FROM jsonb_array_elements(json_data->'products')
     LOOP
         -- Insert data into the products table
         INSERT INTO products (name, price, tags)

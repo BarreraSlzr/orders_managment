@@ -2,11 +2,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, X } from 'lucide-react';
-import { OrderContextType } from '@/lib/types';
+import { useOrders } from '@/context/useOrders';
 
-export function FilterControls({ searchQuery, visibleTags, selectedTags, setSearchQuery, setSelectedTags, resetFilters }: 
-  Pick<OrderContextType, 'searchQuery' | 'visibleTags' | 'selectedTags' | 'setSearchQuery' | 'setSelectedTags' | 'resetFilters'>
-) {
+export function FilterControls() {
+  const {
+    searchQuery, visibleTags, selectedTags, setSearchQuery, setSelectedTags, resetFilters
+  } = useOrders()
   const handleTagToggle = (tag: string) => {
     selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
     setSelectedTags(new Set(selectedTags));
@@ -14,7 +15,7 @@ export function FilterControls({ searchQuery, visibleTags, selectedTags, setSear
 
   return (
     <form onSubmit={(ev) => ev.preventDefault()} onReset={resetFilters}
-    className='space-y-2 w-full'>
+      className='space-y-2 w-full'>
       <div className="relative">
         <Input
           name="search"

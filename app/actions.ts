@@ -7,6 +7,9 @@ import { getProducts } from "@/lib/sql/functions/getProducts";
 import { getOrder } from "@/lib/sql/functions/getOrder";
 import { getOrderItemsDetailed } from "@/lib/sql/functions/getOrderItemsDetailed";
 import { errorHandler } from "@/lib/utils/errorHandler";
+import { Product } from "@/lib/types";
+import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
+import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -77,4 +80,43 @@ export async function handleSelectOrderItems(formData: FormData) {
     },
     formData
   });
+}
+
+export async function handleUpsertProduct(formData: FormData) {
+  return errorHandler({
+    actionName: 'handleUpsertProduct',
+    async callback() {
+      const id = formData.get('id')?.toString() || '';
+      const name = formData.get('name')?.toString() || '';
+      const price = parseFloat(formData.get('price')?.toString() || '0');
+      const tags = `${formData.get('tags')?.toString() || ''}`.replace(/\s*,\s*/g, ',');
+    
+      if (!name || isNaN(price)) {
+        throw new Error('Invalid data: Name and price are required.');
+      }
+    
+      const product: Product = await upsertProduct({
+        id,
+        name,
+        price,
+        tags,
+      });
+    
+      return { product };
+    },
+    formData
+  });
+}
+
+export async function handleExportProducts(formData: FormData) {
+  errorHandler({
+    actionName: 'handleExportProducts',
+    async callback(){
+        return {
+          json: JSON.stringify((await exportProductsJSON())?.rows || [])
+        }
+    },
+    formData
+  })
+  
 }

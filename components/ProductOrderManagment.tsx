@@ -1,65 +1,46 @@
 'use client'
 import { FilterControls } from '@/components/FilterControls';
-import { ProductCard } from '@/components/ProductCard';
+import { OrderControls, ProductCard } from '@/components/ProductCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useOrders } from '@/hooks/useOrders';
+import { useOrders } from '@/context/useOrders';
 import { formatPrice } from '@/lib/utils/formatPrice';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Product, Order } from '@/lib/types';
 import { useState } from 'react';
 import Receipt from './ReceiptCard';
+import { OrderContextType } from '@/lib/types';
 
-export default function ProductOrderManagment({ products: p, orders: os }: {
-    products: Product[],
-    orders: Order[]
-}) {
+export default function ProductOrderManagment() {
     const {
         products,
         isPending,
         currentOrder,
         orders,
-        searchQuery,
-        selectedTags,
         visibleProducts,
-        visibleTags,
         handleAddOrder,
-        handleUpdateOrderItems,
         handleCloseOrder,
-        setSearchQuery,
-        setSelectedTags,
         setCurrentOrderDetails,
-        resetFilters
-    } = useOrders({ products: p, orders: os });
+        handleUpdateOrderItems
+    } = useOrders();
     const [showDetail, setShowDetail] = useState(false);
 
     return (
         <div className="max-w-md mx-auto space-y-4 h-screen flex flex-col justify-between">
             <main className='p-4 pb-10 flex flex-wrap gap-2'>
-                <FilterControls
-                    searchQuery={searchQuery}
-                    visibleTags={visibleTags}
-                    selectedTags={selectedTags}
-                    setSearchQuery={setSearchQuery}
-                    setSelectedTags={setSelectedTags}
-                    resetFilters={resetFilters}
-                />
+                <FilterControls />
                 {visibleProducts.map(product => (
                     <div
                         className='flex-grow'
                         key={product.id}>
                         <ProductCard
                             product={product}
-                            currentOrder={currentOrder}
-                            handleAddOrder={handleAddOrder}
-                            handleUpdateOrderItems={handleUpdateOrderItems}
-                            isPending={isPending}
-                        />
+                        >
+                            <OrderControls product={product} />
+                        </ProductCard>
                     </div>
                 ))}
             </main>
-
             <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
                 {currentOrder?.items && (
                     <Card className="py-4 translate-y-8">
@@ -79,20 +60,18 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
                         </CardHeader>
                         {showDetail && (
                             <CardContent className="flex flex-col gap-2">
-                                {products
+                                {Array.from(products.values())
                                     .filter((product) => currentOrder.items.has(product.id))
                                     .map((product) => (
                                         <ProductCard
                                             key={product.id}
                                             product={product}
-                                            currentOrder={currentOrder}
-                                            handleAddOrder={handleAddOrder}
-                                            handleUpdateOrderItems={handleUpdateOrderItems}
-                                            isPending={isPending}
-                                        />
+                                        >
+                                            <OrderControls product={product} />
+                                        </ProductCard>
                                     ))
                                 }
-                                <Receipt data={currentOrder}/>
+                                <Receipt data={currentOrder} />
                             </CardContent>
                         )}
                     </Card>
@@ -145,4 +124,4 @@ export default function ProductOrderManagment({ products: p, orders: os }: {
             </footer>
         </div>
     );
-}
+};
