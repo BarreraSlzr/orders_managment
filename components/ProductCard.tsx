@@ -1,23 +1,18 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Minus, Plus } from 'lucide-react';
-import { OrderContextType, Product } from '@/lib/types';
+import { Product } from '@/lib/types';
 import { formatPrice } from '@/lib/utils/formatPrice';
 import { useOrders } from '@/context/useOrders';
+import { PropsWithChildren } from 'react';
 
 interface Props {
-  product: Product,
+  product: Product
 }
 
 export function ProductCard({
-  product }: Props) {
-  const {
-    currentOrder,
-    handleAddOrder,
-    handleUpdateOrderItems,
-    isPending
-  } = useOrders()
-  const productInOrder = currentOrder?.items.get(product.id);
+  product,
+  children: actions }: PropsWithChildren<Props>) {
 
   return (
     <Card>
@@ -26,38 +21,60 @@ export function ProductCard({
           <h2 className="font-semibold">{product.name}</h2>
           <p className="text-sm text-gray-500">{formatPrice(product.price)}</p>
         </div>
-        {currentOrder ? (
-          productInOrder ? (
-            <div className="inline-flex items-center rounded-md border border-input bg-background shadow-sm">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleUpdateOrderItems(product.id, 'DELETE')}
-                disabled={productInOrder.quantity === 0 || isPending}
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <div className="w-8 h-8 flex items-center justify-center">{productInOrder.quantity}</div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleUpdateOrderItems(product.id, 'INSERT')}
-                disabled={isPending}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-            </div>
-          ) : (
-            <Button size="sm" onClick={() => handleUpdateOrderItems(product.id, 'INSERT')} disabled={isPending}>
-              Agregar
-            </Button>
-          )
-        ) : (
-          <Button size="sm" onClick={() => handleAddOrder(product.id)} disabled={isPending}>
-            Crear orden
-          </Button>
-        )}
+        {actions}
       </CardContent>
     </Card>
   );
 }
+
+export function OrderControls({ product }: Props) {
+  const {
+    currentOrder,
+    handleAddOrder,
+    handleUpdateOrderItems,
+    isPending
+  } = useOrders()
+  const productInOrder = currentOrder?.items.get(product.id);
+  
+  if (currentOrder) {
+    return productInOrder ? (
+      <div className="inline-flex items-center rounded-md border border-input bg-background shadow-sm">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleUpdateOrderItems(product.id, "DELETE")}
+          disabled={productInOrder.quantity === 0 || isPending}
+        >
+          <Minus className="h-3 w-3" />
+        </Button>
+        <div className="w-8 h-8 flex items-center justify-center">{productInOrder.quantity}</div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => handleUpdateOrderItems(product.id, "INSERT")}
+          disabled={isPending}
+        >
+          <Plus className="h-3 w-3" />
+        </Button>
+      </div>
+    ) : (
+      <Button
+        size="sm"
+        onClick={() => handleUpdateOrderItems(product.id, "INSERT")}
+        disabled={isPending}
+      >
+        Agregar
+      </Button>
+    );
+  } else {
+    return (
+      <Button
+        size="sm"
+        onClick={() => handleAddOrder(product.id)}
+        disabled={isPending}
+      >
+        Crear orden
+      </Button>
+    );
+  }
+};

@@ -1,6 +1,6 @@
 'use client'
 import { FilterControls } from '@/components/FilterControls';
-import { ProductCard } from '@/components/ProductCard';
+import { OrderControls, ProductCard } from '@/components/ProductCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useOrders } from '@/context/useOrders';
@@ -9,6 +9,7 @@ import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useState } from 'react';
 import Receipt from './ReceiptCard';
+import { OrderContextType } from '@/lib/types';
 
 export default function ProductOrderManagment() {
     const {
@@ -16,17 +17,11 @@ export default function ProductOrderManagment() {
         isPending,
         currentOrder,
         orders,
-        searchQuery,
-        selectedTags,
         visibleProducts,
-        visibleTags,
         handleAddOrder,
-        handleUpdateOrderItems,
         handleCloseOrder,
-        setSearchQuery,
-        setSelectedTags,
         setCurrentOrderDetails,
-        resetFilters
+        handleUpdateOrderItems
     } = useOrders();
     const [showDetail, setShowDetail] = useState(false);
 
@@ -40,7 +35,9 @@ export default function ProductOrderManagment() {
                         key={product.id}>
                         <ProductCard
                             product={product}
-                        />
+                        >
+                            <OrderControls product={product} />
+                        </ProductCard>
                     </div>
                 ))}
             </main>
@@ -63,13 +60,15 @@ export default function ProductOrderManagment() {
                         </CardHeader>
                         {showDetail && (
                             <CardContent className="flex flex-col gap-2">
-                                {products
+                                {Array.from(products.values())
                                     .filter((product) => currentOrder.items.has(product.id))
                                     .map((product) => (
                                         <ProductCard
                                             key={product.id}
                                             product={product}
-                                        />
+                                        >
+                                            <OrderControls product={product} />
+                                        </ProductCard>
                                     ))
                                 }
                                 <Receipt data={currentOrder} />
@@ -125,4 +124,4 @@ export default function ProductOrderManagment() {
             </footer>
         </div>
     );
-}
+};

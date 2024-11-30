@@ -1,4 +1,4 @@
-import { Selectable } from "kysely";
+import { Selectable, Updateable } from "kysely";
 import { Database } from "./sql/types";
 
 export type Order = Selectable<Database["orders"]>;
@@ -23,7 +23,6 @@ export interface OrderItemsFE {
 
 export interface OrderContextState {
     isPending: boolean;
-    products: Product[];
     tagsSorted: [string, number][];
     currentOrder: OrderItemsFE | null;
     orders: Map<Order['id'], Order>;
@@ -34,14 +33,23 @@ export interface OrderContextState {
   }
   
   export interface OrderContextActions {
-    handleAddOrder: (productId?: string) => void;
-    handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => void;
-    handleCloseOrder: () => void;
+    handleAddOrder: (productId?: string) => Promise<void>;
+    handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => Promise<void>;
+    handleCloseOrder: () => Promise<void>;
     setSearchQuery: (query: string) => void;
     setSelectedTags: (tags: Set<string>) => void;
-    setCurrentOrderDetails: (order: Order | null) => void;
+    setCurrentOrderDetails: (order: Order | null) => Promise<void>;
     resetFilters: () => void;
   }
   
   export type OrderContextType = OrderContextState & OrderContextActions;
+
+  export interface ProductContextType {
+    products: Map<string, Product>;
+    currentProduct: Updateable<Product>;
+    handleEditProduct: (product?: Updateable<Product>) => void;
+    handleUpsertProduct: (formData: FormData) => Promise<void>;
+    handleDeleteProduct: (formData: FormData) => Promise<void>;
+  }
+  
   
