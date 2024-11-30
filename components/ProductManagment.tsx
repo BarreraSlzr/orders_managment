@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from './ui/input';
 import { useProducts } from '@/context/useProducts';
 import { X } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from "date-fns/locale/es";
 
 export default function ProductOrderManagment() {
     const {
@@ -36,7 +38,10 @@ export default function ProductOrderManagment() {
                 <Card className="w-full">
                     <CardHeader>
                         <p className="font-bold">Información de producto</p>
-                        { currentProduct.id && <pre className='font-mono text-xs'>{currentProduct.id}</pre>}
+                        {(currentProduct.id && currentProduct.updated) && (<>
+                            <pre className='font-mono text-xs'>{currentProduct.id}</pre>
+                            <pre className='font-mono text-xs'>{format(currentProduct.updated, "EEEE, MMMM dd, yyyy, p", { locale: es }).toUpperCase()}</pre>
+                        </>)}
                     </CardHeader>
                     <CardContent>
                         <form
@@ -89,7 +94,7 @@ export default function ProductOrderManagment() {
                             </div>
                             <div className="flex justify-between items-center gap-3">
                                 <Button type='button' variant="outline" onClick={() => handleEditProduct()}>
-                                    {currentProduct.id ? <X/> : 'Crear producto'}
+                                    {currentProduct.id ? <X /> : 'Crear producto'}
                                 </Button>
                                 <Button type="submit" variant="secondary">
                                     Guardar producto

@@ -25,7 +25,7 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
     <Card className="w-full bg-white font-mono text-sm">
       <CardHeader className="text-center space-y-0 pb-3">
         <h1 className="font-bold text-lg tracking-wide">DETALLE DE ORDEN</h1>
-        <p className="text-xs">{format(order.created, "EEEE, MMMM dd, yyyy", {locale: es}).toUpperCase()}</p>
+        <p className="text-xs">{format(order.created, "EEEE, MMMM dd, yyyy, p", {locale: es}).toUpperCase()}</p>
         <p className="text-xs">ORDEN #{order.position }-{order.id.substring(0, 5).toUpperCase()}</p>
       </CardHeader>
       <CardContent className="space-y-6">
