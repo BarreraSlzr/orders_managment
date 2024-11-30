@@ -6,9 +6,12 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { OrderItemsFE } from "@/lib/types"
 import { formatPrice } from "@/lib/utils/formatPrice"
+import { Fragment } from "react";
+import { Checkbox } from "./ui/checkbox";
 
 interface ReceiptProps {
   data: OrderItemsFE
+  splitting: boolean
   serverInfo?: {
     servedBy: string
     time: string
@@ -16,7 +19,7 @@ interface ReceiptProps {
 }
 
 
-export default function Receipt({ data, serverInfo }: ReceiptProps) {
+export default function Receipt({ data, serverInfo, splitting }: ReceiptProps) {
   const { order, items } = data
   const itemsArray = Array.from(items.values())
   const total = itemsArray.reduce((acc, item) => acc + (item.price * item.quantity), 0)
@@ -26,8 +29,7 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
       <CardHeader className="text-center space-y-0 pb-3">
         <h1 className="font-bold text-lg tracking-wide">DETALLE DE ORDEN</h1>
         <p className="text-xs">{format(order.created, "EEEE, MMMM dd, yyyy, p", {locale: es}).toUpperCase()}</p>
-        <p className="text-xs">ORDEN #{order.position }-{order.id.substring(0, 5).toUpperCase()}</p>
-      </CardHeader>
+        <p className="text-xs">ORDEN #{order.position }-{order.id.substring(0, 5).toUpperCase()}</p></CardHeader>
       <CardContent className="space-y-6">
         {/* Customer Section 
         <div className="space-y-1">
@@ -37,19 +39,33 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
         */}
 
         {/* Items Section */}
-        <div className="space-y-2">
-          {itemsArray.map((item) => (
-            <div key={item.product_id} className="flex justify-between">
-              <div>
-                <p>{item.name}</p>
-                <p className="text-xs text-muted-foreground">Cant: {item.quantity}</p>
+        <div className={`flex flex-col ${splitting ? 'gap-4' : 'gap-2'}`}>
+          {itemsArray.map((item) => (<Fragment key={item.product_id}>
+            {Array.from(Array(!splitting ? 1 : item.quantity).keys()).map((x, index) => (
+              <div key={item.product_id + index} className="flex justify-between">
+                <div className="items-top flex space-x-2">
+                  {splitting && <Checkbox id={item.product_id + index} />}
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor={item.product_id + index}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      {item.name}
+                    </label>
+                    {!splitting &&
+                      <p className="text-xs text-muted-foreground">Cant: {item.quantity}</p>
+                    }
+                  </div>
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-muted-foreground">{formatPrice(item.price)}</p>
+                  {!splitting &&
+                    <p className="text-xs tabular-nums font-bold mt-auto">{formatPrice(item.price * item.quantity)}</p>
+                  }
+                </div>
               </div>
-              <div className="flex flex-col">
-                <p className="text-muted-foreground mt-auto">{formatPrice(item.price)}</p>
-                <p className="text-xs font-bold tabular-nums">{formatPrice(item.price * item.quantity)}</p>
-              </div>
-            </div>
-          ))}
+            ))}
+          </Fragment>))}
           <Separator />
           <div className="flex justify-between font-bold">
             <p>TOTAL:</p>
@@ -84,7 +100,7 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
 
         <div className="text-center space-y-4">
           <p className="font-bold">Gracias por consumir!</p>
-          
+
           {/* Barcode 
           <div className="flex justify-center">
             <Barcode className="h-12 w-full" />

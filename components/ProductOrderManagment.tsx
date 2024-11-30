@@ -5,11 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useOrders } from '@/context/useOrders';
 import { formatPrice } from '@/lib/utils/formatPrice';
-import { ArrowDown, ArrowUp, X } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { ArrowDown, ArrowUp, Split, X } from 'lucide-react';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { useState } from 'react';
 import Receipt from './ReceiptCard';
-import { OrderContextType } from '@/lib/types';
 
 export default function ProductOrderManagment() {
     const {
@@ -24,6 +23,7 @@ export default function ProductOrderManagment() {
         handleUpdateOrderItems
     } = useOrders();
     const [showDetail, setShowDetail] = useState(false);
+    const [SplitingOrder, setSplitingOrder] = useState(false);
 
     return (
         <div className="max-w-md mx-auto space-y-4 h-screen flex flex-col justify-between">
@@ -43,8 +43,8 @@ export default function ProductOrderManagment() {
             </main>
             <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
                 {currentOrder?.items && (
-                    <Card className="py-4 translate-y-8">
-                        <CardHeader className="pt-1 px-4">
+                    <Card className="pb-4 translate-y-8 max-h-[70vh] overflow-auto relative">
+                        <CardHeader className="sticky top-0 p-4 bg-white">
                             <Button variant="outline" size="sm" onClick={() => setShowDetail(!showDetail)}>
                                 <b>
                                     Productos seleccionados (
@@ -58,7 +58,7 @@ export default function ProductOrderManagment() {
                                 {showDetail ? <ArrowDown /> : <ArrowUp />}
                             </Button>
                         </CardHeader>
-                        {showDetail && (
+                        {showDetail && (<>
                             <CardContent className="flex flex-col gap-2">
                                 {Array.from(products.values())
                                     .filter((product) => currentOrder.items.has(product.id))
@@ -71,8 +71,30 @@ export default function ProductOrderManagment() {
                                         </ProductCard>
                                     ))
                                 }
-                                <Receipt data={currentOrder} />
+                                <Receipt data={currentOrder} splitting={SplitingOrder}/>
                             </CardContent>
+                            <CardFooter className={`flex gap-2 justify-between px-6 pb-8 pt-4 ${ SplitingOrder ? 'sticky bottom-0 bg-white' : ''}`}>
+                                    {!SplitingOrder ?
+                                        <Button variant='secondary' size='sm'
+                                            onClick={() => setSplitingOrder(!SplitingOrder)}
+                                        >Dividir cuenta <Split /></Button>
+                                        :
+                                        <Button variant='default' size='sm'
+                                            onClick={() => setSplitingOrder(!SplitingOrder)}
+                                        >Crear cuenta <Split /></Button>
+                                    }
+                                    <div className='flex gap-2'>
+                                        {!SplitingOrder ? (<>
+                                            <Button variant='outline' size='sm'>Efectivo 💵</Button>
+                                            <Button variant='outline' size='sm'>Transferencia 💳</Button>
+                                        </>)
+                                            : <Button variant='destructive' size='sm'
+                                                onClick={() => setSplitingOrder(!SplitingOrder)}
+                                            >Cancelar</Button>
+                                        }
+                                    </div>
+                                </CardFooter>
+                            </>
                         )}
                     </Card>
                 )}
