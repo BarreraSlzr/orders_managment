@@ -31,9 +31,16 @@ interface OrderItemTable {
   product_id: string
 }
 
+interface PaymentOptionsTable {
+  id: Generated<number>
+  created: ColumnType<Date, string | undefined, never>
+  name: string
+}
+
 // Keys of this interface are table names.
 export interface Database {
   products: ProductTable
   orders: OrderTable
-  order_items: OrderItemTable
+  order_items: OrderItemTable,
+  payment_options: PaymentOptionsTable
 }

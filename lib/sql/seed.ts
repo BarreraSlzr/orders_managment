@@ -50,20 +50,96 @@ function createOrderItemsTable() {
     );
 }
 
+function createPaymentOptionsTable() {
+  return db.schema
+    .createTable('payment_options')
+    .ifNotExists()
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('name', 'varchar', (col) => col.notNull()) // e.g., "cash", "transfer", etc.
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .execute()
+    .then(() => console.info(`Created "payment_options" table`));
+}
+
+async function populatePaymentOptionsIfEmpty() {
+  const paymentOptions = [
+    { name: 'Cash' },
+    { name: 'Transfer' },
+    { name: 'Credit Card' },
+    { name: 'Debit Card' },
+    { name: 'Mobile Payment' }, // e.g., Apple Pay, Google Pay
+    { name: 'Cryptocurrency' },
+  ];
+
+  const noRows = (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM payment_options`))).rows.pop()?.count === 0
+    
+  if (noRows) {
+    await db
+      .insertInto('payment_options')
+      .values(paymentOptions)
+      .execute();
+
+    console.info(`Populated "payment_options" table with default entries`);
+  } else {
+    console.info(`"payment_options" table already populated. Skipping.`);
+  }
+}
+
+
+// SCHEMA UPDATES
+
+function updateOrdersTable() {
+  return db.schema
+    .alterTable('orders')
+    .addColumn('payment_option_id', 'integer', (col) =>
+      col
+        .references('payment_options.id')
+        .notNull()
+        .defaultTo(1) // Default to "Cash"
+        .onDelete('set null')
+    )
+    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false)) // true: to-go, false: in-site
+    .execute()
+    .then(() => console.info(`Updated "orders" table with payment_option_id and is_takeaway columns`));
+}
+
+function updateOrderItemsTable() {
+  return db.schema
+    .alterTable('order_items')
+    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false)) // Allows item-level override
+    .execute()
+    .then(() => console.info(`Updated "order_items" table with is_takeaway column`));
+}
+
+
 const calculateOrderTotal = `
 CREATE OR REPLACE FUNCTION calculate_order_total() RETURNS TRIGGER AS $$
 BEGIN
-  -- Update the order total
-  UPDATE orders
-  SET total = (
-    SELECT COALESCE(SUM(p.price), 0)
-    FROM order_items oi
-    JOIN products p ON oi.product_id = p.id
-    WHERE oi.order_id = COALESCE(OLD.order_id, NEW.order_id)
-  )
-  WHERE id = COALESCE(OLD.order_id, NEW.order_id);
+  -- Update total for the old order if applicable
+  IF (TG_OP = 'DELETE' OR TG_OP = 'UPDATE') AND OLD.order_id IS NOT NULL THEN
+    UPDATE orders
+    SET total = (
+      SELECT COALESCE(SUM(p.price), 0)
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = OLD.order_id
+    )
+    WHERE id = OLD.order_id;
+  END IF;
 
-  RETURN OLD;
+  -- Update total for the new order if applicable
+  IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') AND NEW.order_id IS NOT NULL THEN
+    UPDATE orders
+    SET total = (
+      SELECT COALESCE(SUM(p.price), 0)
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = NEW.order_id
+    )
+    WHERE id = NEW.order_id;
+  END IF;
+
+  RETURN NULL; -- Triggers that do not modify data should return NULL
 END;
 $$ LANGUAGE plpgsql;
 `;
@@ -77,7 +153,7 @@ BEGIN
         WHERE tgname = 'update_order_total'
     ) THEN
         CREATE TRIGGER update_order_total
-        AFTER INSERT OR DELETE
+        AFTER INSERT OR DELETE OR UPDATE
         ON order_items
         FOR EACH ROW
         EXECUTE FUNCTION calculate_order_total();

@@ -1,12 +1,12 @@
 'use client'
 import { FilterControls } from '@/components/FilterControls';
-import { ProductCard } from '@/components/ProductCard';
+import { OrderControls, ProductCard } from '@/components/ProductCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useOrders } from '@/context/useOrders';
 import { formatPrice } from '@/lib/utils/formatPrice';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card, CardContent,  CardHeader } from '@/components/ui/card';
 import { useState } from 'react';
 import Receipt from './ReceiptCard';
 
@@ -16,17 +16,10 @@ export default function ProductOrderManagment() {
         isPending,
         currentOrder,
         orders,
-        searchQuery,
-        selectedTags,
         visibleProducts,
-        visibleTags,
         handleAddOrder,
-        handleUpdateOrderItems,
         handleCloseOrder,
-        setSearchQuery,
-        setSelectedTags,
         setCurrentOrderDetails,
-        resetFilters
     } = useOrders();
     const [showDetail, setShowDetail] = useState(false);
 
@@ -35,19 +28,17 @@ export default function ProductOrderManagment() {
             <main className='p-4 pb-10 flex flex-wrap gap-2'>
                 <FilterControls />
                 {visibleProducts.map(product => (
-                    <div
-                        className='flex-grow'
-                        key={product.id}>
-                        <ProductCard
-                            product={product}
-                        />
+                    <div key={product.id} className='flex-grow'>
+                        <ProductCard product={product}>
+                            <OrderControls product={product} />
+                        </ProductCard>
                     </div>
                 ))}
             </main>
             <footer className="sticky bottom-0 translate-y-2 pb-2 max-w-md w-full">
                 {currentOrder?.items && (
-                    <Card className="py-4 translate-y-8">
-                        <CardHeader className="pt-1 px-4">
+                    <Card className="pb-4 translate-y-8 max-h-[70vh] overflow-auto relative">
+                        <CardHeader className="sticky top-0 p-4 bg-white">
                             <Button variant="outline" size="sm" onClick={() => setShowDetail(!showDetail)}>
                                 <b>
                                     Productos seleccionados (
@@ -61,19 +52,19 @@ export default function ProductOrderManagment() {
                                 {showDetail ? <ArrowDown /> : <ArrowUp />}
                             </Button>
                         </CardHeader>
-                        {showDetail && (
+                        {showDetail && (<>
                             <CardContent className="flex flex-col gap-2">
-                                {products
+                                {Array.from(products.values())
                                     .filter((product) => currentOrder.items.has(product.id))
                                     .map((product) => (
-                                        <ProductCard
-                                            key={product.id}
-                                            product={product}
-                                        />
+                                        <ProductCard key={product.id} product={product}>
+                                            <OrderControls product={product} />
+                                        </ProductCard>
                                     ))
                                 }
-                                <Receipt data={currentOrder} />
+                                <Receipt data={currentOrder}/>
                             </CardContent>
+                            </>
                         )}
                     </Card>
                 )}
@@ -125,4 +116,4 @@ export default function ProductOrderManagment() {
             </footer>
         </div>
     );
-}
+};

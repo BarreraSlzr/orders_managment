@@ -1,7 +1,8 @@
 'use client'
-import { handleCloseOrder, handleInsertOrder, handleSelectOrderItems, handleUpdateOrderItem } from '@/app/actions';
-import { Order, OrderContextType, OrderItems, OrderItemsFE, Product } from '@/lib/types';
-import { createContext, PropsWithChildren, useCallback, useContext, useDeferredValue, useEffect, useMemo, useState, useTransition } from 'react';
+import { handleCloseOrder, handleInsertOrder, handleSelectOrderItems, handleSplitOrder, handleUpdateOrderItem } from '@/app/actions';
+import { Order, OrderItems, OrderItemsFE, Product } from '@/lib/types';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from 'react';
+import { useProducts } from './useProducts';
 
 const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
   const tagIndices: Record<string, number> = {};
@@ -19,15 +20,15 @@ const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
   return Object.entries(tagIndices)
     .sort(([, indexA], [, indexB]) => indexA - indexB);
 }
-const getProductTagsSet = (products: Product[]) => new Set(products.map(p => p.tags));
+const getProductTagsSet = (products: Pick<Product, 'tags'>[]) => new Set(products.map(p => p.tags));
 
 export function useOrders({ products: p, orders: os }: {
   products: Product[],
   orders: Order[]
 }) {
   const [isPending, startTransition] = useTransition();
-  const [products, setProducts] = useState<Product[]>(p);
-  const [combinedTags, setCombinedTags] = useState(getProductTagsSet(p));
+  const { products, ...apiProducts } = useProducts({ products: p });
+  const [combinedTags, setCombinedTags] = useState(getProductTagsSet(Array.from(products.values())));
   const [tagsSorted, setTagsSorted] = useState<[string, number][]>(getTagsSorted(combinedTags));
   const [orders, setOrders] = useState(new Map<Order['id'], Order>(os.map(o => [o.id, o])));
   const [currentOrder, setCurrentOrder] = useState<OrderItemsFE | null>(null);
@@ -41,7 +42,7 @@ export function useOrders({ products: p, orders: os }: {
   const visibleProducts = useMemo(() => {
     // Filtering and sorting logic
     function filterAndSortProducts() {
-      return products
+      return Array.from(products.values())
         .map((product) => {
           const productTags = product.tags.split(',').map((tag) => tag.trim());
           const nameMatch = searchQuery
@@ -60,7 +61,7 @@ export function useOrders({ products: p, orders: os }: {
         .map(({ product }) => product);
     }
     if (!deferredSearchQuery && deferredSelectedTags.size === 0) {
-      return products; // No filtering if both are empty
+      return Array.from(products.values()); // No filtering if both are empty
     } else {
       return filterAndSortProducts()
     }
@@ -107,71 +108,13 @@ export function useOrders({ products: p, orders: os }: {
     }
   }, [orders])
 
-  function handleAddOrder(productId?: string) {
-    // Add order logic
-    const formData = new FormData()
-    if (productId) formData.append('productId', productId)
-    startTransition(async () => {
-      const { message, success, result: orderUpdated } = await handleInsertOrder(formData);
-      if (success) updateOrder(orderUpdated);
-    })
-  }
-
-  function handleUpdateOrderItems(productId: string, type: "INSERT" | "DELETE") {
-    // Update order items logic
-    if (!currentOrder) return
-    const formData = new FormData()
-    formData.append('orderId', currentOrder.order.id)
-    formData.append('productId', productId)
-    formData.append('type', type)
-
-    startTransition(async () => {
-      const { success, result: orderUpdated } = await handleUpdateOrderItem(formData);
-      if (success) updateOrder(orderUpdated)
-    })
-  }
-
-  const closeOrder = useCallback(function () {
-    // Close order logic
-    if (!currentOrder) return
-    const formData = new FormData()
-    formData.append('orderId', currentOrder.order.id)
-    startTransition(async () => {
-      const { success } = await handleCloseOrder(formData)
-      if (success) {
-        orders.delete(currentOrder.order.id);
-        setOrders(new Map(orders));
-      }
-      updateOrder(null)
-    })
-  }, [orders])
-
-  function setCurrentOrderDetails(order: Order | null) {
-    // Set current order logic
-    if (!order) {
-      updateOrder(null);
-      return void 0;
-    }
-    const formData = new FormData()
-    formData.append('orderId', order.id)
-    startTransition(async () => {
-      const { success, result: orderUpdated } = await handleSelectOrderItems(formData);
-      if (success) updateOrder(orderUpdated)
-    })
-  }
-
-  function resetFilters() {
-    setSearchQuery('');
-    setSelectedTags(new Set());
-  }
-
-  // Fetching tags
+  // Fetching orders
   const fetchOrders = async () => {
     const response = await fetch('/api/orders')
     if (!response.ok) throw new Error('Failed to fetch open orders')
     return response.json() as unknown as Order[]
   }
-  
+
   useEffect(() => {
     async function fetchAll() {
       const orders = await fetchOrders()
@@ -192,12 +135,77 @@ export function useOrders({ products: p, orders: os }: {
     selectedTags,
     visibleProducts,
     visibleTags,
-    handleAddOrder: useCallback(handleAddOrder, [orders]),
-    handleUpdateOrderItems: useCallback(handleUpdateOrderItems, [orders]),
-    handleCloseOrder: useCallback(closeOrder, [orders]),
-    setSearchQuery: setSearchQuery,
-    setSelectedTags: setSelectedTags,
-    setCurrentOrderDetails: useCallback(setCurrentOrderDetails, [orders]),
-    resetFilters: resetFilters,
+    setSearchQuery,
+    setSelectedTags,
+    handleSplitOrder: async function(formData: FormData) {
+      const updatedOrder = await handleSplitOrder(formData);
+      if (updatedOrder.success) {
+        startTransition(() => {
+          orders.set(updatedOrder.result.olderOrder.id, updatedOrder.result.olderOrder);
+          orders.set(updatedOrder.result.newOrder.id, updatedOrder.result.newOrder);
+          setOrders(new Map(orders));
+          setCurrentOrder({
+            order: updatedOrder.result.newOrder,
+            items: new Map(updatedOrder.result.items.map(it => [it.product_id, it]))
+          });
+        })
+      }
+      return updatedOrder.success
+    },
+    handleAddOrder: async function (productId?: string) {
+      const formData = new FormData()
+      if (productId) formData.append('productId', productId)
+      const { message, success, result: orderUpdated } = await handleInsertOrder(formData);
+
+      startTransition(async () => {
+        if (success) updateOrder(orderUpdated);
+      })
+    },
+    handleUpdateOrderItems: async function (productId: string, type: "INSERT" | "DELETE") {
+      // Update order items logic
+      if (!currentOrder) return
+      const formData = new FormData()
+      formData.append('orderId', currentOrder.order.id)
+      formData.append('productId', productId)
+      formData.append('type', type)
+      const { success, result: orderUpdated } = await handleUpdateOrderItem(formData);
+
+      startTransition(async () => {
+        if (success) updateOrder(orderUpdated)
+      })
+    },
+    handleCloseOrder: async function () {
+      // Close order logic
+      if (!currentOrder) return
+      const formData = new FormData()
+      formData.append('orderId', currentOrder.order.id)
+      const { success } = await handleCloseOrder(formData)
+
+      startTransition(async () => {
+        if (success) {
+          orders.delete(currentOrder.order.id);
+          setOrders(new Map(orders));
+        }
+        updateOrder(null)
+      })
+    },
+    setCurrentOrderDetails: async function (order: Order | null) {
+      // Set current order logic
+      if (!order) {
+        updateOrder(null);
+        return void 0;
+      }
+      const formData = new FormData()
+      formData.append('orderId', order.id)
+      const { success, result: orderUpdated } = await handleSelectOrderItems(formData);
+      startTransition(async () => {
+        if (success) updateOrder(orderUpdated)
+      })
+    },
+    resetFilters() {
+      setSearchQuery('');
+      setSelectedTags(new Set());
+    },
+    ...apiProducts
   }
 }
