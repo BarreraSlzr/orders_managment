@@ -47,7 +47,7 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
           <div className="flex flex-col gap-4">
             {itemsArray.map((item) => (
               <Fragment key={item.product_id}>
-                {Array.from(Array(item.quantity).keys()).map((_, index) => (
+                {Array.from(Array(!SplitingOrder ? 1 : item.quantity).keys()).map((_, index) => (
                   <div key={item.product_id + index} className="flex justify-between">
                     <div className="items-top flex space-x-2">
                       {SplitingOrder && <Checkbox id={item.product_id + index} name="product_id" value={item.product_id} />}
