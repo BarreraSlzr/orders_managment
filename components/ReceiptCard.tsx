@@ -83,13 +83,13 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
             {!SplitingOrder ?
               <Button variant='secondary' size='sm' type="button"
                 onClick={() => setSplitingOrder(true)}
-              >Dividir cuenta <Split /></Button>
+              >Dividir <Split /></Button>
               : (<>
                 <Button variant="destructive" size="sm" type="button" onClick={() => setSplitingOrder(false)}>
                   Cancelar
                 </Button>
                 <Button variant='default' size='sm' type="submit"
-                >Crear cuenta <Split /></Button>
+                >Confirmar <Split /></Button>
               </>)
             }
           </CardFooter>
