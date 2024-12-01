@@ -139,7 +139,7 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
                   Cancelar
                 </Button>
                 <Button variant="default" size="sm" type="submit" id="split">
-                  Nueva<Split />
+                  Nueva orden<Split />
                 </Button>
                 <Button variant="default" size="sm" type="submit" id="updatePayment">
                   Metodo de pago 💳

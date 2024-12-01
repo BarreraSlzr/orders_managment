@@ -11,7 +11,6 @@ import { Product } from "@/lib/types";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
-import { NextResponse } from "next/server";
 import { togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
 
 export async function handleSelectProducts(formData: FormData) {
