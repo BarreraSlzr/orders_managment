@@ -43,11 +43,11 @@ export function OrderControls({ product }: Props) {
           variant="ghost"
           size="sm"
           onClick={() => handleUpdateOrderItems(product.id, "DELETE")}
-          disabled={productInOrder.quantity === 0 || isPending}
+          disabled={productInOrder.items.length === 0 || isPending}
         >
           <Minus className="h-3 w-3" />
         </Button>
-        <div className="w-8 h-8 flex items-center justify-center">{productInOrder.quantity}</div>
+        <div className="w-8 h-8 flex items-center justify-center">{productInOrder.items.length}</div>
         <Button
           variant="ghost"
           size="sm"

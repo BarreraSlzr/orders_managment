@@ -11,6 +11,8 @@ import { Product } from "@/lib/types";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
+import { NextResponse } from "next/server";
+import { togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -64,10 +66,10 @@ export async function handleSplitOrder(formData: FormData) {
     actionName: 'handleUpdateOrderItem',
     async callback() {
       const orderId =`${formData.get('orderId')}`;
-      const productIds = formData.getAll('product_id') as string[];
+      const item_ids = formData.getAll('item_id').map(ii => parseInt(`${ii}`));
       return await splitOrder({
-        orderId,
-        productIds
+        old_order_id: orderId,
+        item_ids
       })
     },
     formData
@@ -124,6 +126,40 @@ export async function handleUpsertProduct(formData: FormData) {
   });
 }
 
+export async function handleUpdatePayment(formData: FormData) {
+  return errorHandler({
+    actionName: 'handleUpdatePayment',
+    async callback(){
+      const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
+      const paymentOptionId = Number(formData.get('payment_option_id'));
+    
+      if (!itemIds.length || isNaN(paymentOptionId)) {
+        throw new Error('Invalid data.');
+      }
+     
+      return await togglePaymentOption(itemIds);
+    },
+    formData
+  })
+}
+
+export async function handleToggleTakeAway(formData: FormData) {
+  return errorHandler({
+    actionName: 'handleToggleTakeAway',
+    async callback() {
+      const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
+    
+      if (!itemIds.length) {
+        throw new Error('Invalid data.');
+      }
+    
+      return await toggleTakeAway(itemIds);
+    },
+    formData
+  })
+}
+
+
 export async function handleExportProducts(formData: FormData) {
   errorHandler({
     actionName: 'handleExportProducts',
@@ -133,6 +169,5 @@ export async function handleExportProducts(formData: FormData) {
         }
     },
     formData
-  })
-  
+  }) 
 }

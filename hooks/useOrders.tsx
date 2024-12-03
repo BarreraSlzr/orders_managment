@@ -1,8 +1,9 @@
 'use client'
-import { handleCloseOrder, handleInsertOrder, handleSelectOrderItems, handleSplitOrder, handleUpdateOrderItem } from '@/app/actions';
-import { Order, OrderItems, OrderItemsFE, Product } from '@/lib/types';
+import { handleCloseOrder, handleInsertOrder, handleSelectOrderItems, handleSplitOrder, handleToggleTakeAway, handleUpdateOrderItem, handleUpdatePayment } from '@/app/actions';
+import { Order, OrderContextType, OrderItems, OrderItemsFE, Product } from '@/lib/types';
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, useTransition } from 'react';
 import { useProducts } from './useProducts';
+import { toggleTakeAway } from '@/lib/sql/functions/updateTakeAway';
 
 const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
   const tagIndices: Record<string, number> = {};
@@ -25,7 +26,7 @@ const getProductTagsSet = (products: Pick<Product, 'tags'>[]) => new Set(product
 export function useOrders({ products: p, orders: os }: {
   products: Product[],
   orders: Order[]
-}) {
+}): OrderContextType {
   const [isPending, startTransition] = useTransition();
   const { products, ...apiProducts } = useProducts({ products: p });
   const [combinedTags, setCombinedTags] = useState(getProductTagsSet(Array.from(products.values())));
@@ -127,7 +128,6 @@ export function useOrders({ products: p, orders: os }: {
 
   return {
     isPending,
-    products,
     tagsSorted,
     currentOrder,
     orders,
@@ -137,11 +137,31 @@ export function useOrders({ products: p, orders: os }: {
     visibleTags,
     setSearchQuery,
     setSelectedTags,
-    handleSplitOrder: async function(formData: FormData) {
+    async handleUpdateItemDetails(actionType, formData) {
+      const update = () => actionType === 'toggleTakeAway'
+        ? handleToggleTakeAway(formData)
+        : handleUpdatePayment(formData);
+      const result = await update();
+      if (result.success){
+        if(currentOrder){
+          const newItemDetails = new Map((result.result.map(({product_id, ...item}) => [item.id, item])))
+          const productsInvolved = new Set((result.result.map(({product_id}) => product_id)))
+          Array.from(productsInvolved.values()).map((product_id) => {
+            const product = currentOrder.items.get(product_id);
+            if( product ){
+              currentOrder.items.set(product_id, {...product, items: product.items.map(it => newItemDetails.get(it.id) || it)})
+            }
+          })
+          setCurrentOrder({...currentOrder});
+        }
+      }
+      return result.success;
+    },
+    handleSplitOrder: async function (formData: FormData) {
       const updatedOrder = await handleSplitOrder(formData);
       if (updatedOrder.success) {
         startTransition(() => {
-          orders.set(updatedOrder.result.olderOrder.id, updatedOrder.result.olderOrder);
+          orders.set(updatedOrder.result.oldOrder.id, updatedOrder.result.oldOrder);
           orders.set(updatedOrder.result.newOrder.id, updatedOrder.result.newOrder);
           setOrders(new Map(orders));
           setCurrentOrder({
