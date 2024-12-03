@@ -12,7 +12,6 @@ import Receipt from './ReceiptCard';
 
 export default function ProductOrderManagment() {
     const {
-        products,
         isPending,
         currentOrder,
         orders,
@@ -44,7 +43,7 @@ export default function ProductOrderManagment() {
                                     Productos seleccionados (
                                     {Array.from(currentOrder.items.values()).reduce(
                                         (totalQuantity, items) =>
-                                            totalQuantity + items.quantity,
+                                            totalQuantity + items.items.length,
                                         0
                                     )}
                                     )
@@ -54,7 +53,7 @@ export default function ProductOrderManagment() {
                         </CardHeader>
                         {showDetail && (<>
                             <CardContent className="flex flex-col gap-2">
-                                {Array.from(products.values())
+                                {Array.from(visibleProducts.values())
                                     .filter((product) => currentOrder.items.has(product.id))
                                     .map((product) => (
                                         <ProductCard key={product.id} product={product}>

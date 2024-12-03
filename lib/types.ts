@@ -8,7 +8,7 @@ export type OrderItemTable = Selectable<Database['order_items']>
 export interface OrderItem extends Pick<OrderItemTable, "product_id"> {
     name: string
     price: number
-    quantity: number
+    items: Pick<OrderItemTable, 'id' | 'is_takeaway' | 'payment_option_id'>[]
 }
 
 export interface OrderItems {
@@ -33,6 +33,7 @@ export interface OrderContextState {
   }
   
   export interface OrderContextActions {
+    handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway',formData: FormData) => Promise<boolean>
     handleSplitOrder: (formData: FormData) => Promise<boolean>
     handleAddOrder: (productId?: string) => Promise<void>;
     handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => Promise<void>;
@@ -46,7 +47,7 @@ export interface OrderContextState {
   export type OrderContextType = OrderContextState & OrderContextActions;
 
   export interface ProductContextType {
-    products: Map<string, Product>;
+    products: Map<Product['id'], Product>;
     currentProduct: Updateable<Product>;
     handleEditProduct: (product?: Updateable<Product>) => void;
     handleUpsertProduct: (formData: FormData) => Promise<void>;

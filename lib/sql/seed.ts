@@ -44,6 +44,8 @@ function createOrderItemsTable() {
     .addColumn('order_id', 'uuid', (col) => col.notNull().references('orders.id').onDelete('cascade'))
     .addColumn('product_id', 'uuid', (col) => col.notNull().references('products.id'))
     .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false))
+    .addColumn('payment_option_id', 'serial', (col) => col.notNull().references('payment_option.id').defaultTo(1))
     .execute()
     .then(() =>
       console.info(`Created "order_items" table`)
@@ -71,14 +73,13 @@ async function populatePaymentOptionsIfEmpty() {
     { name: 'Cryptocurrency' },
   ];
 
-  const noRows = (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM payment_options`))).rows.pop()?.count === 0
+  const noRows = (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM payment_options`))).rows.some(({count}) => count === 0)
     
   if (noRows) {
     await db
       .insertInto('payment_options')
       .values(paymentOptions)
       .execute();
-
     console.info(`Populated "payment_options" table with default entries`);
   } else {
     console.info(`"payment_options" table already populated. Skipping.`);
@@ -87,28 +88,13 @@ async function populatePaymentOptionsIfEmpty() {
 
 
 // SCHEMA UPDATES
-
-function updateOrdersTable() {
-  return db.schema
-    .alterTable('orders')
-    .addColumn('payment_option_id', 'integer', (col) =>
-      col
-        .references('payment_options.id')
-        .notNull()
-        .defaultTo(1) // Default to "Cash"
-        .onDelete('set null')
-    )
-    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false)) // true: to-go, false: in-site
-    .execute()
-    .then(() => console.info(`Updated "orders" table with payment_option_id and is_takeaway columns`));
-}
-
 function updateOrderItemsTable() {
   return db.schema
     .alterTable('order_items')
-    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false)) // Allows item-level override
+    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false))
+    .addColumn('payment_option_id', 'serial', (col) => col.notNull().references('payment_options.id'))
     .execute()
-    .then(() => console.info(`Updated "order_items" table with is_takeaway column`));
+    .then(() => console.info(`Updated "order_items" table with is_takeaway and payment_option_id column`));
 }
 
 
@@ -163,16 +149,21 @@ END $$;
 
 export async function seed() {
   console.info('Start schema creation')
-  await createProductTable();
-  await createOrderTable();
-  await createOrderItemsTable();
-  await db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
-    .then(() =>
-      console.info(`Created "calculate_order_total" function`)
-    );
-  await db.executeQuery(CompiledQuery.raw(`${updateOrderTotal}`, []))
-    .then(() =>
-      console.info(`Created "update_order_total" trigger for "calculate_order_total"`)
-    );
-  await importProductsFromJson();
+  return Promise.all([
+    createPaymentOptionsTable(),
+    populatePaymentOptionsIfEmpty(),
+    //updateOrderItemsTable(),
+    createProductTable(),
+    createOrderTable(),
+    createOrderItemsTable(),
+    db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
+      .then(() =>
+        console.info(`Created "calculate_order_total" function`)
+      ),
+    db.executeQuery(CompiledQuery.raw(`${updateOrderTotal}`, []))
+      .then(() =>
+        console.info(`Created "update_order_total" trigger for "calculate_order_total"`)
+      ),
+    importProductsFromJson(),
+  ]).then(() => console.info("DB schema finished"))
 }  

@@ -29,6 +29,8 @@ interface OrderItemTable {
   created: ColumnType<Date, string | undefined, never>
   order_id: string
   product_id: string
+  is_takeaway: ColumnType<boolean, boolean | undefined, boolean | undefined>
+  payment_option_id: ColumnType<number, number, number | undefined>
 }
 
 interface PaymentOptionsTable {

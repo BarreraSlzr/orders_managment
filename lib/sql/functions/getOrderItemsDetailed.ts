@@ -10,7 +10,13 @@ export async function getOrderItemsDetailed(orderId: Order['id']): Promise<Order
       p.id AS product_id,
       p.name,
       p.price,
-      COUNT(oi.product_id) AS quantity
+      JSON_AGG(
+        JSON_BUILD_OBJECT(
+          'id', oi.id,
+          'is_takeaway', oi.is_takeaway,
+          'payment_option_id', oi.payment_option_id
+        )
+      ) AS items
     FROM
       order_items oi
     INNER JOIN
@@ -21,12 +27,8 @@ export async function getOrderItemsDetailed(orderId: Order['id']): Promise<Order
     GROUP BY
       p.id, p.name, p.price
   `;
-  const results = await db.executeQuery<OrderItem>(CompiledQuery.raw(sqlQuery,[orderId]));
-
-  return results.rows.map((row) => ({
-    product_id: row.product_id,
-    quantity: Number(row.quantity), // Ensure quantity is a number
-    name: row.name,
-    price: row.price,
-  }));
+  const results = await db.executeQuery<OrderItem>(CompiledQuery.raw(sqlQuery, [orderId]));
+  
+  return results.rows
 }
+

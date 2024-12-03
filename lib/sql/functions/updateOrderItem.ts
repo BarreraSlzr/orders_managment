@@ -28,6 +28,7 @@ export async function updateOrderItem(
       .values({
         order_id: orderId,
         product_id: productId,
+        payment_option_id: 1
       })
       .returningAll()
       .executeTakeFirstOrThrow();
