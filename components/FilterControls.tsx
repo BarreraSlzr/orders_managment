@@ -2,12 +2,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, X } from 'lucide-react';
-import { useOrders } from '@/context/useOrders';
+import { useOrderItemsProducts } from '@/context/useOrderItemsProducts';
 
 export function FilterControls() {
   const {
     searchQuery, visibleTags, selectedTags, setSearchQuery, setSelectedTags, resetFilters
-  } = useOrders()
+  } = useOrderItemsProducts()
   const handleTagToggle = (tag: string) => {
     selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
     setSelectedTags(new Set(selectedTags));
