@@ -7,6 +7,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Order, OrderItemsFE } from "@/lib/types";
 import { getOrders } from "@/lib/sql/functions/getOpenOrders";
 import { getOrderItemsDetailed } from "@/lib/sql/functions/getOrderItemsDetailed";
+import { Button } from "./ui/button";
+import { X } from "lucide-react";
 
 interface Props {
     orders: Order[]
@@ -71,11 +73,14 @@ export default function OrderHistoryPage({ orders: os }: Props) {
                     </div>
 
                     {/* Selected Order Details */}
-                    <div className="lg:col-span-1">
+                    <div className="lg:col-span-1 sticky bottom-0" onBlur={() => setSelectedOrder(null)}>
                         {loadingDetails ? (
                             <Spinner className="mx-auto" />
                         ) : selectedOrder ? (
-                            <Receipt data={selectedOrder} />
+                            <div className="relative">
+                                <Receipt data={selectedOrder} />
+                                <Button className="absolute top-0 right-0" variant='ghost' onClick={() => setSelectedOrder(null)}><X/></Button>
+                            </div>
                         ) : (
                             <p className="text-center text-gray-500">
                                 Selecciona una orden para ver los detalles.
