@@ -13,7 +13,9 @@ import { format } from "date-fns";
 export default function OrderHistoryPage() {
   const { fetchOrders, setCurrentOrder, currentOrder } = useOrders()
   const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    fetchOrders({ date: event.target.value });
+    if(event.target.valueAsDate){
+      fetchOrders({ date: format(event.target.valueAsDate, "yyyy-MM-dd") });
+    }
   };
 
   // Handle global close event
@@ -50,6 +52,7 @@ export default function OrderHistoryPage() {
         </CardHeader>
       </Card>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        
         {/* Orders List */}
         <Suspense fallback={<Spinner className="mx-auto" />}>
           <OrdersList />
@@ -57,7 +60,6 @@ export default function OrderHistoryPage() {
 
         {/* Selected Order Details */}
         <Card className="sticky lg:top-8 bottom-0 self-start">
-
           {currentOrder ? (
             <Suspense fallback={<Spinner className="mx-auto" />}>
               <OrderDetails order={currentOrder} />
