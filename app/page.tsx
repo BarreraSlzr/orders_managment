@@ -1,23 +1,24 @@
 import React from 'react'
 import ProductOrderManagment from '@/components/ProductOrderManagment'
 import { getProducts } from '@/lib/sql/functions/getProducts';
-import { getOpenOrders } from '@/lib/sql/functions/getOpenOrders';
+import { getOrders } from '@/lib/sql/functions/getOrders';
 import { OrderItemsProductsProvider } from '@/context/useOrderItemsProducts';
 import { OrdersProvider } from '@/context/useOrders';
 import { ProductProvider } from '@/context/useProducts';
 
 export default async function Page() {
   const products = await getProducts();
-  const orders = await getOpenOrders("America/Mexico_City");
+  const ordersQuery = {
+    isClosed: false
+  }
+
   return (
-    <OrdersProvider orders={orders}>
+    <OrdersProvider query={ordersQuery}>
       <ProductProvider products={products}>
         <OrderItemsProductsProvider>
           <ProductOrderManagment />
         </OrderItemsProductsProvider>
       </ProductProvider>
     </OrdersProvider>
-
-
   )
 }

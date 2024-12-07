@@ -36,6 +36,7 @@ export function useOrderItemsProducts(): OrderContextType {
     updateCurrentOrder,
     handleSplitOrder,
     handleUpdateItemDetails,
+    fetchOrders
   } = useOrders();
   const [combinedTags, setCombinedTags] = useState(getProductTagsSet(Array.from(products.values())));
   const [tagsSorted, setTagsSorted] = useState<[string, number][]>(getTagsSorted(combinedTags));
@@ -94,20 +95,6 @@ export function useOrderItemsProducts(): OrderContextType {
     }
   }, [selectedTags, tagsSorted]);
 
-  // Fetching orders
-  const fetchOrders = async () => {
-    const response = await fetch('/api/orders')
-    if (!response.ok) throw new Error('Failed to fetch open orders')
-    return response.json() as unknown as Order[]
-  }
-
-  useEffect(() => {
-    async function fetchAll() {
-      const orders = await fetchOrders()
-      setOrders(new Map(orders.map(o => [o.id, o])))
-    }
-    fetchAll();
-  }, [])
 
   return {
     isPending,
@@ -124,6 +111,7 @@ export function useOrderItemsProducts(): OrderContextType {
     handleUpdateItemDetails,
     handleCloseOrder,
     setCurrentOrderDetails,
+    fetchOrders,
     handleAddOrder: async function (productId?: string) {
       const formData = new FormData()
       if (productId) formData.append('productId', productId)

@@ -1,14 +1,37 @@
 'use client'
 import { handleCloseOrder,  handleSelectOrderItems, handleSplitOrder, handleToggleTakeAway, handleUpdatePayment } from '@/app/actions';
-import { Order, OrderContextActions, OrderContextState, OrderItems, OrderItemsFE } from '@/lib/types';
+import { OrdersQuery, Order, OrderContextActions, OrderContextState, OrderItems, OrderItemsFE } from '@/lib/types';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 
-export function useOrders({ orders: os }: {
-  orders: Order[]
-}): OrderContextState & OrderContextActions {
+export interface initOrdersProps {
+  orders?: Order[]
+  query?: OrdersQuery
+}
+
+export function useOrders({ orders: os = [], query: initialQuery = {}}: initOrdersProps): OrderContextState & OrderContextActions {
   const [isPending, startTransition] = useTransition();
   const [orders, setOrders] = useState(new Map<Order['id'], Order>(os.map(o => [o.id, o])));
   const [currentOrder, setCurrentOrder] = useState<OrderItemsFE | null>(null);
+  const [query, setQuery] = useState<OrdersQuery>(initialQuery);
+
+  // Fetching orders
+  const fetchOrders = async (updatedQuery: Partial<OrdersQuery> = {}) => {
+    const newQuery = { ...query, ...updatedQuery };
+    setQuery(newQuery);
+
+    const queryParams = new URLSearchParams(newQuery as Record<string, string>).toString();
+    const response = await fetch(`/api/orders?${queryParams}`);
+    if (!response.ok) throw new Error('Failed to fetch orders');
+
+    const fetchedOrders = await response.json() as Order[];
+    startTransition(() => {
+      setOrders(new Map(fetchedOrders.map(o => [o.id, o])));
+    });
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, [])
 
   const updateOrder = useCallback(function (value: OrderItems | null) {
     try {
@@ -31,23 +54,6 @@ export function useOrders({ orders: os }: {
     }
   }, [orders])
 
-  // Fetching orders
-  const fetchOrders = async () => {
-    const response = await fetch('/api/orders')
-    if (!response.ok) throw new Error('Failed to fetch open orders')
-    return response.json() as unknown as Order[]
-  }
-
-  useEffect(() => {
-    async function fetchAll() {
-      const orders = await fetchOrders()
-      startTransition(() => {
-        setOrders(new Map(orders.map(o => [o.id, o])))
-      })
-    }
-    fetchAll();
-  }, [])
-
   return {
     isPending,
     currentOrder,
@@ -56,6 +62,7 @@ export function useOrders({ orders: os }: {
     setCurrentOrder,
     setOrders,
     updateCurrentOrder: updateOrder,
+    fetchOrders,
     async handleUpdateItemDetails(actionType, formData) {
       const update = () => actionType === 'toggleTakeAway'
         ? handleToggleTakeAway(formData)
@@ -92,7 +99,6 @@ export function useOrders({ orders: os }: {
       return updatedOrder.success
     },
     handleCloseOrder: async function () {
-      // Close order logic
       if (!currentOrder) return
       const formData = new FormData()
       formData.append('orderId', currentOrder.order.id)
@@ -107,7 +113,6 @@ export function useOrders({ orders: os }: {
       })
     },
     setCurrentOrderDetails: async function (order: Order | null) {
-      // Set current order logic
       if (!order) {
         updateOrder(null);
         return void 0;

@@ -22,6 +22,13 @@ export interface OrderItemsFE {
   items: Map<OrderItem['product_id'], OrderItem>
 }
 
+export interface OrdersQuery {
+  timeZone?: string;
+  date?: string; // ISO date string: 'YYYY-MM-DD'
+  isClosed?: boolean; // Include only closed orders if true, or only open orders if false
+  all?: boolean
+}
+
 export interface OrderContextState {
   isPending: boolean;
   currentOrder: OrderItemsFE | null;
@@ -33,6 +40,8 @@ export interface OrderContextActions {
   setOrders: (v: OrderContextState['orders']) => void;
   setCurrentOrder: (v: OrderContextState['currentOrder']) => void;
   updateCurrentOrder: (value: OrderItems) => void;
+
+  fetchOrders: (query: OrdersQuery ) => Promise<void>;
   handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway', formData: FormData) => Promise<boolean>
   setCurrentOrderDetails: (order: Order | null) => Promise<void>;
   handleSplitOrder: (formData: FormData) => Promise<boolean>
