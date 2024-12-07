@@ -1,9 +1,10 @@
 'use client'
+import { useState } from 'react';
 import { FilterControls } from '@/components/FilterControls';
 import { OrderControls, ProductCard } from '@/components/ProductCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useOrders } from '@/context/useOrders';
+import { useOrderItemsProducts } from '@/context/useOrderItemsProducts';
 import { formatPrice } from '@/lib/utils/formatPrice';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,7 @@ export default function ProductOrderManagment() {
         visibleProducts,
         handleCloseOrder,
         setCurrentOrderDetails,
-    } = useOrders();
+    } = useOrderItemsProducts();
     const [showDetail, setShowDetail] = useState(false);
 
     return (

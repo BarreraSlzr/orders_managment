@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Minus, Plus } from 'lucide-react';
 import { Product } from '@/lib/types';
 import { formatPrice } from '@/lib/utils/formatPrice';
-import { useOrders } from '@/context/useOrders';
+import { useOrderItemsProducts } from '@/context/useOrderItemsProducts';
 import { PropsWithChildren } from 'react';
 
 interface Props {
@@ -33,7 +33,7 @@ export function OrderControls({ product }: Props) {
     handleAddOrder,
     handleUpdateOrderItems,
     isPending
-  } = useOrders()
+  } = useOrderItemsProducts()
   const productInOrder = currentOrder?.items.get(product.id);
   
   if (currentOrder) {
