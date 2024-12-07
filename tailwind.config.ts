@@ -1,5 +1,4 @@
 /** @type {import('tailwindcss').Config} */
-const colors = require('tailwindcss/colors');
 
 module.exports = {
 	darkMode: ['class'],
@@ -60,11 +59,6 @@ module.exports = {
 					'5': 'hsl(var(--chart-5))'
 				}
 			}
-		},
-		colors: {
-			...colors,
-			transparent: 'transparent',
-			current: 'currentColor',
 		}
 	},
 	plugins: [require("tailwindcss-animate")],

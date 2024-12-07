@@ -4,6 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Search, X } from 'lucide-react';
 import { useOrders } from '@/context/useOrders';
 
+const colorsByIndex = ["bg-indigo-500", "bg-blue-500", "bg-sky-500", "bg-cyan-500"]
+
 export function FilterControls() {
   const {
     searchQuery, visibleTags, selectedTags, setSearchQuery, setSelectedTags, resetFilters
@@ -30,17 +32,14 @@ export function FilterControls() {
         </Button>
       </div>
       <div className="flex flex-wrap gap-2">
-        {visibleTags.map(([tag]) => (
+        {visibleTags.map(([tag,id]) => (
           <Badge
             key={tag}
-            variant={selectedTags.has(tag) ? 'default' : 'outline'}
+            className={`${colorsByIndex[id]} ${selectedTags.has(tag) ? 'bg-black' : ''}`}
             onClick={() => handleTagToggle(tag)}
-          >
-            {tag}
-          </Badge>
+          >{tag}</Badge>
         ))}
       </div>
-      <Button type="reset">Limpiar</Button>
     </form>
   );
 }
