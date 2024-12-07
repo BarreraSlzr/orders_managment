@@ -22,7 +22,7 @@ export function TagsSheet({ }: OrderSummaryProps) {
     return (
         <Sheet>
             <SheetTrigger asChild>
-                <Button className="fixed bottom-4 left-4 h-16 w-16 rounded-full">
+                <Button className="relative h-16 w-16 rounded-full">
                     <Search className="h-6 w-6" />
                     <span className="absolute -left-2 -top-2 h-6 w-6 rounded-full bg-primary text-primary-foreground">
                         {selectedTags.size}

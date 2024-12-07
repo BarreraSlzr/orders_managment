@@ -25,7 +25,7 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
     return (
         <Sheet>
             <SheetTrigger asChild>
-                <Button className="fixed bottom-4 right-4 h-16 w-16 rounded-full">
+                <Button className="relative h-16 w-16 rounded-full">
                     <ShoppingBag className="h-6 w-6" />
                     <span className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-primary text-primary-foreground">
                         {orders.size}
