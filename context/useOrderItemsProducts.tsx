@@ -1,13 +1,14 @@
 'use client'
 import React, { PropsWithChildren, useContext } from 'react';
 import { useOrderItemsProducts as useHook } from '@/hooks/useOrderItemsProducts';
-import { OrderContextType} from '@/lib/types';
+import { OrderItemsContextActions} from '@/lib/types';
 
-const OrderContext = React.createContext<OrderContextType>(undefined as unknown as OrderContextType);
+type ContextType = OrderItemsContextActions;
+const Context = React.createContext<ContextType>(undefined as unknown as ContextType);
 
 export const OrderItemsProductsProvider = ({children }: PropsWithChildren) => {
-    return <OrderContext.Provider value={useHook()}>{children}</OrderContext.Provider>;
+    return <Context.Provider value={useHook()}>{children}</Context.Provider>;
 };
 
 
-export const useOrderItemsProducts = () => useContext(OrderContext);
+export const useOrderItemsProducts = () => useContext(Context);

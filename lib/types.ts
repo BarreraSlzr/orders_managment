@@ -48,7 +48,7 @@ export interface OrderContextActions {
   handleCloseOrder: () => Promise<void>;
 }
 
-export interface OrderItemsContextState {
+export interface ProductFilterContextState {
   tagsSorted: [string, number][];
   searchQuery: string;
   selectedTags: Set<string>;
@@ -56,17 +56,22 @@ export interface OrderItemsContextState {
   visibleTags: [string, number][];
 }
 
-export interface OrderItemsContextActions {
-  handleAddOrder: (productId?: string) => Promise<void>;
-  handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => Promise<void>;
+export interface ProductFilterContextActions {
   setSearchQuery: (query: string) => void;
   setSelectedTags: (tags: Set<string>) => void;
   resetFilters: () => void;
+  handleTagToggle: (tag: string) => void
 }
 
-export type OrderItemsContext = OrderItemsContextState & OrderItemsContextActions;
+export interface OrderItemsContextActions {
+  handleAddOrder: (productId?: string) => Promise<void>;
+  handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => Promise<void>;
+}
 
-export type OrderContextType = OrderContextState & Omit<OrderContextActions, 'startTransition' | 'setOrders' | 'setCurrentOrder' | 'updateCurrentOrder'> & OrderItemsContext;
+export type OrderItemsContext = OrderItemsContextActions;
+
+export type OrderContextType = OrderContextState & Omit<OrderContextActions
+, 'startTransition' | 'setOrders' | 'setCurrentOrder' | 'updateCurrentOrder'> & OrderItemsContext;
 
 export interface ProductContextType {
   products: Map<Product['id'], Product>;

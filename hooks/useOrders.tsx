@@ -30,7 +30,10 @@ export function useOrders({ orders: os = [], query: initialQuery = {}}: initOrde
   };
 
   useEffect(() => {
+    const closeHandler = () => setCurrentOrder(null);
+    window.addEventListener("close-order-details", closeHandler);
     fetchOrders();
+    return () => window.removeEventListener("close-order-details", closeHandler);
   }, [])
 
   const updateOrder = useCallback(function (value: OrderItems | null) {

@@ -5,6 +5,7 @@ import { Product } from '@/lib/types';
 import { formatPrice } from '@/lib/utils/formatPrice';
 import { useOrderItemsProducts } from '@/context/useOrderItemsProducts';
 import { PropsWithChildren } from 'react';
+import { useOrders } from '@/context/useOrders';
 
 interface Props {
   product: Product
@@ -29,11 +30,10 @@ export function ProductCard({
 
 export function OrderControls({ product }: Props) {
   const {
-    currentOrder,
     handleAddOrder,
-    handleUpdateOrderItems,
-    isPending
-  } = useOrderItemsProducts()
+    handleUpdateOrderItems
+  } = useOrderItemsProducts();
+  const { isPending, currentOrder } = useOrders()
   const productInOrder = currentOrder?.items.get(product.id);
   
   if (currentOrder) {

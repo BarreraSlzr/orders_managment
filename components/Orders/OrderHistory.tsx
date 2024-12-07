@@ -18,13 +18,6 @@ export default function OrderHistoryPage() {
     }
   };
 
-  // Handle global close event
-  useEffect(() => {
-    const closeHandler = () => setCurrentOrder(null);
-    window.addEventListener("close-order-details", closeHandler);
-    return () => window.removeEventListener("close-order-details", closeHandler);
-  }, []);
-
   return (
     <main className="container mx-auto px-4 py-8">
       <Card className="mb-8">
