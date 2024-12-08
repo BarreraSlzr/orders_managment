@@ -28,7 +28,7 @@ export async function getOrders({
   let query = db
     .selectFrom("orders");
 
-  if(!all){
+  if(!all || !!date){
     query = query
     .where(eb => eb.and([
       eb(sql`timezone(${timeZone}, "created")`, ">=", start),
