@@ -42,7 +42,7 @@ export interface OrderContextActions {
   updateCurrentOrder: (value: OrderItems) => void;
 
   fetchOrders: (query: OrdersQuery ) => Promise<void>;
-  handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway', formData: FormData) => Promise<boolean>
+  handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway' | 'remove', formData: FormData) => Promise<boolean>
   setCurrentOrderDetails: (order: Order | null) => Promise<void>;
   handleSplitOrder: (formData: FormData) => Promise<boolean>
   handleCloseOrder: () => Promise<void>;

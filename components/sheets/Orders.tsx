@@ -3,17 +3,18 @@
 import { Button } from "@/components/ui/button"
 import {
     Sheet,
+    SheetClose,
     SheetContent,
     SheetHeader,
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, X } from 'lucide-react'
 import { useOrders } from "@/context/useOrders"
 import OrdersList from "../Orders/OrderList"
 import { Suspense } from "react"
 import { Spinner } from "../ui/spinner"
-import { Card, CardHeader, CardTitle } from "../ui/card"
+import { Card, CardHeader } from "../ui/card"
 import OrderDetails from "../Orders/OrderDetails"
 
 interface OrderSummaryProps {
@@ -33,24 +34,31 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
                 </Button>
             </SheetTrigger>
             <SheetContent className="flex w-full flex-col sm:max-w-lg">
-                <SheetHeader className="space-y-4">
-                    <SheetTitle className="text-center text-xl font-bold">
-                        ORDENES ABIERTAS
-                    </SheetTitle>
-                </SheetHeader>
+                <SheetClose asChild>
+                    <SheetHeader className="space-y-4" >
+                        <SheetTitle className="text-center text-xl font-bold">
+                            ORDENES ABIERTAS
+                        </SheetTitle>
+                    </SheetHeader>
+                </SheetClose>
                 <div className="flex flex-col gap-4 overflow-auto min-h-full">
 
                     {/* Orders List */}
                     <Suspense fallback={<Spinner className="mx-auto" />}>
                         <OrdersList />
                     </Suspense>
-                    <div className="m-auto"/>
+                    <div className="m-auto" />
 
                     {/* Selected Order Details */}
-                    <Card className="sticky bottom-0">
+                    <Card className="sticky bottom-0 flex flex-col">
                         {currentOrder ? (
                             <Suspense fallback={<Spinner className="mx-auto" />}>
-                                <OrderDetails order={currentOrder} />
+                                <SheetClose asChild>
+                                    <Button className="flex-grow">
+                                        Agregar mas porductos
+                                    </Button>
+                                </SheetClose>
+                                <OrderDetails order={currentOrder} editMode/>
                             </Suspense>
                         ) : (
                             <CardHeader>

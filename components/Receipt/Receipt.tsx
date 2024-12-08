@@ -5,23 +5,25 @@ import { ReceiptHeader } from "./ReceiptHeader";
 import { ReceiptItems } from "./ReceiptItems";
 import { ReceiptFooter } from "./ReceiptFooter";
 import { OrderItemsFE } from "@/lib/types";
-import { useState } from "react";
+import { PropsWithChildren, useState } from "react";
 import { useOrderItemsProducts } from "@/context/useOrderItemsProducts";
 import { Button } from "../ui/button";
 import { ReceiptActions } from "./ReceiptActions";
 import { useOrders } from "@/context/useOrders";
+import { handleCloseOrder } from "@/app/actions";
 
 interface ReceiptProps {
     data: OrderItemsFE;
+    editMode?: boolean;
     serverInfo?: {
         servedBy: string;
         time: string;
     };
 }
 
-export default function Receipt({ data, serverInfo }: ReceiptProps) {
+export default function Receipt({ data, serverInfo, editMode: defaultEditMode = false, children }: PropsWithChildren<ReceiptProps>) {
     const { order, items } = data;
-    const [editMode, setEditMode] = useState(false);
+    const [editMode, setEditMode] = useState(defaultEditMode);
     const { handleSplitOrder, handleUpdateItemDetails } = useOrders();
 
     const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
@@ -37,8 +39,12 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
                 break;
             case "updatePayment":
             case "toggleTakeAway":
+            case "remove":
                 await handleUpdateItemDetails(submitter.id, formData);
                 setEditMode(false);
+                break;
+            case 'close':
+                await handleCloseOrder(formData)
                 break;
             default:
                 console.error("Unknown submit action:", submitter.id);
@@ -61,13 +67,22 @@ export default function Receipt({ data, serverInfo }: ReceiptProps) {
                     <ReceiptFooter orderTotal={order.total}>
                         <CardFooter className="flex flex-wrap gap-2 justify-between px-0 sticky bottom-0 bg-white">
                             {
-                                !editMode ? (
+                                !editMode ? (<>
                                     <Button
                                         variant="secondary"
                                         size="sm"
                                         type="reset"
                                     >Modificar productos</Button>
-                                ) : <ReceiptActions />
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        type="submit"
+                                        id='close'
+                                    >
+                                        Cerrar orden
+                                    </Button>
+                                </>
+                                ) : (children || <ReceiptActions />)
                             }
                         </CardFooter>
                     </ReceiptFooter>

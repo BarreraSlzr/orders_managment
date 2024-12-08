@@ -1,5 +1,5 @@
 'use client'
-import { handleCloseOrder,  handleSelectOrderItems, handleSplitOrder, handleToggleTakeAway, handleUpdatePayment } from '@/app/actions';
+import { handleCloseOrder,  handleRemoveProducts,  handleSelectOrderItems, handleSplitOrder, handleToggleTakeAway, handleUpdatePayment } from '@/app/actions';
 import { OrdersQuery, Order, OrderContextActions, OrderContextState, OrderItems, OrderItemsFE } from '@/lib/types';
 import { useCallback, useEffect, useState, useTransition } from 'react';
 
@@ -67,9 +67,27 @@ export function useOrders({ orders: os = [], query: initialQuery = {}}: initOrde
     updateCurrentOrder: updateOrder,
     fetchOrders,
     async handleUpdateItemDetails(actionType, formData) {
-      const update = () => actionType === 'toggleTakeAway'
-        ? handleToggleTakeAway(formData)
-        : handleUpdatePayment(formData);
+      if( actionType === 'remove'){
+        return  await handleRemoveProducts(formData).then((result) => {
+          if( result.success && currentOrder){
+            const itemIds = new Set(formData.getAll('item_id').map(Number));
+            currentOrder.items.forEach((order) => {
+              order.items = order.items.filter(({id}) => !itemIds.has(id));
+              if( order.items.length === 0){
+                currentOrder.items.delete(order.product_id)
+              } 
+            });
+            setCurrentOrder({...currentOrder});
+          }
+          return result.success;
+      });
+      }
+      const update = () => {
+          switch(actionType){
+            case 'toggleTakeAway': return handleToggleTakeAway(formData);
+            case 'updatePayment': return handleUpdatePayment(formData);
+        }
+      } 
       const result = await update();
       if (result.success){
         if(currentOrder){

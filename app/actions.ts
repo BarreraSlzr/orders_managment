@@ -11,7 +11,7 @@ import { Product } from "@/lib/types";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
-import { togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
+import { removeProducts, togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -153,6 +153,23 @@ export async function handleToggleTakeAway(formData: FormData) {
       }
     
       return await toggleTakeAway(itemIds);
+    },
+    formData
+  })
+}
+
+export async function handleRemoveProducts(formData: FormData) {
+  return errorHandler({
+    actionName: 'handleRemoveProducts',
+    async callback() {
+      const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
+    
+      if (!itemIds.length) {
+        throw new Error('Invalid data.');
+      }
+    
+      await removeProducts(itemIds);
+      return true 
     },
     formData
   })
