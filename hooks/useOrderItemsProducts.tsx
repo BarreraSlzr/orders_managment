@@ -7,7 +7,7 @@ export function useOrderItemsProducts(): OrderItemsContextActions {
   const {
     currentOrder,
     startTransition,
-    updateCurrentOrder,
+    updateCurrentOrder
   } = useOrders();
 
   return {
@@ -21,9 +21,9 @@ export function useOrderItemsProducts(): OrderItemsContextActions {
     },
     handleUpdateOrderItems: async function (productId: string, type: "INSERT" | "DELETE") {
       // Update order items logic
-      if (!currentOrder) return
+      if (!currentOrder) return;
       const formData = new FormData()
-      formData.append('orderId', currentOrder.order.id)
+      formData.append('orderId', currentOrder.id)
       formData.append('productId', productId)
       formData.append('type', type)
       const { success, result: orderUpdated } = await handleUpdateOrderItem(formData);

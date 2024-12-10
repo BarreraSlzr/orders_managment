@@ -1,8 +1,8 @@
 import { OrderItemTable } from "@/lib/types";
 import { db } from "../database";
 import { getOrder } from "./getOrder";
-import { getOrderItemsDetailed } from "./getOrderItemsDetailed";
 import { insertOrder } from "./insertOrder";
+import { getOrderItemsView } from "./getOrderItemsView";
 
 interface props {
   old_order_id: string,
@@ -23,8 +23,7 @@ export async function splitOrder({
     .execute();
 
   return { 
-    newOrder: await getOrder(newOrder.id),
+    newOrder: await getOrderItemsView(newOrder.id),
     oldOrder: await getOrder(old_order_id),
-    items: await getOrderItemsDetailed(newOrder.id) 
   };
 }

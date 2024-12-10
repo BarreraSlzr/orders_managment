@@ -4,16 +4,15 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { ReceiptHeader } from "./ReceiptHeader";
 import { ReceiptItems } from "./ReceiptItems";
 import { ReceiptFooter } from "./ReceiptFooter";
-import { OrderItemsFE } from "@/lib/types";
 import { PropsWithChildren, useState } from "react";
-import { useOrderItemsProducts } from "@/context/useOrderItemsProducts";
 import { Button } from "../ui/button";
 import { ReceiptActions } from "./ReceiptActions";
 import { useOrders } from "@/context/useOrders";
 import { handleCloseOrder } from "@/app/actions";
+import { OrderItemsView } from "@/lib/sql/types";
 
 interface ReceiptProps {
-    data: OrderItemsFE;
+    data: OrderItemsView;
     editMode?: boolean;
     serverInfo?: {
         servedBy: string;
@@ -22,7 +21,7 @@ interface ReceiptProps {
 }
 
 export default function Receipt({ data, serverInfo, editMode: defaultEditMode = false, children }: PropsWithChildren<ReceiptProps>) {
-    const { order, items } = data;
+    const { products: items, ...order } = data;
     const [editMode, setEditMode] = useState(defaultEditMode);
     const { handleSplitOrder, handleUpdateItemDetails } = useOrders();
 
@@ -30,7 +29,7 @@ export default function Receipt({ data, serverInfo, editMode: defaultEditMode = 
         ev.preventDefault();
         const formData = new FormData(ev.currentTarget);
         const submitter = (ev.nativeEvent as SubmitEvent).submitter as HTMLButtonElement;
-        formData.append("orderId", data.order.id);
+        formData.append("orderId", `${order.id}`);
 
         switch (submitter.id) {
             case "split":

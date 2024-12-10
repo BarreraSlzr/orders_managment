@@ -3,10 +3,10 @@
 import { Fragment } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatPrice } from "@/lib/utils/formatPrice";
-import { OrderItemsFE } from "@/lib/types";
+import { OrderItemsView } from "@/lib/sql/types";
 
 interface ReceiptItemsProps {
-    items: OrderItemsFE['items'];
+    items: OrderItemsView['products'];
     listProducts: boolean;
 }
 
