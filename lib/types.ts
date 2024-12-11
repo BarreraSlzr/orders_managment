@@ -1,26 +1,10 @@
-import { startTransition } from 'react';
 import { Selectable, Updateable } from "kysely";
-import { Database } from "./sql/types";
+import { Database, OrderItemsView } from "./sql/types";
 
 export type Order = Selectable<Database["orders"]>;
 export type Product = Selectable<Database["products"]>;
 export type OrderItemTable = Selectable<Database['order_items']>
 
-export interface OrderItem extends Pick<OrderItemTable, "product_id"> {
-  name: string
-  price: number
-  items: Pick<OrderItemTable, 'id' | 'is_takeaway' | 'payment_option_id'>[]
-}
-
-export interface OrderItems {
-  order: Order,
-  items: OrderItem[]
-}
-
-export interface OrderItemsFE {
-  order: Order,
-  items: Map<OrderItem['product_id'], OrderItem>
-}
 
 export interface OrdersQuery {
   timeZone?: string;
@@ -31,21 +15,17 @@ export interface OrdersQuery {
 
 export interface OrderContextState {
   isPending: boolean;
-  currentOrder: OrderItemsFE | null;
+  currentOrder: OrderItemsView | null;
   orders: Map<Order['id'], Order>;
 }
 
 export interface OrderContextActions {
-  startTransition: ( cb: () => Promise<void>) => void;
-  setOrders: (v: OrderContextState['orders']) => void;
-  setCurrentOrder: (v: OrderContextState['currentOrder']) => void;
-  updateCurrentOrder: (value: OrderItems) => void;
-
+  updateCurrentOrder: (value: OrderContextState['currentOrder']) => void;
   fetchOrders: (query: OrdersQuery ) => Promise<void>;
   handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway' | 'remove', formData: FormData) => Promise<boolean>
   setCurrentOrderDetails: (order: Order | null) => Promise<void>;
   handleSplitOrder: (formData: FormData) => Promise<boolean>
-  handleCloseOrder: () => Promise<void>;
+  handleCloseOrder: (formData: FormData) => Promise<boolean>;
 }
 
 export interface ProductFilterContextState {
@@ -71,7 +51,7 @@ export interface OrderItemsContextActions {
 export type OrderItemsContext = OrderItemsContextActions;
 
 export type OrderContextType = OrderContextState & Omit<OrderContextActions
-, 'startTransition' | 'setOrders' | 'setCurrentOrder' | 'updateCurrentOrder'> & OrderItemsContext;
+, 'setCurrentOrder' | 'updateCurrentOrder'> & OrderItemsContext;
 
 export interface ProductContextType {
   products: Map<Product['id'], Product>;

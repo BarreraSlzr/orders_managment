@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { useOrders } from "@/context/useOrders";
 import OrdersList from "./OrderList";
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 
 export default function OrderHistoryPage() {
-  const { fetchOrders, setCurrentOrder, currentOrder } = useOrders()
+  const { fetchOrders, currentOrder } = useOrders()
   const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if(event.target.valueAsDate){
       fetchOrders({ date: format(event.target.valueAsDate, "yyyy-MM-dd") });

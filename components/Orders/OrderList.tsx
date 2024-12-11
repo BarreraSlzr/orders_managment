@@ -11,7 +11,7 @@ export default function OrdersList() {
         {Array.from(orders.values()).map((order) => (
           <div
             key={order.id}
-            className={`border rounded-lg p-4 cursor-pointer ${currentOrder?.order.id === order.id
+            className={`border rounded-lg p-4 cursor-pointer ${currentOrder?.id === order.id
                 ? "bg-blue-100"
                 : "hover:bg-gray-50"
                 }`}

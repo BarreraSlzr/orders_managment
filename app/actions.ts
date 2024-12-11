@@ -4,8 +4,7 @@ import { insertOrder } from "@/lib/sql/functions/insertOrder";
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
 import { getProducts } from "@/lib/sql/functions/getProducts";
-import { getOrder } from "@/lib/sql/functions/getOrder";
-import { getOrderItemsDetailed } from "@/lib/sql/functions/getOrderItemsDetailed";
+import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { errorHandler } from "@/lib/utils/errorHandler";
 import { Product } from "@/lib/types";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
@@ -80,7 +79,7 @@ export async function handleCloseOrder(formData: FormData) {
     actionName: 'handleCloseOrder',
     async callback() {
       const orderIdValue = `${formData.get('orderId')}`;
-      return closeOrder(orderIdValue);
+      return await closeOrder(orderIdValue);
     },
     formData
   });
@@ -91,9 +90,7 @@ export async function handleSelectOrderItems(formData: FormData) {
     actionName: 'getOrderItems',
     async callback() {
       const orderIdValue = `${formData.get('orderId')}`;
-      const order = await getOrder(orderIdValue);
-      const items = await getOrderItemsDetailed(order.id);
-      return { order, items };
+      return getOrderItemsView(orderIdValue);
     },
     formData
   });
@@ -128,7 +125,7 @@ export async function handleUpsertProduct(formData: FormData) {
 export async function handleUpdatePayment(formData: FormData) {
   return errorHandler({
     actionName: 'handleUpdatePayment',
-    async callback(){
+    callback(){
       const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
       const paymentOptionId = Number(formData.get('payment_option_id'));
     
@@ -136,7 +133,7 @@ export async function handleUpdatePayment(formData: FormData) {
         throw new Error('Invalid data.');
       }
      
-      return await togglePaymentOption(itemIds);
+      return togglePaymentOption(itemIds);
     },
     formData
   })
@@ -145,14 +142,14 @@ export async function handleUpdatePayment(formData: FormData) {
 export async function handleToggleTakeAway(formData: FormData) {
   return errorHandler({
     actionName: 'handleToggleTakeAway',
-    async callback() {
+    callback() {
       const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
     
       if (!itemIds.length) {
         throw new Error('Invalid data.');
       }
     
-      return await toggleTakeAway(itemIds);
+      return toggleTakeAway(itemIds);
     },
     formData
   })
@@ -160,24 +157,25 @@ export async function handleToggleTakeAway(formData: FormData) {
 
 export async function handleRemoveProducts(formData: FormData) {
   return errorHandler({
-    actionName: 'handleRemoveProducts',
-    async callback() {
-      const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
-    
+    actionName: 'Remove Products',
+    async callback(){
+      const orderId = `${formData.get('orderId')}`;
+      const itemIds = formData.getAll('item_id').map(id => parseInt(id as string, 10));
+
       if (!itemIds.length) {
-        throw new Error('Invalid data.');
+        throw new Error('No items provided for removal.');
       }
-    
-      await removeProducts(itemIds);
-      return true 
+
+      return (await removeProducts(orderId, itemIds)).pop()?.numDeletedRows;
     },
-    formData
-  })
+    formData,
+  });
 }
 
 
+
 export async function handleExportProducts(formData: FormData) {
-  errorHandler({
+  return errorHandler({
     actionName: 'handleExportProducts',
     async callback(){
         return {

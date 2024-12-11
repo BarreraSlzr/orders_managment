@@ -6,9 +6,11 @@ import { TagsSheet } from './sheets/Tags';
 import { useProductsFilter } from '@/context/useProductsFilter';
 import { Badge } from './ui/badge';
 import { colorsByIndex } from './FilterControls';
+import { useOrders } from '@/context/useOrders';
 
 export default function ProductOrderManagment() {
     const { visibleProducts, visibleTags, selectedTags, handleTagToggle } = useProductsFilter();
+    const { currentOrder } = useOrders();
 
     return (
         <div className="min-h-screen bg-slate-100 flex flex-col justify-between">
@@ -32,7 +34,7 @@ export default function ProductOrderManagment() {
                     </div>
                 ))}
             </main>
-            <div className="sticky bottom-0 p-4 flex justify-between">
+            <div className="sticky bottom-0 p-4 flex justify-between items-end">
                 <TagsSheet />
                 <OpenOrderSheet />
             </div>

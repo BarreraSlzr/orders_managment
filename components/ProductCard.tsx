@@ -34,7 +34,7 @@ export function OrderControls({ product }: Props) {
     handleUpdateOrderItems
   } = useOrderItemsProducts();
   const { isPending, currentOrder } = useOrders()
-  const productInOrder = currentOrder?.items.get(product.id);
+  const productInOrder = currentOrder?.products.find(product_item => product_item.product_id === product.id);
   
   if (currentOrder) {
     return productInOrder ? (

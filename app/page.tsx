@@ -11,7 +11,7 @@ export default async function Page() {
   const products = await getProducts();
   const ordersQuery: OrdersQuery = {
     isClosed: false
-  }
+  };
 
   return (
     <OrdersProvider query={ordersQuery}>
