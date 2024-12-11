@@ -20,13 +20,12 @@ export interface OrderContextState {
 }
 
 export interface OrderContextActions {
-  startTransition: ( cb: () => Promise<void>) => void;
   updateCurrentOrder: (value: OrderContextState['currentOrder']) => void;
   fetchOrders: (query: OrdersQuery ) => Promise<void>;
   handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway' | 'remove', formData: FormData) => Promise<boolean>
   setCurrentOrderDetails: (order: Order | null) => Promise<void>;
   handleSplitOrder: (formData: FormData) => Promise<boolean>
-  handleCloseOrder: () => Promise<boolean>;
+  handleCloseOrder: (formData: FormData) => Promise<boolean>;
 }
 
 export interface ProductFilterContextState {
@@ -52,7 +51,7 @@ export interface OrderItemsContextActions {
 export type OrderItemsContext = OrderItemsContextActions;
 
 export type OrderContextType = OrderContextState & Omit<OrderContextActions
-, 'startTransition' | 'setOrders' | 'setCurrentOrder' | 'updateCurrentOrder'> & OrderItemsContext;
+, 'setCurrentOrder' | 'updateCurrentOrder'> & OrderItemsContext;
 
 export interface ProductContextType {
   products: Map<Product['id'], Product>;

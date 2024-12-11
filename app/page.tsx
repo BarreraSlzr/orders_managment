@@ -6,7 +6,6 @@ import { OrdersProvider } from '@/context/useOrders';
 import { ProductProvider } from '@/context/useProducts';
 import { OrdersQuery } from '@/lib/types';
 import { ProductsFilterProvider } from '@/context/useProductsFilter';
-import { getOrders } from '@/lib/sql/functions/getOrders';
 
 export default async function Page() {
   const products = await getProducts();

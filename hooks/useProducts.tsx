@@ -1,7 +1,7 @@
 import { handleUpsertProduct as serverUpsertProduct } from "@/app/actions";
 import { Product, ProductContextType } from "@/lib/types";
 import { Updateable } from "kysely";
-import { useState, startTransition, useEffect } from "react";
+import { useState, useEffect } from "react";
 
 const defaultProduct = {
     id: '', // Temporary empty ID until the product is saved
@@ -24,9 +24,7 @@ export function useProducts({ products: defaultProducts }: { products: Product[]
     useEffect(() => {
         async function fetchAll() {
             const products = await fetchProducts()
-            startTransition(() => {
-                setProducts(new Map(products.map(p => [p.id, p])))
-            })
+            setProducts(new Map(products.map(p => [p.id, p])))
         }
         fetchAll();
     }, [])
@@ -42,10 +40,8 @@ export function useProducts({ products: defaultProducts }: { products: Product[]
             if (!response.success) throw new Error('Failed to upsert product');
             const updatedProduct = response.result.product as Product;
 
-            startTransition(() => {
-                products.set(updatedProduct.id, updatedProduct);
-                setProducts(new Map(products));
-            });
+            products.set(updatedProduct.id, updatedProduct);
+            setProducts(new Map(products));
         },
         handleDeleteProduct: async (formData: FormData) => {
             const response = await fetch(`/api/products`, {
@@ -55,15 +51,13 @@ export function useProducts({ products: defaultProducts }: { products: Product[]
             if (!response.ok) throw new Error('Failed to delete product');
             const { id: deletedProductId } = await response.json() as { id: string };
 
-            startTransition(() => {
-                const updatedProducts = new Map(products);
-                updatedProducts.delete(deletedProductId);
-                setProducts(updatedProducts);
+            const updatedProducts = new Map(products);
+            updatedProducts.delete(deletedProductId);
+            setProducts(updatedProducts);
 
-                if (currentProduct?.id === deletedProductId) {
-                    setCurrentProduct({ ...defaultProduct });
-                }
-            });
+            if (currentProduct?.id === deletedProductId) {
+                setCurrentProduct({ ...defaultProduct });
+            }
         }
     }
 }

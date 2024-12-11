@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { handleCloseOrder, handleRemoveProducts, handleSplitOrder, handleToggleTakeAway, handleUpdatePayment } from '@/app/actions';
 import { OrdersQuery, Order, OrderContextState, OrderContextActions } from '@/lib/types';
 import { OrderItemsView } from '@/lib/sql/types';
-import { useRouter } from 'next/navigation';
 
 export interface InitOrdersProps {
   orders?: Order[];
@@ -13,33 +12,39 @@ export interface InitOrdersProps {
 }
 
 export function useOrders({ orders: initialOrders = [], query: initialQuery = {} }: InitOrdersProps): OrderContextState & OrderContextActions {
-  const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState<OrdersQuery>(initialQuery);
-  const router = useRouter();
-
-  // Fetch `Order` data for the main `orders` list
-  const { data: fetchedOrders, mutate: revalidateOrders } = useSWR<Order[]>(
-    `/api/orders?${new URLSearchParams(query as Record<string, string>).toString()}`,
-    { fallbackData: initialOrders,
-      fetcher: (resource: any, init: any) => fetch(resource, init).then(res => res.json())
-     }
-  );
-
-  // Fetch `OrderItemsView` data for `currentOrder`
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  const { data: OrderItemsView, mutate: revalidateCurrentOrder} = useSWR(
-    currentOrderId ? `/api/orders/${currentOrderId}` : null,{
-      fetcher: (resource: any, init: any) => fetch(resource, init).then(res => res.json()),
-      onSuccess: () => {
-        if (currentOrderId === null) {
-          revalidateCurrentOrder(null); // Reset the data when the order is null
-        }
-      },
+  const [currentOrder, setCurrentOrder] = useState<OrderItemsView | null>(null);
+  
+  // Fetch `OrderItemsView` data for `currentOrder`
+  const { data: OrderItemsView, isLoading: isLoadingDetail, mutate: revalidateCurrentOrder } = useSWR(
+    currentOrderId ? `/api/orders/${currentOrderId}` : null,
+    {fetcher: (resource: any, init: any) => fetch(resource, init).then((res) => res.json())}
+  );
+  // Fetch `Order` data for the main `orders` list
+  const { data: fetchedOrders, isLoading, mutate: revalidateOrders } = useSWR<Order[]>(
+    `/api/orders?${new URLSearchParams(query as Record<string, string>).toString()}`,
+    {
+      fallbackData: initialOrders,
+      fetcher: (resource: any, init: any) => fetch(resource, init).then((res) => res.json()),
     }
   );
-  const [currentOrder, setCurrentOrder] = useState<OrderItemsView | null>(OrderItemsView)
 
-  const orders = new Map(fetchedOrders?.map((order) => [order.id, order]) ?? []);
+  useEffect(() => {
+    if (!currentOrderId) {
+      setCurrentOrder(null); // Explicitly reset currentOrder when currentOrderId is null
+    } else {
+      setCurrentOrder(OrderItemsView); // Sync with fetched data
+    }
+  }, [currentOrderId, OrderItemsView]);
+
+  useEffect(() => {
+    const closeHandler = () => setCurrentOrder(null);
+    window.addEventListener('close-order-details', closeHandler);
+    return () => window.removeEventListener('close-order-details', closeHandler);
+  }, []);
+
+  const orders = new Map<string, Order>(fetchedOrders?.map((order) => [order.id, order]) ?? []);
 
   const fetchOrders = async (updatedQuery: Partial<OrdersQuery> = {}) => {
     setQuery((prev) => ({ ...prev, ...updatedQuery }));
@@ -48,35 +53,20 @@ export function useOrders({ orders: initialOrders = [], query: initialQuery = {}
 
   const updateOrder = (updatedOrder: OrderItemsView | null) => {
     if (updatedOrder) {
-      setCurrentOrderId(updatedOrder.id);
-      if(!orders.has(updatedOrder.id)){
+      if (!orders.has(updatedOrder.id)) {
         revalidateOrders();
       }
+      setCurrentOrderId(updatedOrder.id);
     } else {
       setCurrentOrderId(null);
     }
     revalidateCurrentOrder();
   };
 
-  useEffect(() => {
-    if (currentOrderId === null) {
-      setCurrentOrder(null);
-    } else {
-      setCurrentOrder(OrderItemsView);
-    }
-  }, [currentOrderId, OrderItemsView])
-
-  useEffect(() => {
-    const closeHandler = () => setCurrentOrder(null);
-    window.addEventListener("close-order-details", closeHandler);
-    return () => window.removeEventListener("close-order-details", closeHandler);
-  }, [])
-
   return {
-    isPending,
+    isPending: (isLoading || isLoadingDetail),
     orders,
     currentOrder,
-    startTransition,
     fetchOrders,
     updateCurrentOrder: updateOrder,
     async handleUpdateItemDetails(actionType, formData) {
@@ -103,23 +93,22 @@ export function useOrders({ orders: initialOrders = [], query: initialQuery = {}
     async handleSplitOrder(formData: FormData) {
       const result = await handleSplitOrder(formData);
       if (result.success) {
-        startTransition(() => {
-          const {products: items, ...newOrder} = result.result.newOrder;
+          const { products: items, ...newOrder } = result.result.newOrder;
           orders.set(result.result.oldOrder.id, result.result.oldOrder);
           orders.set(newOrder.id, newOrder);
+          await revalidateOrders();
           updateOrder(result.result.newOrder);
-        });
       }
       return result.success;
     },
-    async handleCloseOrder() {
-      if (!currentOrder) return false;
-      const formData = new FormData();
-      formData.append('orderId', currentOrder.id.toString());
-      setCurrentOrder(null);
-      setCurrentOrderId(null);
-      const result = handleCloseOrder(formData);
-      return (await result).success;
+    async handleCloseOrder(formData: FormData) {
+      const result = await handleCloseOrder(formData);
+      if( result.success){
+        setCurrentOrder(null);
+        setCurrentOrderId(null);
+        await revalidateOrders();
+      }
+      return result.success;
     },
     async setCurrentOrderDetails(order: Order | null) {
       if (!order) {

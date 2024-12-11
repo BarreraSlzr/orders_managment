@@ -9,13 +9,14 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
-import { ShoppingBag, X } from 'lucide-react'
+import { ShoppingBag } from 'lucide-react'
 import { useOrders } from "@/context/useOrders"
 import OrdersList from "../Orders/OrderList"
 import { Suspense } from "react"
 import { Spinner } from "../ui/spinner"
 import { Card, CardHeader } from "../ui/card"
 import OrderDetails from "../Orders/OrderDetails"
+import { OrderSummary } from "../OrderSummary"
 
 interface OrderSummaryProps {
 }
@@ -26,12 +27,19 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
     return (
         <Sheet>
             <SheetTrigger asChild>
-                <Button className="relative h-16 w-16 rounded-full">
-                    <ShoppingBag className="h-6 w-6" />
-                    <span className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-primary text-primary-foreground">
-                        {orders.size}
-                    </span>
-                </Button>
+                <div className="ms-auto flex flex-wrap gap-2">
+                    {currentOrder &&
+                        <Button variant={'default'} className='h-16 rounded-full relative px-8 flex-grow'>
+                            <OrderSummary order={currentOrder} minimal />
+                        </Button>
+                    }
+                    <Button className="relative h-16 w-16 rounded-full ms-auto">
+                        <ShoppingBag className="h-6 w-6" />
+                        <span className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-primary text-primary-foreground">
+                            {orders.size}
+                        </span>
+                    </Button>
+                </div>
             </SheetTrigger>
             <SheetContent className="flex w-full flex-col sm:max-w-lg">
                 <SheetClose asChild>
@@ -58,7 +66,7 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
                                         Agregar mas porductos
                                     </Button>
                                 </SheetClose>
-                                <OrderDetails order={currentOrder} editMode/>
+                                <OrderDetails order={currentOrder} editMode />
                             </Suspense>
                         ) : (
                             <CardHeader>

@@ -8,7 +8,6 @@ import { PropsWithChildren, useState } from "react";
 import { Button } from "../ui/button";
 import { ReceiptActions } from "./ReceiptActions";
 import { useOrders } from "@/context/useOrders";
-import { handleCloseOrder } from "@/app/actions";
 import { OrderItemsView } from "@/lib/sql/types";
 
 interface ReceiptProps {
@@ -23,7 +22,7 @@ interface ReceiptProps {
 export default function Receipt({ data, serverInfo, editMode: defaultEditMode = false, children }: PropsWithChildren<ReceiptProps>) {
     const { products: items, ...order } = data;
     const [editMode, setEditMode] = useState(defaultEditMode);
-    const { handleSplitOrder, handleUpdateItemDetails } = useOrders();
+    const { handleSplitOrder, handleUpdateItemDetails, handleCloseOrder } = useOrders();
 
     const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
         ev.preventDefault();
