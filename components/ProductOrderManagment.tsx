@@ -6,11 +6,11 @@ import { TagsSheet } from './sheets/Tags';
 import { useProductsFilter } from '@/context/useProductsFilter';
 import { Badge } from './ui/badge';
 import { colorsByIndex } from './FilterControls';
-import { useOrders } from '@/context/useOrders';
+import { ShowCurrentProductForm } from './Products/form';
+import EmptyState from './Products/EmptyState';
 
 export default function ProductOrderManagment() {
     const { visibleProducts, visibleTags, selectedTags, handleTagToggle } = useProductsFilter();
-    const { currentOrder } = useOrders();
 
     return (
         <div className="min-h-screen bg-slate-100 flex flex-col justify-between">
@@ -33,7 +33,11 @@ export default function ProductOrderManagment() {
                         </ProductCard>
                     </div>
                 ))}
+                { visibleProducts.length === 0 && <EmptyState/>}
             </main>
+            <div className="sticky bottom-14 p-4 flex justify-between items-end">
+                <ShowCurrentProductForm />
+            </div>
             <div className="sticky bottom-0 p-4 flex justify-between items-end">
                 <TagsSheet />
                 <OpenOrderSheet />

@@ -1,7 +1,8 @@
 'use client'
 import { useProducts } from '@/context/useProducts';
 import {  Product, ProductFilterContextActions, ProductFilterContextState } from '@/lib/types';
-import { useDeferredValue,  useEffect,  useMemo, useState } from 'react';
+import { cleanString } from '@/lib/utils/cleanString';
+import { useDeferredValue,  useMemo, useState } from 'react';
 
 const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
   const tagIndices: Record<string, number> = {};
@@ -22,7 +23,7 @@ const getTagsSorted = (productTagsSet: Set<string>): [string, number][] => {
 const getProductTagsSet = (products: Pick<Product, 'tags'>[]) => new Set(products.map(p => p.tags));
 
 export function useProductsFilter(): ProductFilterContextState & ProductFilterContextActions {
-  const { products, ...apiProducts } = useProducts();
+  const { products } = useProducts();
   const combinedTags = useMemo(() => getProductTagsSet(Array.from(products.values())), []);
   const tagsSorted = useMemo<[string, number][]>(() => getTagsSorted(combinedTags), []);
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,10 +38,11 @@ export function useProductsFilter(): ProductFilterContextState & ProductFilterCo
     function filterAndSortProducts() {
       return Array.from(products.values())
         .map((product) => {
-          const productTags = product.tags.split(',').map((tag) => tag.trim());
+          const productTags = product.tags.split(',').map((tag) => tag.trim());        
           const nameMatch = searchQuery
-            ? product.name.toLowerCase().includes(searchQuery.toLowerCase())
-            : false;
+              ? cleanString(product.name).includes(cleanString(searchQuery))
+              : false;
+        
           const matchedTags = selectedTags.size > 0
             ? productTags.filter((tag) => selectedTags.has(tag))
             : [];
@@ -55,8 +57,8 @@ export function useProductsFilter(): ProductFilterContextState & ProductFilterCo
     }
     if (!deferredSearchQuery && deferredSelectedTags.size === 0) {
       return Array.from(products.values()); // No filtering if both are empty
-    } else {
-      return filterAndSortProducts()
+    } else { 
+      return filterAndSortProducts();
     }
   }, [deferredSearchQuery, deferredSelectedTags, products]);
 
@@ -97,7 +99,6 @@ export function useProductsFilter(): ProductFilterContextState & ProductFilterCo
     resetFilters() {
       setSearchQuery('');
       setSelectedTags(new Set());
-    },
-    ...apiProducts
+    }
   }
 }
