@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { Spinner } from "@/components/ui/spinner";
 import { useOrders } from "@/context/useOrders";
 import OrdersList from "./OrderList";
@@ -9,22 +9,16 @@ import { Search, Calendar } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
-import { OrdersQuery } from "@/lib/types";
+import OrderStatus from "./OrderControls";
 
 export default function OrderHistoryPage() {
   const { fetchOrders, currentOrder } = useOrders();
-  const [filterStatus, setFilterStatus] = useState<OrdersQuery['status']>("");
   
   const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if(event.target.valueAsDate){
       fetchOrders({ date: format(event.target.valueAsDate, "yyyy-MM-dd") });
     }
   };
-
-  useEffect(() => {
-    fetchOrders({status: filterStatus})
-  }, [filterStatus])
 
   return (
     <main className="container mx-auto px-4 py-8">
@@ -49,16 +43,7 @@ export default function OrderHistoryPage() {
                 className="pl-10 pr-4 py-2 w-full sm:w-48"
               />
             </div>
-            <ToggleGroup type="single" value={filterStatus} onValueChange={(value) => setFilterStatus(value)}>
-              <ToggleGroupItem value="opened" aria-label="Show open orders">
-                <div className="w-4 h-4 rounded-full bg-green-500" />
-                <span hidden={filterStatus !== 'opened'} className="ml-2">Abiertas</span>
-              </ToggleGroupItem>
-              <ToggleGroupItem value="closed" aria-label="Show closed orders">
-                <div className="w-4 h-4 rounded-full bg-red-500" />
-                <span hidden={filterStatus !== 'closed'} className="ml-2">Cerradas</span>
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <OrderStatus/>
           </div>
         </CardHeader>
       </Card>
