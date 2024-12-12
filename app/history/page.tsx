@@ -5,7 +5,7 @@ import { OrdersProvider } from '@/context/useOrders';
 export default async function Page() {
 
   return (
-    <OrdersProvider query={{all: true}}>
+    <OrdersProvider query={{status: ''}}>
         <OrderHistoryPage/>    
     </OrdersProvider>
   )
