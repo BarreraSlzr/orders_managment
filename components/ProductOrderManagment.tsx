@@ -1,47 +1,37 @@
 'use client'
 
-import { OrderControls, ProductCard } from '@/components/ProductCard';
 import { OpenOrderSheet } from './sheets/Orders';
 import { TagsSheet } from './sheets/Tags';
 import { useProductsFilter } from '@/context/useProductsFilter';
-import { Badge } from './ui/badge';
-import { colorsByIndex } from './FilterControls';
-import { ShowCurrentProductForm } from './Products/form';
+import { ProductForm } from './Products/Form';
 import EmptyState from './Products/EmptyState';
+import { useProducts } from '@/context/useProducts';
+import { Product } from '@/lib/types';
+import TagList from './Tag/List';
+import { ListProducts } from './Products/List';
 
 export default function ProductOrderManagment() {
-    const { visibleProducts, visibleTags, selectedTags, handleTagToggle } = useProductsFilter();
+    const { visibleProducts, selectedTags, visibleTags } = useProductsFilter();
 
     return (
-        <div className="min-h-screen bg-slate-100 flex flex-col justify-between">
-            <main className='p-4 pb-10 flex flex-wrap gap-2'>
-                {selectedTags.size > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                        {visibleTags.map(([tag, id]) => (
-                            <Badge
-                                key={tag}
-                                className={`${colorsByIndex[id]} ${selectedTags.has(tag) ? 'bg-black' : ''}`}
-                                onClick={() => handleTagToggle(tag)}
-                            >{tag}</Badge>
-                        ))}
-                    </div>
-                )}
-                {visibleProducts.map(product => (
-                    <div key={product.id} className='flex-grow'>
-                        <ProductCard product={product}>
-                            <OrderControls product={product} />
-                        </ProductCard>
-                    </div>
-                ))}
-                { visibleProducts.length === 0 && <EmptyState/>}
-            </main>
-            <div className="sticky bottom-14 p-4 flex justify-between items-end">
-                <ShowCurrentProductForm />
-            </div>
-            <div className="sticky bottom-0 p-4 flex justify-between items-end">
-                <TagsSheet />
-                <OpenOrderSheet />
-            </div>
-        </div>
+        <main className="min-h-screen bg-slate-100 flex flex-col justify-between p-4 gap-8">
+            {selectedTags.size > 0 && <TagList tags={visibleTags} />}
+            {visibleProducts.length === 0 && <div className="p-4"><EmptyState /></div>}
+            <ListProducts products={visibleProducts} />
+            <Actions />
+        </main>
     );
 };
+
+const Actions = () => {
+    const { currentProduct } = useProducts();
+    if (currentProduct) return <div className="fixed backdrop-blur-sm bg-slate-400/30 bottom-0 left-0 h-screen w-screen flex items-center">
+            <ProductForm product={currentProduct as Product} /> 
+    </div>
+    return (
+        <div className="sticky bottom-4 flex justify-between items-end">
+            <TagsSheet />
+            <OpenOrderSheet />
+        </div>
+    )
+}

@@ -1,14 +1,12 @@
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, X } from 'lucide-react';
 import { useProductsFilter } from '@/context/useProductsFilter';
-
-export const colorsByIndex = ["bg-indigo-500", "bg-blue-500", "bg-sky-500", "bg-cyan-500"]
+import TagList from './Tag/List';
 
 export function FilterControls() {
   const {
-    searchQuery, tagsSorted, selectedTags, setSearchQuery, resetFilters, handleTagToggle
+    searchQuery, tagsSorted, setSearchQuery, resetFilters 
   } = useProductsFilter()
 
   return (
@@ -27,18 +25,7 @@ export function FilterControls() {
           <X />
         </Button>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {tagsSorted.map(([tag,id]) => (
-          <Badge
-            key={tag}
-            className={`${colorsByIndex[id]} ${selectedTags.has(tag) ? 'bg-black' : ''}`}
-            onClick={(ev) => {
-              handleTagToggle(tag)
-              ev.currentTarget.blur();
-            }}
-          >{tag}</Badge>
-        ))}
-      </div>
+      <TagList tags={tagsSorted}/>
     </form>
   );
 }
