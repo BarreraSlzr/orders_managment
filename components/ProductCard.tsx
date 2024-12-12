@@ -10,7 +10,7 @@ import { useProducts } from '@/context/useProducts';
 import { Badge } from './ui/badge';
 import { useProductsFilter } from '@/context/useProductsFilter';
 
-const LONG_PRESS_DURATION = 500 // ms
+const LONG_PRESS_DURATION = 3000 // ms
 
 interface Props {
   product: Product
