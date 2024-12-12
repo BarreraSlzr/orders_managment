@@ -1,16 +1,16 @@
 'use client';
 
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { Product, ProductContextType } from '@/lib/types';
-import { Updateable } from 'kysely';
 import { handleUpsertProduct as serverUpsertProduct } from '@/app/actions';
+import { Updateable } from 'kysely';
 
 const defaultProduct: Updateable<Product> = {
   id: '', // Temporary empty ID until the product is saved
   name: '',
   price: 0,
-  tags: '',
+  tags: ''
 };
 
 export function useProducts({ products: defaultProducts }: { products: Product[] }): ProductContextType {
@@ -20,14 +20,20 @@ export function useProducts({ products: defaultProducts }: { products: Product[]
     revalidateOnFocus: false,
   });
 
-  const [currentProduct, setCurrentProduct] = useState<Updateable<Product>>({ ...defaultProduct });
+  const [currentProduct, setCurrentProduct] = useState< Updateable<Product> | Product | undefined>();
 
   const productsMap = useMemo(() => {
     return new Map(productsData?.map((p) => [p.id, p]) ?? []);
   }, [productsData]);
 
-  const handleEditProduct = (product: Updateable<Product> = { ...defaultProduct }) => {
-    setCurrentProduct({ ...product });
+  const handleEditProduct = (product?: Product | null ) => {
+    if( typeof product === 'undefined'){
+      setCurrentProduct(() => undefined);
+    } else if( product === null ){
+      setCurrentProduct({ ...defaultProduct });
+    } else {
+      setCurrentProduct({ ...product });
+    }
   };
 
   const handleUpsertProduct = async (formData: FormData) => {

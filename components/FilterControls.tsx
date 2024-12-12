@@ -17,7 +17,7 @@ export function FilterControls() {
       <div className="relative">
         <Input
           name="search"
-          placeholder="Search by name or tags..."
+          placeholder="Buscar por nombre de producto..."
           className="pl-10 pr-10"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -32,7 +32,10 @@ export function FilterControls() {
           <Badge
             key={tag}
             className={`${colorsByIndex[id]} ${selectedTags.has(tag) ? 'bg-black' : ''}`}
-            onClick={() => handleTagToggle(tag)}
+            onClick={(ev) => {
+              handleTagToggle(tag)
+              ev.currentTarget.blur();
+            }}
           >{tag}</Badge>
         ))}
       </div>

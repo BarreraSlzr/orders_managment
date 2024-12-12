@@ -2,6 +2,7 @@
 
 import { OrderSummary } from "@/components/OrderSummary"; // API call to fetch order details
 import { useOrders } from "@/context/useOrders";
+import EmptyOrders from "./EmptyState";
 
 export default function OrdersList() {
     const { orders, setCurrentOrderDetails, currentOrder } = useOrders();
@@ -20,6 +21,7 @@ export default function OrdersList() {
             <OrderSummary order={order} />
           </div>
         ))}
+        { orders.size === 0 && <EmptyOrders/>}
       </div>
     );
   }

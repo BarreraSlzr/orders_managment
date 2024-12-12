@@ -19,7 +19,8 @@ export function useOrders({ orders: initialOrders = [], query: initialQuery = {}
   // Fetch `OrderItemsView` data for `currentOrder`
   const { data: OrderItemsView, isLoading: isLoadingDetail, mutate: revalidateCurrentOrder } = useSWR(
     currentOrderId ? `/api/orders/${currentOrderId}` : null,
-    {fetcher: (resource: any, init: any) => fetch(resource, init).then((res) => res.json())}
+    { refreshInterval: 1000 * 60 * 5,
+      fetcher: (resource: any, init: any) => fetch(resource, init).then((res) => res.json())},
   );
   // Fetch `Order` data for the main `orders` list
   const { data: fetchedOrders, isLoading, mutate: revalidateOrders } = useSWR<Order[]>(
