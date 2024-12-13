@@ -6,8 +6,8 @@ import { OrdersQuery, Order } from "@/lib/types";
 // Utility to calculate the start and end of the given date in the specified timezone
 const calculateDateRange = (timeZone: string, date?: string) => {
   if (date) {
-    const start = sql`DATE_TRUNC('day', timezone(${timeZone}, ${date}::timestamptz)) + interval '1 day'`;
-    const end = sql`DATE_TRUNC('day', timezone(${timeZone}, ${date}::timestamptz)) + interval '2 day'`;
+    const start = sql`DATE_TRUNC('day', timezone(${timeZone}, ${date}::timestamptz)) + interval '2 day'`;
+    const end = sql`DATE_TRUNC('day', timezone(${timeZone}, ${date}::timestamptz)) + interval '3 day'`;
     return { start, end };
   }
 
