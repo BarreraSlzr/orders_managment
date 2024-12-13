@@ -71,10 +71,3 @@ export const ProductForm = ({ product }: { product: Product; }) => {
         </Card>
     )
 }
-
-export const ShowCurrentProductForm = () => {
-    const { currentProduct } = useProducts();
-    return (
-        currentProduct && <ProductForm product={currentProduct as Product} />
-    )
-}

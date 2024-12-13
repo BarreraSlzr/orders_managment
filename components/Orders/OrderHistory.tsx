@@ -9,9 +9,11 @@ import { Search, Calendar } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
+import OrderStatus from "./OrderControls";
 
 export default function OrderHistoryPage() {
-  const { fetchOrders, currentOrder } = useOrders()
+  const { fetchOrders, currentOrder } = useOrders();
+  
   const handleDateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if(event.target.valueAsDate){
       fetchOrders({ date: format(event.target.valueAsDate, "yyyy-MM-dd") });
@@ -24,7 +26,7 @@ export default function OrderHistoryPage() {
         <CardHeader className="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
           <CardTitle className="text-3xl font-bold">Historial de ordenes</CardTitle>
           <div className="flex items-center space-x-4">
-            <div className="relative">
+            <div hidden className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <Input
                 type="text"
@@ -41,6 +43,7 @@ export default function OrderHistoryPage() {
                 className="pl-10 pr-4 py-2 w-full sm:w-48"
               />
             </div>
+            <OrderStatus/>
           </div>
         </CardHeader>
       </Card>

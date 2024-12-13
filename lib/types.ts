@@ -10,7 +10,8 @@ export interface OrdersQuery {
   timeZone?: string;
   date?: string; // ISO date string: 'YYYY-MM-DD'
   isClosed?: boolean; // Include only closed orders if true, or only open orders if false
-  all?: boolean
+  all?: boolean,
+  status?: 'closed' | 'opened' | string |undefined,
 }
 
 export interface OrderContextState {

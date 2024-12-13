@@ -17,6 +17,7 @@ import { Spinner } from "../ui/spinner"
 import { Card, CardHeader } from "../ui/card"
 import OrderDetails from "../Orders/OrderDetails"
 import { OrderSummary } from "../OrderSummary"
+import OrderStatus from "../Orders/OrderControls"
 
 interface OrderSummaryProps {
 }
@@ -42,13 +43,14 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
                 </div>
             </SheetTrigger>
             <SheetContent className="flex w-full flex-col sm:max-w-lg">
-                <SheetClose asChild>
-                    <SheetHeader className="space-y-4" >
+                <SheetHeader className="flex flex-row gap-2 justify-between items-center" >
+                    <SheetClose asChild>
                         <SheetTitle className="text-center text-xl font-bold">
-                            ORDENES ABIERTAS
+                            ORDENES
                         </SheetTitle>
-                    </SheetHeader>
-                </SheetClose>
+                    </SheetClose>
+                    <OrderStatus defaultStatus="opened" />
+                </SheetHeader>
                 <div className="flex flex-col gap-4 overflow-auto min-h-full">
 
                     {/* Orders List */}

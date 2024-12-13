@@ -10,7 +10,7 @@ import { ProductsFilterProvider } from '@/context/useProductsFilter';
 export default async function Page() {
   const products = await getProducts();
   const ordersQuery: OrdersQuery = {
-    isClosed: false
+    status: 'opened'
   };
 
   return (
