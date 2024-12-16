@@ -76,11 +76,18 @@ export interface OrderItemsView extends Selectable<OrderTable> {
   products: OrderItem[];
 }
 
+export interface Item extends BaseTable {
+  name: string;
+  status: 'pending' | 'completed';
+}
+
+
 // Keys of this interface are table names.
 export interface Database {
-  products: ProductTable
-  orders: OrderTable
-  order_items: OrderItemTable,
-  order_items_view: OrderItemsView,
-  payment_options: PaymentOptionsTable
+  products: ProductTable;
+  orders: OrderTable;
+  order_items: OrderItemTable;
+  order_items_view: OrderItemsView;
+  payment_options: PaymentOptionsTable;
+  items: Item;
 }

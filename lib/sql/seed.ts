@@ -19,6 +19,22 @@ function createProductTable() {
     );
 }
 
+function createItemsTable() {
+  return db.schema
+    .createTable('items')
+    .ifNotExists()
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('name', 'varchar', (col) => col.notNull())
+    .addColumn('status', 'varchar', (col) => col.notNull().defaultTo('pending'))
+    .execute()
+    .then(() =>
+      console.info(`Created "items" table`)
+    );
+}
+
 function createOrderTable() {
   return db.schema
     .createTable('orders')
@@ -156,6 +172,7 @@ export async function seed() {
     createProductTable(),
     createOrderTable(),
     createOrderItemsTable(),
+    createItemsTable(),
     db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
       .then(() =>
         console.info(`Created "calculate_order_total" function`)

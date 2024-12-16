@@ -11,6 +11,7 @@ import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import { removeProducts, togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
+import { addItem, deleteItem, toggleItem } from "@/lib/sql/functions/todoList";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -184,4 +185,49 @@ export async function handleExportProducts(formData: FormData) {
     },
     formData
   }) 
+}
+
+export async function addNewItem(formData: FormData) {
+  return errorHandler({
+    actionName: 'addNewItem',
+    async callback() {
+      const name = formData.get('name')?.toString();
+      if( name && name.trim() ){
+        await addItem(name);
+        return true; 
+      }
+      return false;
+    },
+    formData,
+  })
+}
+
+export async function toggleItemStatus(formData: FormData) {
+  return errorHandler({
+    actionName: 'toggleItemStatus',
+    async callback() {
+      const id = formData.get('id')?.toString();
+      if( id && id.trim() ){
+        await toggleItem(id);
+        return true
+      }
+      return false
+    },
+    formData,
+  })
+}
+
+export async function removeItem(formData: FormData) {
+  return errorHandler({
+    actionName: 'toggleItemStatus',
+    async callback() {
+      const id = formData.get('id')?.toString();
+      if( id && id.trim() ){
+        await deleteItem(id);
+        return true
+      }
+      return false
+    },
+    formData,
+  })
 }
