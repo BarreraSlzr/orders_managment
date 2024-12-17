@@ -24,8 +24,8 @@ const getProductTagsSet = (products: Pick<Product, 'tags'>[]) => new Set(product
 
 export function useProductsFilter(): ProductFilterContextState & ProductFilterContextActions {
   const { products } = useProducts();
-  const combinedTags = useMemo(() => getProductTagsSet(Array.from(products.values())), []);
-  const tagsSorted = useMemo<[string, number][]>(() => getTagsSorted(combinedTags), []);
+  const combinedTags = useMemo(() => getProductTagsSet(Array.from(products.values())), [products]);
+  const tagsSorted = useMemo<[string, number][]>(() => getTagsSorted(combinedTags), [combinedTags]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTags, setSelectedTags] = useState(new Set<string>());
 
@@ -80,7 +80,7 @@ export function useProductsFilter(): ProductFilterContextState & ProductFilterCo
       );
       return tagsSorted.filter(([ts]) => combinedTagsRelated.has(ts));
     }
-  }, [selectedTags, tagsSorted]);
+  }, [selectedTags, tagsSorted, combinedTags]);
 
   const handleTagToggle = (tag: string) => {
     selectedTags.has(tag) ? selectedTags.delete(tag) : selectedTags.add(tag);
