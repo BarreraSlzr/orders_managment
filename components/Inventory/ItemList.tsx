@@ -2,11 +2,11 @@
 
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { Item, useTodoList } from '@/context/TodoListProvider';
+import { Item, useInventory } from '@/context/InventoryProvider';
 import { AnimatePresence, motion } from 'framer-motion';
 
-function ListItem({item }:{ item: Item }) {
-  const { toggleItem, deleteItem } = useTodoList();
+export function ListItem({item }:{ item: Item }) {
+  const { toggleItem, deleteItem } = useInventory();
 
   return (
     <motion.li
@@ -18,7 +18,7 @@ function ListItem({item }:{ item: Item }) {
       <input
         type="checkbox"
         checked={item.status === 'completed'}
-        onChange={() => toggleItem(item.id)}
+        onChange={() => toggleItem(item)}
         className="mr-3 form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-400"
       />
       <span className={`flex-grow ${item.status === 'completed' ? 'line-through text-gray-500' : 'text-gray-800'}`}>{item.name}</span>
@@ -34,7 +34,7 @@ function ListItem({item }:{ item: Item }) {
 }
 
 export default function ItemList({ status } : Pick<Item, 'status'>) {
-  const { items } = useTodoList();
+  const { items } = useInventory();
   const filteredItems = items.filter(item => item.status === status);
 
   return (

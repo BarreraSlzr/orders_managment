@@ -1,4 +1,4 @@
-import { getAllItems } from '@/lib/sql/functions/todoList';
+import { getAllItems } from '@/lib/sql/functions/inventory';
 import { NextResponse } from 'next/server';
 
 export async function GET() {

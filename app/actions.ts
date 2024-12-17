@@ -11,7 +11,8 @@ import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import { removeProducts, togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
-import { addItem, deleteItem, toggleItem } from "@/lib/sql/functions/todoList";
+import { addItem, deleteItem, toggleItem } from "@/lib/sql/functions/inventory";
+import { addTransaction, deleteTransaction } from "@/lib/sql/functions/transactions";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -187,13 +188,14 @@ export async function handleExportProducts(formData: FormData) {
   }) 
 }
 
-export async function addNewItem(formData: FormData) {
+export async function addNewItemAction(formData: FormData) {
   return errorHandler({
     actionName: 'addNewItem',
     async callback() {
       const name = formData.get('name')?.toString();
-      if( name && name.trim() ){
-        await addItem(name);
+      const key = formData.get('quantity_type_key')?.toString();
+      if( name && name.trim() && key && key.trim()){
+        await addItem(name, key);
         return true; 
       }
       return false;
@@ -202,7 +204,7 @@ export async function addNewItem(formData: FormData) {
   })
 }
 
-export async function toggleItemStatus(formData: FormData) {
+export async function toggleItemStatusAction(formData: FormData) {
   return errorHandler({
     actionName: 'toggleItemStatus',
     async callback() {
@@ -217,9 +219,9 @@ export async function toggleItemStatus(formData: FormData) {
   })
 }
 
-export async function removeItem(formData: FormData) {
+export async function removeItemAction(formData: FormData) {
   return errorHandler({
-    actionName: 'toggleItemStatus',
+    actionName: 'removeItem',
     async callback() {
       const id = formData.get('id')?.toString();
       if( id && id.trim() ){
@@ -229,5 +231,36 @@ export async function removeItem(formData: FormData) {
       return false
     },
     formData,
+  })
+}
+
+export async function addTransactionAction(formData: FormData) {
+  return errorHandler({
+    actionName: 'addTransaction',
+    async callback(){
+      const itemId = formData.get('item_id')?.toString();
+      const type = formData.get('type')?.toString() as 'IN' | 'OUT';
+      const price = parseFloat(formData.get('price')?.toString() || '0');
+      const quantity = parseFloat(formData.get('quantity')?.toString() || '0');
+      const quantityTypeValue = formData.get('quantity_type_value')?.toString();
+    
+      if (itemId && type && !isNaN(price) && !isNaN(quantity) && quantityTypeValue) {
+        await addTransaction(itemId, type, price, quantity, quantityTypeValue);
+      }
+    },
+    formData
+  })
+}
+
+export async function deleteTransactionAction(formData: FormData) {
+  return errorHandler({
+    actionName: 'deleteTransaction',
+    async callback(){
+      const id = parseInt(formData.get('id')?.toString() || '0', 10);
+      if (id) {
+        await deleteTransaction(id)
+      }
+    },
+    formData
   })
 }

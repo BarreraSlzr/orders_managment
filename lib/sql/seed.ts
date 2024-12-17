@@ -7,31 +7,15 @@ function createProductTable() {
     .createTable('products')
     .ifNotExists()
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
-    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .addColumn('name', 'varchar', (col) => col.notNull())
     .addColumn('price', 'integer', (col) => col.notNull()) // price in cents
     .addColumn('tags', sql`varchar`, (col) => col.notNull())
     .execute()
     .then(() =>
       console.info(`Created "product" table`)
-    );
-}
-
-function createItemsTable() {
-  return db.schema
-    .createTable('items')
-    .ifNotExists()
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
-    .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
-    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
-    .addColumn('name', 'varchar', (col) => col.notNull())
-    .addColumn('status', 'varchar', (col) => col.notNull().defaultTo('pending'))
-    .execute()
-    .then(() =>
-      console.info(`Created "items" table`)
     );
 }
 
@@ -42,9 +26,9 @@ function createOrderTable() {
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('position', 'integer', (col) => col.notNull()) // Order number by day
     .addColumn('closed', 'timestamptz', (col) => col.defaultTo(null))
-    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
-    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .addColumn('total', 'integer', (col) => col.notNull().defaultTo(0)) // total in cents
     .execute()
     .then(() =>
@@ -59,7 +43,7 @@ function createOrderItemsTable() {
     .addColumn('id', 'serial', (col) => col.primaryKey())
     .addColumn('order_id', 'uuid', (col) => col.notNull().references('orders.id').onDelete('cascade'))
     .addColumn('product_id', 'uuid', (col) => col.notNull().references('products.id'))
-    .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false))
     .addColumn('payment_option_id', 'serial', (col) => col.notNull().references('payment_option.id').defaultTo(1))
     .execute()
@@ -74,7 +58,7 @@ function createPaymentOptionsTable() {
     .ifNotExists()
     .addColumn('id', 'serial', (col) => col.primaryKey())
     .addColumn('name', 'varchar', (col) => col.notNull()) // e.g., "cash", "transfer", etc.
-    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`current_timestamp`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .execute()
     .then(() => console.info(`Created "payment_options" table`));
 }
@@ -89,8 +73,8 @@ async function populatePaymentOptionsIfEmpty() {
     { name: 'Cryptocurrency' },
   ];
 
-  const noRows = (await db.executeQuery<{count: number}>(CompiledQuery.raw(`SELECT count(id) FROM payment_options`))).rows.some(({count}) => count === 0)
-    
+  const noRows = (await db.executeQuery<{ count: number }>(CompiledQuery.raw(`SELECT count(id) FROM payment_options`))).rows.some(({ count }) => count === 0)
+
   if (noRows) {
     await db
       .insertInto('payment_options')
@@ -102,17 +86,78 @@ async function populatePaymentOptionsIfEmpty() {
   }
 }
 
-
-// SCHEMA UPDATES
-function updateOrderItemsTable() {
-  return db.schema
-    .alterTable('order_items')
-    .addColumn('is_takeaway', 'boolean', (col) => col.notNull().defaultTo(false))
-    .addColumn('payment_option_id', 'serial', (col) => col.notNull().references('payment_options.id'))
+export async function createInventoryItemsTable() {
+  await db.schema
+    .createTable('inventory_items')
+    .ifNotExists()
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('name', 'varchar', (col) => col.notNull())
+    .addColumn('status', 'varchar', (col) => col.notNull().check(sql`status in ('pending', 'completed')`))
+    .addColumn('quantity_type_key', 'varchar', (col) => col.notNull())
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .addColumn('deleted', 'timestamptz')
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`now()`))
     .execute()
-    .then(() => console.info(`Updated "order_items" table with is_takeaway and payment_option_id column`));
+    .then(() => console.info(`Created "inventory_items" table`));
 }
 
+export async function createTransactionsTable() {
+  await db.schema
+    .createTable('transactions')
+    .ifNotExists()
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('item_id', 'uuid', (col) => col.notNull().references('inventory_items.id'))
+    .addColumn('type', 'varchar', (col) => col.notNull().check(sql`type in ('IN', 'OUT')`))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .addColumn('price', 'decimal', (col) => col.notNull())
+    .addColumn('quantity', 'integer', (col) => col.notNull())
+    .addColumn('quantity_type_value', 'varchar', (col) => col.notNull())
+    .execute()
+    .then(() => console.info(`Created "transactions" table`));
+}
+
+export async function createProductConsumptionsTable() {
+  await db.schema
+    .createTable('product_consumptions')
+    .ifNotExists()
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('product_id', 'uuid', (col) => col.notNull().references('products.id'))
+    .addColumn('item_id', 'uuid', (col) => col.notNull().references('inventory_items.id'))
+    .addColumn('is_takeaway', 'boolean', (col) => col.defaultTo(false))
+    .addColumn('quantity', 'integer', (col) => col.notNull())
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .addColumn('deleted', 'timestamptz')
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .execute()
+    .then(() => console.info(`Created "product_consumptions" table`));
+}
+
+export async function createSuppliersTable() {
+  await db.schema
+    .createTable('suppliers')
+    .ifNotExists()
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('name', 'varchar', (col) => col.notNull())
+    .addColumn('contact_email', 'varchar')
+    .addColumn('contact_phone', 'varchar')
+    .addColumn('contact_address', 'varchar')
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .addColumn('deleted', 'timestamptz')
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .execute()
+    .then(() => console.info(`Created "suppliers" table`));
+}
+
+export async function createSuppliersItemTable() {
+  await db.schema
+    .createTable('suppliers_item')
+    .ifNotExists()
+    .addColumn('item_id', 'uuid', (col) => col.notNull().references('inventory_items.id'))
+    .addColumn('supplier_id', 'uuid', (col) => col.notNull().references('suppliers.id'))
+    .addPrimaryKeyConstraint('supplier_item_id', ['item_id', 'supplier_id'])
+    .execute()
+    .then(() => console.info(`Created "suppliers_item" table`));
+}
 
 const calculateOrderTotal = `
 CREATE OR REPLACE FUNCTION calculate_order_total() RETURNS TRIGGER AS $$
@@ -168,11 +213,14 @@ export async function seed() {
   return Promise.all([
     createPaymentOptionsTable(),
     populatePaymentOptionsIfEmpty(),
-    //updateOrderItemsTable(),
     createProductTable(),
     createOrderTable(),
     createOrderItemsTable(),
-    createItemsTable(),
+    await createInventoryItemsTable(),
+    await createTransactionsTable(),
+    // createProductConsumptionsTable(),
+    // createSuppliersTable(),
+    // createSuppliersItemTable(),
     db.executeQuery(CompiledQuery.raw(`${calculateOrderTotal}`, []))
       .then(() =>
         console.info(`Created "calculate_order_total" function`)

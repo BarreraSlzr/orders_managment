@@ -76,11 +76,43 @@ export interface OrderItemsView extends Selectable<OrderTable> {
   products: OrderItem[];
 }
 
-export interface Item extends BaseTable {
+
+export interface InventoryItemsTable extends BaseTable {
   name: string;
   status: 'pending' | 'completed';
+  quantity_type_key: string;
 }
 
+// New Tables
+interface ProductConsumptionsTable extends BaseTable {
+  product_id: string;
+  item_id: string;
+  is_takeaway: ColumnType<boolean, boolean | undefined, boolean | undefined>;
+  quantity: number;
+}
+
+export interface TransactionsTable {
+  id: Generated<number>;
+  item_id: string;
+  type: 'IN' | 'OUT';
+  created: ColumnType<Date, string | undefined, never>;
+  price: number;
+  quantity: number;
+  quantity_type_value: string;
+}
+
+interface SuppliersTable extends BaseTable {
+  name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_address: string | null;
+}
+
+interface SuppliersItemTable {
+  supplier_item_id: string;
+  item_id: string;
+  supplier_id: string;
+}
 
 // Keys of this interface are table names.
 export interface Database {
@@ -89,5 +121,9 @@ export interface Database {
   order_items: OrderItemTable;
   order_items_view: OrderItemsView;
   payment_options: PaymentOptionsTable;
-  items: Item;
+  inventory_items: InventoryItemsTable;
+  transactions: TransactionsTable;
+  // product_consumptions: ProductConsumptionsTable;
+  // suppliers: SuppliersTable;
+  // suppliers_item: SuppliersItemTable;
 }

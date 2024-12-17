@@ -1,13 +1,20 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import AddItemForm from './AddItemForm';
 import ItemList from './ItemList';
-import {  TodoListProvider } from '@/context/TodoListProvider';
+import {  InventoryProvider, useInventory } from '@/context/InventoryProvider';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { TransactionFormModal } from './TransactionFormModal';
 
 function TodoListContent() {
+  const { selectedItem } = useInventory();
   const [showCompleted, setShowCompleted] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    setModalOpen(!!selectedItem);
+  }, [selectedItem])
 
   return (
     <div className="max-w-md mx-auto p-4 bg-slate-50 min-h-screen">
@@ -32,14 +39,21 @@ function TodoListContent() {
           {showCompleted && <ItemList status={'completed'} />}
         </section>
       </div>
+      {selectedItem && (
+        <TransactionFormModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          item={selectedItem}
+        />
+      )}
     </div>
   );
 }
 
 export default function TodoListPage() {
   return (
-    <TodoListProvider>
+    <InventoryProvider>
       <TodoListContent />
-    </TodoListProvider>
+    </InventoryProvider>
   );
 }
