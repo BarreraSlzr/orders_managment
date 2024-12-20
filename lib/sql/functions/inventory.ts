@@ -2,12 +2,32 @@
 
 import { db } from "../database";
 
-export async function getAllItems() {
-  return await db.selectFrom('inventory_items').selectAll().execute();
+export async function getItems(categoryId?: string) {
+  return await db
+    .selectFrom('inventory_items')
+    .leftJoin('category_inventory_item',
+       'inventory_items.id',
+      'category_inventory_item.item_id')
+    .select([
+      'id',
+      'name',
+      'created',
+      'deleted',
+      'quantity_type_key',
+      'status',
+      'updated'
+    ])
+    .$if(!!categoryId, (qb) => qb
+      .where('category_inventory_item.category_id', '=', `${categoryId}`)
+    )
+    .execute();
 }
 
 export async function addItem(name: string, quantity_type_key: string) {
-  return await db.insertInto('inventory_items').values({ name, quantity_type_key, status: 'pending' }).execute();
+  return await db.insertInto('inventory_items')
+  .values({ name, quantity_type_key, status: 'pending' })
+  .returningAll()
+  .executeTakeFirstOrThrow();
 }
 
 export async function toggleItem(id: string) {

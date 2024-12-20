@@ -13,6 +13,9 @@ import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import { removeProducts, togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
 import { addItem, deleteItem, toggleItem } from "@/lib/sql/functions/inventory";
 import { addTransaction, deleteTransaction } from "@/lib/sql/functions/transactions";
+import { deleteCategory, toggleCategoryItem, upsertCategory } from "@/lib/sql/functions/categories";
+import { CategoriesTable } from "@/lib/sql/types";
+import { Selectable } from "kysely";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -29,10 +32,10 @@ export async function handleSelectProducts(formData: FormData) {
 export async function handleInsertOrder(formData: FormData) {
   return errorHandler({
     actionName: 'handleCreateOrder',
-    async callback () {
+    async callback() {
       const order = await insertOrder("America/Mexico_City");
       formData.append('orderId', order.id)
-      if( formData.has('productId') ){
+      if (formData.has('productId')) {
         const orderIdValue = order.id;
         const productIdValue = `${formData.get('productId')}`;
         await updateOrderItem(orderIdValue, productIdValue, 'INSERT');
@@ -65,7 +68,7 @@ export async function handleSplitOrder(formData: FormData) {
   return await errorHandler({
     actionName: 'handleUpdateOrderItem',
     async callback() {
-      const orderId =`${formData.get('orderId')}`;
+      const orderId = `${formData.get('orderId')}`;
       const item_ids = formData.getAll('item_id').map(ii => parseInt(`${ii}`));
       return await splitOrder({
         old_order_id: orderId,
@@ -106,18 +109,18 @@ export async function handleUpsertProduct(formData: FormData) {
       const name = formData.get('name')?.toString() || '';
       const price = parseFloat(formData.get('price')?.toString() || '0');
       const tags = `${formData.get('tags')?.toString() || ''}`.replace(/\s*,\s*/g, ',');
-    
+
       if (!name || isNaN(price)) {
         throw new Error('Invalid data: Name and price are required.');
       }
-    
+
       const product: Product = await upsertProduct({
         id,
         name,
         price,
         tags,
       });
-    
+
       return { product };
     },
     formData
@@ -127,14 +130,14 @@ export async function handleUpsertProduct(formData: FormData) {
 export async function handleUpdatePayment(formData: FormData) {
   return errorHandler({
     actionName: 'handleUpdatePayment',
-    callback(){
+    callback() {
       const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
       const paymentOptionId = Number(formData.get('payment_option_id'));
-    
+
       if (!itemIds.length || isNaN(paymentOptionId)) {
         throw new Error('Invalid data.');
       }
-     
+
       return togglePaymentOption(itemIds);
     },
     formData
@@ -146,11 +149,11 @@ export async function handleToggleTakeAway(formData: FormData) {
     actionName: 'handleToggleTakeAway',
     callback() {
       const itemIds = formData.getAll('item_id').map(Number); // Get item IDs from formData
-    
+
       if (!itemIds.length) {
         throw new Error('Invalid data.');
       }
-    
+
       return toggleTakeAway(itemIds);
     },
     formData
@@ -160,7 +163,7 @@ export async function handleToggleTakeAway(formData: FormData) {
 export async function handleRemoveProducts(formData: FormData) {
   return errorHandler({
     actionName: 'Remove Products',
-    async callback(){
+    async callback() {
       const orderId = `${formData.get('orderId')}`;
       const itemIds = formData.getAll('item_id').map(id => parseInt(id as string, 10));
 
@@ -179,13 +182,13 @@ export async function handleRemoveProducts(formData: FormData) {
 export async function handleExportProducts(formData: FormData) {
   return errorHandler({
     actionName: 'handleExportProducts',
-    async callback(){
-        return {
-          json: JSON.stringify((await exportProductsJSON())?.rows || [])
-        }
+    async callback() {
+      return {
+        json: JSON.stringify((await exportProductsJSON())?.rows || [])
+      }
     },
     formData
-  }) 
+  })
 }
 
 export async function addNewItemAction(formData: FormData) {
@@ -194,9 +197,13 @@ export async function addNewItemAction(formData: FormData) {
     async callback() {
       const name = formData.get('name')?.toString();
       const key = formData.get('quantity_type_key')?.toString();
-      if( name && name.trim() && key && key.trim()){
-        await addItem(name, key);
-        return true; 
+      const categoryId = formData.get('categoryId')?.toString();
+      if (name && name.trim() && key && key.trim()) {
+        const newItem = await addItem(name, key);
+        if( newItem && categoryId){
+          await toggleCategoryItem(categoryId, newItem.id)
+        }
+        return true;
       }
       return false;
     },
@@ -209,7 +216,7 @@ export async function toggleItemStatusAction(formData: FormData) {
     actionName: 'toggleItemStatus',
     async callback() {
       const id = formData.get('id')?.toString();
-      if( id && id.trim() ){
+      if (id && id.trim()) {
         await toggleItem(id);
         return true
       }
@@ -224,7 +231,7 @@ export async function removeItemAction(formData: FormData) {
     actionName: 'removeItem',
     async callback() {
       const id = formData.get('id')?.toString();
-      if( id && id.trim() ){
+      if (id && id.trim()) {
         await deleteItem(id);
         return true
       }
@@ -237,13 +244,13 @@ export async function removeItemAction(formData: FormData) {
 export async function addTransactionAction(formData: FormData) {
   return errorHandler({
     actionName: 'addTransaction',
-    async callback(){
+    async callback() {
       const itemId = formData.get('item_id')?.toString();
       const type = formData.get('type')?.toString() as 'IN' | 'OUT';
       const price = parseFloat(formData.get('price')?.toString() || '0');
       const quantity = parseFloat(formData.get('quantity')?.toString() || '0');
       const quantityTypeValue = formData.get('quantity_type_value')?.toString();
-    
+
       if (itemId && type && !isNaN(price) && !isNaN(quantity) && quantityTypeValue) {
         await addTransaction(itemId, type, price, quantity, quantityTypeValue);
       }
@@ -255,12 +262,57 @@ export async function addTransactionAction(formData: FormData) {
 export async function deleteTransactionAction(formData: FormData) {
   return errorHandler({
     actionName: 'deleteTransaction',
-    async callback(){
+    async callback() {
       const id = parseInt(formData.get('id')?.toString() || '0', 10);
       if (id) {
         await deleteTransaction(id)
       }
     },
     formData
+  })
+}
+
+export async function removeCategoryAction(formData: FormData) {
+  return errorHandler({
+    formData,
+    actionName: 'removeCategoryAction',
+    async callback() {
+      const id = formData.get('id')?.toString();
+      if (!id) {
+        throw new Error('Category ID is required');
+      }
+      return await deleteCategory(id);
+    }
+  })
+}
+
+export async function updateCategoryAction(formData: FormData) {
+  return errorHandler({
+    formData,
+    actionName: 'updateCategoryAction',
+    async callback() {
+      const id = formData.get('id')?.toString();
+      const name = formData.get('name')?.toString();
+      if (!name) {
+        throw new Error('Category name is required');
+      }
+      return await upsertCategory(name, id);
+    }
+  })
+}
+
+export async function toggleCategoryItemAction(formData: FormData) {
+  return errorHandler({
+    formData,
+    actionName: 'updateCategoryAction',
+    async callback() {
+      const categoryId = formData.get('category_id')?.toString();
+      const itemId = formData.get('item_id')?.toString();
+
+      if (!categoryId || !itemId) {
+        throw new Error('Both category ID and item ID are required');
+      }
+      return toggleCategoryItem(categoryId, itemId);
+    }
   })
 }

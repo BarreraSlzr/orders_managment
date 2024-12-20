@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { Trash2 } from 'lucide-react';
-import { Item, useInventory } from '@/context/InventoryProvider';
+import { useInventory } from '@/context/InventoryProvider';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Item } from '@/hooks/inventory/useInventoryItems';
 
 export function ListItem({item }:{ item: Item }) {
   const { toggleItem, deleteItem } = useInventory();

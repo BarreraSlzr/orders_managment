@@ -29,7 +29,7 @@ export const ProductForm = ({ product }: { product: Product; }) => {
     const removeCurrentProduct = () => handleEditProduct();
 
     return (
-        <Card className="w-full max-w-md mx-auto">
+        <Card className="w-full max-w-md mx-auto cursor-pointer touch-auto hover:shadow-md transition-shadow">
             <CardHeader className="relative">
                 <CardTitle className="text-2xl font-bold">{product.id ? 'Editar' : 'Crear'} Producto</CardTitle>
                 {(product.id && product.updated) && (<>

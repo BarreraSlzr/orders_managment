@@ -101,6 +101,29 @@ export async function createInventoryItemsTable() {
     .then(() => console.info(`Created "inventory_items" table`));
 }
 
+export async function createCategoriesTable() {
+  await db.schema
+    .createTable('categories')
+    .ifNotExists()
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('name', 'varchar', (col) => col.notNull())
+    .addColumn('created', 'timestamp', (col) => col.defaultTo(sql`now()`))
+    .addColumn('deleted', 'timestamp')
+    .addColumn('updated', 'timestamp', (col) => col.defaultTo(sql`now()`))
+    .execute()
+    .then(() => console.info(`Created "categories" table`));
+}
+
+export async function createCategoryInventoryItemTable() {
+  await db.schema
+    .createTable('category_inventory_item')
+    .ifNotExists()
+    .addColumn('category_id', 'uuid', (col) => col.notNull().references('categories.id'))
+    .addColumn('item_id', 'uuid', (col) => col.notNull().references('inventory_items.id'))
+    .execute()
+    .then(() => console.info(`Created "category_inventory_item" table`));
+}
+
 export async function createTransactionsTable() {
   await db.schema
     .createTable('transactions')
@@ -218,6 +241,8 @@ export async function seed() {
     createOrderItemsTable(),
     await createInventoryItemsTable(),
     await createTransactionsTable(),
+    await createCategoriesTable(),
+    await createCategoryInventoryItemTable(),
     // createProductConsumptionsTable(),
     // createSuppliersTable(),
     // createSuppliersItemTable(),

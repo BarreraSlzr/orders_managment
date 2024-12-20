@@ -2,11 +2,12 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
-import { Item, useInventory } from '@/context/InventoryProvider';
+import { useInventory } from '@/context/InventoryProvider';
 import { measureTypes } from '@/lib/utils/measureTypes';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Button } from '../ui/button';
+import { Item } from '@/hooks/inventory/useInventoryItems';
 
 export default function AddItemForm() {
   const { addItem, items} = useInventory();

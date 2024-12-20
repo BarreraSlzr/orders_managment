@@ -6,9 +6,10 @@ import ItemList from './ItemList';
 import {  InventoryProvider, useInventory } from '@/context/InventoryProvider';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { TransactionFormModal } from './TransactionFormModal';
+import { CategorizedCardList } from './Categories';
 
 function TodoListContent() {
-  const { selectedItem } = useInventory();
+  const { selectedCategory, selectedItem } = useInventory();
   const [showCompleted, setShowCompleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -17,8 +18,10 @@ function TodoListContent() {
   }, [selectedItem])
 
   return (
-    <div className="max-w-md mx-auto p-4 bg-slate-50 min-h-screen">
-      <h1 className="text-2xl font-bold mb-4 text-gray-800">Inventario</h1>
+    <div>
+      <h1 className="text-2xl font-bold mb-4 text-gray-800">
+        Inventario {!!selectedCategory?.id && ` de ${selectedCategory.name}`}
+      </h1>
       <AddItemForm />
       <div className="space-y-4">
         <section aria-labelledby="unchecked-items">
@@ -53,7 +56,14 @@ function TodoListContent() {
 export default function TodoListPage() {
   return (
     <InventoryProvider>
-      <TodoListContent />
+      <div className="p-4 bg-slate-50 min-h-screen flex flex-col md:flex-row flex-wrap gap-8">
+        <div>
+          <CategorizedCardList />
+        </div>
+        <div className='flex-grow'>
+          <TodoListContent />
+        </div>
+      </div>
     </InventoryProvider>
   );
 }

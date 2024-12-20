@@ -8,11 +8,11 @@ export default function OrdersList() {
     const { orders, setCurrentOrderDetails, currentOrder } = useOrders();
   
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 p-4">
         {Array.from(orders.values()).map((order) => (
           <div
             key={order.id}
-            className={`border rounded-lg p-4 cursor-pointer ${currentOrder?.id === order.id
+            className={`border rounded-lg p-4 cursor-pointer touch-auto hover:shadow-md transition-shadow ${currentOrder?.id === order.id
                 ? "bg-blue-100"
                 : "hover:bg-gray-50"
                 }`}

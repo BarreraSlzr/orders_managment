@@ -4,15 +4,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Item, useInventory } from '@/context/InventoryProvider'
+import { useInventory } from '@/context/InventoryProvider'
 import { measureTypes } from '@/lib/utils/measureTypes'
-import { AnimatePresence } from 'framer-motion'
 import { ListItem } from './ItemList'
+import { Item } from '@/hooks/inventory/useInventoryItems'
+import { AnimatePresence } from 'framer-motion'
 
 interface ItemDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  item: Item
+  item: Item;
 }
 
 export function TransactionFormModal({ isOpen, onClose, item }: ItemDetailsModalProps) {
@@ -56,9 +57,11 @@ export function TransactionFormModal({ isOpen, onClose, item }: ItemDetailsModal
               </SelectTrigger>
               <SelectContent>
                 {item.quantity_type_key && measureTypes[item.quantity_type_key as keyof typeof measureTypes].map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {value}
-                  </SelectItem>
+                  <AnimatePresence>
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  </AnimatePresence>
                 ))}
               </SelectContent>
             </Select>
