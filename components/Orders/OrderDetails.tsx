@@ -5,7 +5,7 @@ import { OrderItemsView } from "@/lib/sql/types";
 
 export default function OrderDetails({ order: selectedOrder, editMode = false }: { order: OrderItemsView, editMode?: boolean }) {
     return (
-        <div className="relative">
+        <div className="relative max-h-[80vh] overflow-auto">
             <Receipt data={selectedOrder} editMode={editMode}/>
             <Button
                 className="absolute top-0 right-0"

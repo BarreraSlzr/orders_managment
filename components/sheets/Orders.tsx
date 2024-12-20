@@ -42,14 +42,16 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
                     </Button>
                 </div>
             </SheetTrigger>
-            <SheetContent className="flex w-full flex-col sm:max-w-lg">
-                <SheetHeader className="flex flex-row gap-2 justify-between items-center" >
+            <SheetContent className="flex w-full flex-col sm:max-w-lg p-0 pt-4">
+                <SheetHeader className="flex flex-row gap-2 justify-between items-center p-0">
                     <SheetClose asChild>
-                        <SheetTitle className="text-center text-xl font-bold">
+                        <SheetTitle className="text-center text-xl font-bold px-4">
                             ORDENES
                         </SheetTitle>
                     </SheetClose>
-                    <OrderStatus defaultStatus="opened" />
+                    <div className="px-4 pr-10">
+                        <OrderStatus defaultStatus="opened" />
+                    </div>
                 </SheetHeader>
                 <div className="flex flex-col gap-4 overflow-auto min-h-full">
 
@@ -60,7 +62,7 @@ export function OpenOrderSheet({ }: OrderSummaryProps) {
                     <div className="m-auto" />
 
                     {/* Selected Order Details */}
-                    <Card className="sticky bottom-0 flex flex-col">
+                    <Card className="sticky bottom-4 flex flex-col">
                         {currentOrder ? (
                             <Suspense fallback={<Spinner className="mx-auto" />}>
                                 <SheetClose asChild>

@@ -46,25 +46,6 @@ interface PaymentOptionsTable {
   name: string
 }
 
-interface BaseTable {
-  id: Generated<string>
-  // You can specify a different type for each operation (select, insert and
-  // update) using the `ColumnType<SelectType, InsertType, UpdateType>`
-  // wrapper. Here we define a column `createdAt` that is selected as
-  // a `Date`, can optionally be provided as a `string` in inserts and
-  // can never be updated:
-  created: ColumnType<Date, string | undefined, never>
-  deleted: ColumnType<Date, string | undefined, never>
-  updated: ColumnType<Date, string | undefined, never>
-}
-
-interface OrderTable extends BaseTable {
-  closed: ColumnType<undefined, undefined, Date>
-  position: number
-  total: ColumnType<number, never, never>
-}
-
-
 export interface OrderItem {
   product_id: string;
   name: string;
@@ -76,11 +57,62 @@ export interface OrderItemsView extends Selectable<OrderTable> {
   products: OrderItem[];
 }
 
+export interface InventoryItemsTable extends BaseTable {
+  name: string;
+  status: 'pending' | 'completed';
+  quantity_type_key: string;
+}
+
+export interface TransactionsTable {
+  id: Generated<number>;
+  item_id: string;
+  type: 'IN' | 'OUT';
+  created: ColumnType<Date, string | undefined, never>;
+  price: number;
+  quantity: number;
+  quantity_type_value: string;
+}
+
+export interface CategoriesTable extends BaseTable {
+  name: string;
+}
+
+interface CategoryInventoryItemTable {
+  category_id: string;
+  item_id: string;
+}
+
+interface ProductConsumptionsTable extends BaseTable {
+  product_id: string;
+  item_id: string;
+  is_takeaway: ColumnType<boolean, boolean | undefined, boolean | undefined>;
+  quantity: number;
+}
+
+interface SuppliersTable extends BaseTable {
+  name: string;
+  contact_email: string | null;
+  contact_phone: string | null;
+  contact_address: string | null;
+}
+
+interface SuppliersItemTable {
+  supplier_item_id: string;
+  item_id: string;
+  supplier_id: string;
+}
+
 // Keys of this interface are table names.
 export interface Database {
-  products: ProductTable
-  orders: OrderTable
-  order_items: OrderItemTable,
-  order_items_view: OrderItemsView,
-  payment_options: PaymentOptionsTable
+  products: ProductTable;
+  orders: OrderTable;
+  order_items: OrderItemTable;
+  payment_options: PaymentOptionsTable;
+  inventory_items: InventoryItemsTable;
+  transactions: TransactionsTable;
+  categories: CategoriesTable;
+  category_inventory_item: CategoryInventoryItemTable;
+  // product_consumptions: ProductConsumptionsTable;
+  // suppliers: SuppliersTable;
+  // suppliers_item: SuppliersItemTable;
 }
