@@ -12,7 +12,7 @@ export const ReceiptActions = () => (<>
         <Button variant="default" size="sm" type="submit" id="toggleTakeAway">
             Para llevar 🛍️
         </Button>
-        <Button variant="default" size="sm" type="submit" id="remove">
+        <Button variant="destructive" size="sm" type="submit" id="remove">
             Quitar productos<Delete/>
         </Button>
         <Button

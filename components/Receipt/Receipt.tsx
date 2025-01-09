@@ -22,6 +22,7 @@ interface ReceiptProps {
 export default function Receipt({ data, serverInfo, editMode: defaultEditMode = false, children }: PropsWithChildren<ReceiptProps>) {
     const { products: items, ...order } = data;
     const [editMode, setEditMode] = useState(defaultEditMode);
+    const [totalPrice, setTotalPrice] = useState<number>(0);
     const { handleSplitOrder, handleUpdateItemDetails, handleCloseOrder } = useOrders();
 
     const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
@@ -53,6 +54,23 @@ export default function Receipt({ data, serverInfo, editMode: defaultEditMode = 
         setEditMode(!editMode)
     }
 
+    const handleChange = async (ev: React.FormEvent<HTMLFormElement>) => {
+        const formData = new FormData(ev.currentTarget);
+        const itemsChecked = new Set(formData.getAll('item_id').map(v => `${v}`));
+        // Calculate the new total price
+        const newTotalPrice = items.reduce((total, orderItem) => {
+            return (
+                total +
+                orderItem.items.reduce((itemTotal, item) => {
+                    return itemsChecked.has(`${item.id}`)
+                        ? itemTotal + orderItem.price
+                        : itemTotal;
+                }, 0)
+            );
+        }, 0);
+        setTotalPrice(newTotalPrice);
+    }
+
     return (
         <Card className="w-full bg-white font-mono text-sm">
             <CardHeader className="text-center space-y-0 pb-3">
@@ -60,30 +78,30 @@ export default function Receipt({ data, serverInfo, editMode: defaultEditMode = 
                 <ReceiptHeader order={order} serverInfo={serverInfo} className="text-sm" />
             </CardHeader>
             <CardContent>
-                <form onSubmit={handleSubmit} onReset={handleReset} className="flex flex-col gap-3">
+                <form onSubmit={handleSubmit} onReset={handleReset} onChange={handleChange} className="flex flex-col gap-3">
                     <ReceiptItems items={items} listProducts={editMode} />
-                    <ReceiptFooter orderTotal={order.total}>
-                        <CardFooter className="flex flex-wrap gap-2 justify-between px-0 sticky bottom-0 bg-white">
-                            {
-                                !editMode ? (<>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        type="reset"
-                                    >Modificar productos</Button>
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        type="submit"
-                                        id='close'
-                                    >
-                                        Cerrar orden
-                                    </Button>
-                                </>
-                                ) : (children || <ReceiptActions />)
-                            }
-                        </CardFooter>
-                    </ReceiptFooter>
+                    <CardFooter className="flex flex-wrap gap-2 justify-between px-0 sticky bottom-0 bg-white">
+                        {editMode && !!totalPrice && <ReceiptFooter label='SUBTOTAL:' orderTotal={totalPrice} />}
+                        <ReceiptFooter orderTotal={order.total} />
+                        {
+                            !editMode ? (<>
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    type="reset"
+                                >Modificar productos</Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    type="submit"
+                                    id='close'
+                                >
+                                    Cerrar orden
+                                </Button>
+                            </>
+                            ) : (children || <ReceiptActions />)
+                        }
+                    </CardFooter>
                 </form>
             </CardContent>
         </Card>
