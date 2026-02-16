@@ -1,4 +1,4 @@
-import { CategoriesTable, OrderItemsView } from "@/lib/sql/types";
+import { CategoriesTable, Extra, OrderItemsView } from "@/lib/sql/types";
 import { Order, OrderItemTable, Product } from "@/lib/types";
 import { Selectable } from "kysely";
 
@@ -18,7 +18,10 @@ export type DomainEventType =
   | "inventory.transaction.deleted"
   | "inventory.category.upserted"
   | "inventory.category.deleted"
-  | "inventory.category.item.toggled";
+  | "inventory.category.item.toggled"
+  | "extra.upserted"
+  | "extra.deleted"
+  | "order.item.extra.toggled";
 
 export interface DomainEventPayloadMap {
   "order.created": {
@@ -84,6 +87,18 @@ export interface DomainEventPayloadMap {
     categoryId: string;
     itemId: string;
   };
+  "extra.upserted": {
+    id?: string;
+    name: string;
+    price: number;
+  };
+  "extra.deleted": {
+    id: string;
+  };
+  "order.item.extra.toggled": {
+    orderItemId: number;
+    extraId: string;
+  };
 }
 
 export interface DomainEventResultMap {
@@ -117,6 +132,13 @@ export interface DomainEventResultMap {
     deleted: string[];
   };
   "inventory.category.item.toggled": string;
+  "extra.upserted": Extra;
+  "extra.deleted": Extra;
+  "order.item.extra.toggled": {
+    action: "added" | "removed";
+    orderItemId: number;
+    extraId: string;
+  };
 }
 
 export interface DomainEvent<TType extends DomainEventType = DomainEventType> {

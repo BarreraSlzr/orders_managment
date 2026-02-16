@@ -139,6 +139,32 @@ export async function createTransactionsTable() {
     .then(() => console.info(`Created "transactions" table`));
 }
 
+export async function createExtrasTable() {
+  await db.schema
+    .createTable('extras')
+    .ifNotExists()
+    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+    .addColumn('name', 'varchar', (col) => col.notNull())
+    .addColumn('price', 'integer', (col) => col.notNull()) // price in cents
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .addColumn('deleted', 'timestamptz', (col) => col.defaultTo(null))
+    .addColumn('updated', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .execute()
+    .then(() => console.info(`Created "extras" table`));
+}
+
+export async function createOrderItemExtrasTable() {
+  await db.schema
+    .createTable('order_item_extras')
+    .ifNotExists()
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('order_item_id', 'integer', (col) => col.notNull().references('order_items.id').onDelete('cascade'))
+    .addColumn('extra_id', 'uuid', (col) => col.notNull().references('extras.id'))
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .execute()
+    .then(() => console.info(`Created "order_item_extras" table`));
+}
+
 export async function createDomainEventsTable() {
   await db.schema
     .createTable('domain_events')
@@ -233,6 +259,8 @@ const NOTIFY_TABLES = [
   'orders',
   'order_items',
   'products',
+  'extras',
+  'order_item_extras',
   'inventory_items',
   'categories',
   'transactions',
@@ -247,6 +275,7 @@ BEGIN
     UPDATE orders
     SET total = (
       SELECT COALESCE(SUM(p.price), 0)
+        + COALESCE((SELECT SUM(e.price) FROM order_item_extras oie JOIN extras e ON oie.extra_id = e.id WHERE oie.order_item_id IN (SELECT oi2.id FROM order_items oi2 WHERE oi2.order_id = OLD.order_id)), 0)
       FROM order_items oi
       JOIN products p ON oi.product_id = p.id
       WHERE oi.order_id = OLD.order_id
@@ -259,6 +288,7 @@ BEGIN
     UPDATE orders
     SET total = (
       SELECT COALESCE(SUM(p.price), 0)
+        + COALESCE((SELECT SUM(e.price) FROM order_item_extras oie JOIN extras e ON oie.extra_id = e.id WHERE oie.order_item_id IN (SELECT oi2.id FROM order_items oi2 WHERE oi2.order_id = NEW.order_id)), 0)
       FROM order_items oi
       JOIN products p ON oi.product_id = p.id
       WHERE oi.order_id = NEW.order_id
@@ -288,6 +318,53 @@ BEGIN
 END $$;
 `;
 
+// ── extras trigger: recalculate order total when extras change ───────────
+const calculateOrderTotalFromExtras = `
+CREATE OR REPLACE FUNCTION calculate_order_total_from_extras() RETURNS TRIGGER AS $$
+DECLARE
+  v_order_id uuid;
+BEGIN
+  -- Get the order_id from the related order_item
+  IF (TG_OP = 'DELETE') THEN
+    SELECT oi.order_id INTO v_order_id FROM order_items oi WHERE oi.id = OLD.order_item_id;
+  ELSE
+    SELECT oi.order_id INTO v_order_id FROM order_items oi WHERE oi.id = NEW.order_item_id;
+  END IF;
+
+  IF v_order_id IS NOT NULL THEN
+    UPDATE orders
+    SET total = (
+      SELECT COALESCE(SUM(p.price), 0)
+        + COALESCE((SELECT SUM(e.price) FROM order_item_extras oie JOIN extras e ON oie.extra_id = e.id WHERE oie.order_item_id IN (SELECT oi2.id FROM order_items oi2 WHERE oi2.order_id = v_order_id)), 0)
+      FROM order_items oi
+      JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = v_order_id
+    )
+    WHERE id = v_order_id;
+  END IF;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+`;
+
+const updateOrderTotalFromExtras = `
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM pg_trigger 
+        WHERE tgname = 'update_order_total_from_extras'
+    ) THEN
+        CREATE TRIGGER update_order_total_from_extras
+        AFTER INSERT OR DELETE
+        ON order_item_extras
+        FOR EACH ROW
+        EXECUTE FUNCTION calculate_order_total_from_extras();
+    END IF;
+END $$;
+`;
+
 export async function seed() {
   console.info('Start schema creation')
   return Promise.all([
@@ -299,6 +376,8 @@ export async function seed() {
     await createInventoryItemsTable(),
     await createTransactionsTable(),
     await createDomainEventsTable(),
+    await createExtrasTable(),
+    await createOrderItemExtrasTable(),
     await createCategoriesTable(),
     await createCategoryInventoryItemTable(),
     // createProductConsumptionsTable(),
@@ -311,6 +390,14 @@ export async function seed() {
     db.executeQuery(CompiledQuery.raw(`${updateOrderTotal}`, []))
       .then(() =>
         console.info(`Created "update_order_total" trigger for "calculate_order_total"`)
+      ),
+    db.executeQuery(CompiledQuery.raw(`${calculateOrderTotalFromExtras}`, []))
+      .then(() =>
+        console.info(`Created "calculate_order_total_from_extras" function`)
+      ),
+    db.executeQuery(CompiledQuery.raw(`${updateOrderTotalFromExtras}`, []))
+      .then(() =>
+        console.info(`Created "update_order_total_from_extras" trigger`)
       ),
     // pg_notify function + triggers for SSE cache invalidation
     db.executeQuery(CompiledQuery.raw(notifyTableChange, []))

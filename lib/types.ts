@@ -47,6 +47,7 @@ export interface ProductFilterContextActions {
 export interface OrderItemsContextActions {
   handleAddOrder: (productId?: string) => Promise<void>;
   handleUpdateOrderItems: (productId: string, type: "INSERT" | "DELETE") => Promise<void>;
+  handleToggleExtra: (params: { orderItemId: number; extraId: string }) => Promise<void>;
 }
 
 export type OrderItemsContext = OrderItemsContextActions;
