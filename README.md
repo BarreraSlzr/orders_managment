@@ -116,3 +116,24 @@ Cookie-based session management using HMAC-SHA256 signatures (Web Crypto API, ze
 ```bash
 bun vitest run lib/auth/__tests__
 ```
+
+## Admin Query Prompt
+
+You can pass `?admin=role:key:username:email` on any page to trigger a global
+toast-style prompt that requests the admin password. Any payload is accepted
+as long as the password matches. Successful verification sets a cross-domain
+cookie with the shared API key.
+
+### Required Env Vars
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ADMIN_PASSWORD` | **yes** | — | Admin password used by the prompt |
+| `ADMIN_SHARED_API_KEY` | **yes** | — | Shared API key stored in cookie |
+| `ADMIN_API_KEY_COOKIE` | no | `__admin_api_key` | Cookie name for shared API key |
+
+### Server-to-Server Usage
+
+`POST /api/admin/verify` is public and requires the admin password plus the
+`admin` payload. Successful validation sets or refreshes the shared API key
+cookie. Other `/api/admin/*` endpoints require the shared API key.
