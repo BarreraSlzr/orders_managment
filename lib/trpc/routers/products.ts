@@ -117,4 +117,62 @@ export const productsRouter = router({
         totalLines: parsed.totalLines,
       };
     }),
+
+  /**
+   * Reset & Import — deletes ALL existing products and imports from CSV.
+   * Destructive operation — admin only.
+   */
+  resetAndImport: adminProcedure
+    .input(z.object({ csv: z.string().min(1, "CSV content is required") }))
+    .mutation(async ({ input }) => {
+      const parsed = parseProductsCSV({ csv: input.csv });
+
+      if (parsed.rows.length === 0) {
+        return {
+          imported: 0,
+          skipped: 0,
+          errors: parsed.errors,
+          totalLines: parsed.totalLines,
+        };
+      }
+
+      // Delete all existing products
+      await db.deleteFrom("products").execute();
+
+      let imported = 0;
+      let skipped = 0;
+      const rowErrors = [...parsed.errors];
+
+      for (let i = 0; i < parsed.rows.length; i++) {
+        const row: ProductRow = parsed.rows[i];
+
+        try {
+          await dispatchDomainEvent({
+            type: "product.upserted",
+            payload: {
+              id: row.id ?? "",
+              name: row.name,
+              price: row.price,
+              tags: row.tags.replace(/\s*,\s*/g, ","),
+            },
+          });
+          imported++;
+        } catch (err) {
+          rowErrors.push({
+            line: i + 2,
+            raw: `${row.name},${row.price},${row.tags}`,
+            message:
+              err instanceof Error ? err.message : "Unknown upsert error",
+          });
+          skipped++;
+        }
+      }
+
+      return {
+        imported,
+        skipped,
+        errors: rowErrors,
+        totalLines: parsed.totalLines,
+      };
+    }),
 });
