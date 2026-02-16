@@ -139,6 +139,21 @@ export async function createTransactionsTable() {
     .then(() => console.info(`Created "transactions" table`));
 }
 
+export async function createDomainEventsTable() {
+  await db.schema
+    .createTable('domain_events')
+    .ifNotExists()
+    .addColumn('id', 'serial', (col) => col.primaryKey())
+    .addColumn('event_type', 'varchar', (col) => col.notNull())
+    .addColumn('payload', 'jsonb', (col) => col.notNull())
+    .addColumn('status', 'varchar', (col) => col.notNull().defaultTo('pending').check(sql`status in ('pending', 'processed', 'failed')`))
+    .addColumn('result', 'jsonb')
+    .addColumn('error_message', 'text')
+    .addColumn('created', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+    .execute()
+    .then(() => console.info(`Created "domain_events" table`));
+}
+
 export async function createProductConsumptionsTable() {
   await db.schema
     .createTable('product_consumptions')
@@ -241,6 +256,7 @@ export async function seed() {
     createOrderItemsTable(),
     await createInventoryItemsTable(),
     await createTransactionsTable(),
+    await createDomainEventsTable(),
     await createCategoriesTable(),
     await createCategoryInventoryItemTable(),
     // createProductConsumptionsTable(),
