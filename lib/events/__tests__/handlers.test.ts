@@ -35,31 +35,41 @@ vi.mock("@/lib/sql/functions/categories", () => ({
   deleteCategory: vi.fn(),
   toggleCategoryItem: vi.fn(),
 }));
+vi.mock("@/lib/sql/functions/extras", () => ({
+  upsertExtra: vi.fn(),
+  deleteExtra: vi.fn(),
+  toggleOrderItemExtra: vi.fn(),
+}));
 
 // Import after mocks
 import { domainEventHandlers } from "@/lib/events/handlers";
 import {
-    deleteCategory,
-    toggleCategoryItem,
-    upsertCategory,
+  deleteCategory,
+  toggleCategoryItem,
+  upsertCategory,
 } from "@/lib/sql/functions/categories";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
+import {
+  deleteExtra,
+  toggleOrderItemExtra,
+  upsertExtra,
+} from "@/lib/sql/functions/extras";
 import { insertOrder } from "@/lib/sql/functions/insertOrder";
 import {
-    addItem,
-    deleteItem,
-    toggleItem,
+  addItem,
+  deleteItem,
+  toggleItem,
 } from "@/lib/sql/functions/inventory";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import {
-    addTransaction,
-    deleteTransaction,
+  addTransaction,
+  deleteTransaction,
 } from "@/lib/sql/functions/transactions";
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import {
-    removeProducts,
-    togglePaymentOption,
-    toggleTakeAway,
+  removeProducts,
+  togglePaymentOption,
+  toggleTakeAway,
 } from "@/lib/sql/functions/updateTakeAway";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 
@@ -281,5 +291,50 @@ describe("domainEventHandlers", () => {
 
     expect(toggleCategoryItem).toHaveBeenCalledWith("c1", "i1");
     expect(result).toBe("Added");
+  });
+
+  // ── Extras events ─────────────────────────────────────────────────────────
+
+  it("extra.upserted → calls upsertExtra", async () => {
+    const extra = { id: "e1", name: "Cheese", price: 500 };
+    (upsertExtra as Mock).mockResolvedValue(extra as any);
+
+    const result = await domainEventHandlers["extra.upserted"]({
+      payload: { name: "Cheese", price: 500 },
+    });
+
+    expect(upsertExtra).toHaveBeenCalledWith({
+      id: undefined,
+      name: "Cheese",
+      price: 500,
+    });
+    expect(result).toEqual(extra);
+  });
+
+  it("extra.deleted → calls deleteExtra", async () => {
+    const extra = { id: "e1", name: "Cheese", price: 500 };
+    (deleteExtra as Mock).mockResolvedValue(extra as any);
+
+    const result = await domainEventHandlers["extra.deleted"]({
+      payload: { id: "e1" },
+    });
+
+    expect(deleteExtra).toHaveBeenCalledWith("e1");
+    expect(result).toEqual(extra);
+  });
+
+  it("order.item.extra.toggled → calls toggleOrderItemExtra", async () => {
+    const toggleResult = { action: "added" as const, orderItemId: 42, extraId: "e1" };
+    (toggleOrderItemExtra as Mock).mockResolvedValue(toggleResult);
+
+    const result = await domainEventHandlers["order.item.extra.toggled"]({
+      payload: { orderItemId: 42, extraId: "e1" },
+    });
+
+    expect(toggleOrderItemExtra).toHaveBeenCalledWith({
+      orderItemId: 42,
+      extraId: "e1",
+    });
+    expect(result).toEqual(toggleResult);
   });
 });

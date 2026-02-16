@@ -1,6 +1,6 @@
 import type {
-    DispatchDomainEventParams,
-    DomainEventType
+  DispatchDomainEventParams,
+  DomainEventType
 } from "@/lib/events/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -29,10 +29,13 @@ describe("Event contracts – completeness", () => {
     "inventory.category.upserted",
     "inventory.category.deleted",
     "inventory.category.item.toggled",
+    "extra.upserted",
+    "extra.deleted",
+    "order.item.extra.toggled",
   ];
 
   it("DomainEventType union contains all expected event types", () => {
-    expect(allEventTypes).toHaveLength(16);
+    expect(allEventTypes).toHaveLength(19);
   });
 
   it("every event type is a non-empty string", () => {
