@@ -1,39 +1,63 @@
-import { addTransactionAction, deleteTransactionAction } from '@/app/actions';
-import { TransactionsTable } from '@/lib/sql/types';
-import { fetcher } from "@/lib/utils/fetcher";
-import { Selectable } from 'kysely';
-import { useEffect } from 'react';
-import useSWR from "swr";
-import { Item } from './useInventoryItems';
+import { TransactionsTable } from "@/lib/sql/types";
+import { useTRPC } from "@/lib/trpc/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Selectable } from "kysely";
+import { useCallback } from "react";
+import { Item } from "./useInventoryItems";
 
 export type Transaction = Selectable<TransactionsTable>;
 
 export const useTransactions = (selectedItem?: Item | null) => {
-    const { data: transactions, mutate: mutateTransactions } = useSWR<Transaction[]>(
-        selectedItem ? `/api/inventory/transactions?itemId=${selectedItem.id}` : null,
-        fetcher,
-        {revalidateOnFocus: false}
-    );
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
 
-    useEffect(() => {
-        if (selectedItem) {
-            mutateTransactions(); // Fetch transactions for the newly selected item
-        }
-    }, [selectedItem]);
+  const listOpts = trpc.inventory.transactions.list.queryOptions(
+    { itemId: selectedItem?.id ?? "" },
+    { enabled: !!selectedItem, refetchOnWindowFocus: false },
+  );
+  const { data: transactions } = useQuery(listOpts);
 
-    const addTransaction = async (formData: FormData) => {
-        await addTransactionAction(formData);
-        mutateTransactions();
-    };
+  const addMutation = useMutation(
+    trpc.inventory.transactions.add.mutationOptions(),
+  );
+  const deleteMutation = useMutation(
+    trpc.inventory.transactions.delete.mutationOptions(),
+  );
 
-    const deleteTransaction = async (formData: FormData) => {
-        await deleteTransactionAction(formData);
-        mutateTransactions();
-    };
+  const invalidateTransactions = useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: listOpts.queryKey,
+      }),
+    [queryClient, listOpts.queryKey],
+  );
 
-    return {
-        transactions: transactions || [],
-        addTransaction,
-        deleteTransaction,
-    }
-};      
+  const addTransaction = async (formData: FormData) => {
+    const itemId = formData.get("itemId") as string;
+    const type = formData.get("type") as "IN" | "OUT";
+    const price = Number(formData.get("price"));
+    const quantity = Number(formData.get("quantity"));
+    const quantityTypeValue = formData.get("quantityTypeValue") as string;
+
+    await addMutation.mutateAsync({
+      itemId,
+      type,
+      price,
+      quantity,
+      quantityTypeValue,
+    });
+    await invalidateTransactions();
+  };
+
+  const deleteTransaction = async (formData: FormData) => {
+    const id = Number(formData.get("id"));
+    await deleteMutation.mutateAsync({ id });
+    await invalidateTransactions();
+  };
+
+  return {
+    transactions: (transactions || []) as Transaction[],
+    addTransaction,
+    deleteTransaction,
+  };
+};

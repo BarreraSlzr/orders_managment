@@ -1,21 +1,18 @@
-import React from 'react'
-import ProductOrderManagment from '@/components/ProductOrderManagment'
-import { getProducts } from '@/lib/sql/functions/getProducts';
-import { OrderItemsProductsProvider } from '@/context/useOrderItemsProducts';
-import { OrdersProvider } from '@/context/useOrders';
-import { ProductProvider } from '@/context/useProducts';
-import { OrdersQuery } from '@/lib/types';
-import { ProductsFilterProvider } from '@/context/useProductsFilter';
+import ProductOrderManagment from "@/components/ProductOrderManagment";
+import { OrderItemsProductsProvider } from "@/context/useOrderItemsProducts";
+import { OrdersProvider } from "@/context/useOrders";
+import { ProductProvider } from "@/context/useProducts";
+import { ProductsFilterProvider } from "@/context/useProductsFilter";
+import { OrdersQuery } from "@/lib/types";
 
-export default async function Page() {
-  const products = await getProducts();
+export default function Page() {
   const ordersQuery: OrdersQuery = {
-    status: 'opened'
+    status: "opened",
   };
 
   return (
     <OrdersProvider query={ordersQuery}>
-      <ProductProvider products={products}>
+      <ProductProvider>
         <ProductsFilterProvider>
           <OrderItemsProductsProvider>
             <ProductOrderManagment />
@@ -23,5 +20,5 @@ export default async function Page() {
         </ProductsFilterProvider>
       </ProductProvider>
     </OrdersProvider>
-  )
+  );
 }

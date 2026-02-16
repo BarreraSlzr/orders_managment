@@ -1,13 +1,18 @@
-'use client'
-import React, { PropsWithChildren, useContext } from 'react';
-import { useProducts as useHook } from '@/hooks/useProducts';
-import { Product, ProductContextType } from '@/lib/types';
+"use client";
+import { useProducts as useHook } from "@/hooks/useProducts";
+import { ProductContextType } from "@/lib/types";
+import React, { PropsWithChildren, useContext } from "react";
 
-const ProductContext = React.createContext<ProductContextType>(undefined as unknown as ProductContextType);
+const ProductContext = React.createContext<ProductContextType>(
+  (undefined as unknown) as ProductContextType,
+);
 
-export const ProductProvider = ({ products, children }: PropsWithChildren<{ products: Product[] }>) => {
-    return <ProductContext.Provider value={useHook({products})}>{children}</ProductContext.Provider>;
+export const ProductProvider = ({ children }: PropsWithChildren) => {
+  return (
+    <ProductContext.Provider value={useHook()}>
+      {children}
+    </ProductContext.Provider>
+  );
 };
-
 
 export const useProducts = () => useContext(ProductContext);
