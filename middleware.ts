@@ -9,6 +9,7 @@
  * Everything else requires a valid session cookie.
  * When AUTH_SECRET is not set (local dev without auth), requests pass through.
  */
+import { getAdminConfig, hasAdminApiKey } from "@/lib/auth/admin";
 import { verifySessionToken } from "@/lib/auth/session";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -16,6 +17,7 @@ import { NextResponse } from "next/server";
 /** Paths that never require authentication */
 const PUBLIC_PATHS = [
   "/api/auth",
+  "/api/admin/verify",
   "/_next",
   "/favicon.ico",
 ];
@@ -30,6 +32,25 @@ export async function middleware(request: NextRequest) {
   // Allow public routes through
   if (isPublicPath(pathname)) {
     return NextResponse.next();
+  }
+
+  if (pathname.startsWith("/api/admin")) {
+    try {
+      const config = getAdminConfig();
+      const hasApiKey = hasAdminApiKey({
+        authorizationHeader: request.headers.get("authorization"),
+        cookieValue: request.cookies.get(config.cookieName)?.value,
+        apiKey: config.apiKey,
+      });
+
+      if (!hasApiKey) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+
+      return NextResponse.next();
+    } catch {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   // When AUTH_SECRET is not configured, skip auth (dev convenience)
