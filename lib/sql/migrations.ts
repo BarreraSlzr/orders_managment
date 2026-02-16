@@ -441,10 +441,242 @@ END $$;
   },
 };
 
+// ── v4: Multi-tenant foundation (tenants + users + tenant_id columns) ───────
+
+const migration004: Migration = {
+  version: 4,
+  description:
+    "Add tenants/users tables + tenant_id columns (backfill legacy data)",
+  async up() {
+    await db.schema
+      .createTable("tenants")
+      .ifNotExists()
+      .addColumn("id", "uuid", (col) =>
+        col.primaryKey().defaultTo(sql`gen_random_uuid()`)
+      )
+      .addColumn("name", "varchar", (col) => col.notNull())
+      .addColumn("created", "timestamptz", (col) =>
+        col.defaultTo(sql`now()`)
+      )
+      .addColumn("updated", "timestamptz", (col) =>
+        col.defaultTo(sql`now()`)
+      )
+      .execute();
+
+    await db.schema
+      .createIndex("tenants_name_idx")
+      .on("tenants")
+      .column("name")
+      .unique()
+      .ifNotExists()
+      .execute();
+
+    await db.schema
+      .createTable("users")
+      .ifNotExists()
+      .addColumn("id", "uuid", (col) =>
+        col.primaryKey().defaultTo(sql`gen_random_uuid()`)
+      )
+      .addColumn("tenant_id", "uuid", (col) =>
+        col.notNull().references("tenants.id")
+      )
+      .addColumn("username", "varchar", (col) => col.notNull())
+      .addColumn("role", "varchar", (col) =>
+        col.notNull().check(sql`role in ('admin', 'manager', 'staff')`)
+      )
+      .addColumn("password_hash", "varchar", (col) => col.notNull())
+      .addColumn("password_salt", "varchar", (col) => col.notNull())
+      .addColumn("created", "timestamptz", (col) =>
+        col.defaultTo(sql`now()`)
+      )
+      .addColumn("updated", "timestamptz", (col) =>
+        col.defaultTo(sql`now()`)
+      )
+      .execute();
+
+    await db.schema
+      .createIndex("users_tenant_username_idx")
+      .on("users")
+      .columns(["tenant_id", "username"])
+      .unique()
+      .ifNotExists()
+      .execute();
+
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+DECLARE
+  default_tenant uuid;
+BEGIN
+  SELECT id INTO default_tenant FROM tenants WHERE name = 'cafe&baguettes';
+  IF default_tenant IS NULL THEN
+    INSERT INTO tenants (name) VALUES ('cafe&baguettes')
+    RETURNING id INTO default_tenant;
+  END IF;
+
+  ALTER TABLE products ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE orders ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE order_items ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE payment_options ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE extras ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE order_item_extras ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE categories ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE category_inventory_item ADD COLUMN IF NOT EXISTS tenant_id uuid;
+  ALTER TABLE domain_events ADD COLUMN IF NOT EXISTS tenant_id uuid;
+
+  UPDATE products SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE orders SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE order_items SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE payment_options SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE extras SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE order_item_extras SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE inventory_items SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE transactions SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE categories SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE category_inventory_item SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  UPDATE domain_events SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'products_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE products
+      ADD CONSTRAINT products_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'orders_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE orders
+      ADD CONSTRAINT orders_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'order_items_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE order_items
+      ADD CONSTRAINT order_items_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'payment_options_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE payment_options
+      ADD CONSTRAINT payment_options_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'extras_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE extras
+      ADD CONSTRAINT extras_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'order_item_extras_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE order_item_extras
+      ADD CONSTRAINT order_item_extras_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'inventory_items_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE inventory_items
+      ADD CONSTRAINT inventory_items_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'transactions_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE transactions
+      ADD CONSTRAINT transactions_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'categories_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE categories
+      ADD CONSTRAINT categories_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'category_inventory_item_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE category_inventory_item
+      ADD CONSTRAINT category_inventory_item_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'domain_events_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE domain_events
+      ADD CONSTRAINT domain_events_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  CREATE INDEX IF NOT EXISTS products_tenant_id_idx ON products(tenant_id);
+  CREATE INDEX IF NOT EXISTS orders_tenant_id_idx ON orders(tenant_id);
+  CREATE INDEX IF NOT EXISTS order_items_tenant_id_idx ON order_items(tenant_id);
+  CREATE INDEX IF NOT EXISTS payment_options_tenant_id_idx ON payment_options(tenant_id);
+  CREATE INDEX IF NOT EXISTS extras_tenant_id_idx ON extras(tenant_id);
+  CREATE INDEX IF NOT EXISTS order_item_extras_tenant_id_idx ON order_item_extras(tenant_id);
+  CREATE INDEX IF NOT EXISTS inventory_items_tenant_id_idx ON inventory_items(tenant_id);
+  CREATE INDEX IF NOT EXISTS transactions_tenant_id_idx ON transactions(tenant_id);
+  CREATE INDEX IF NOT EXISTS categories_tenant_id_idx ON categories(tenant_id);
+  CREATE INDEX IF NOT EXISTS category_inventory_item_tenant_id_idx ON category_inventory_item(tenant_id);
+  CREATE INDEX IF NOT EXISTS domain_events_tenant_id_idx ON domain_events(tenant_id);
+END $$;
+`
+      )
+    );
+
+    console.info("[v4] Tenants/users + tenant_id columns created.");
+  },
+};
+
+// ── v5: User permissions for granular RBAC ────────────────────────────────
+
+const migration005: Migration = {
+  version: 5,
+  description: "Add users.permissions jsonb column (default empty array)",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '[]'::jsonb;
+
+  UPDATE users SET permissions = '[]'::jsonb WHERE permissions IS NULL;
+END $$;
+`
+      )
+    );
+
+    console.info("[v5] users.permissions column added.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
   migration001,
   migration002,
   migration003,
+  migration004,
+  migration005,
 ];

@@ -1,5 +1,6 @@
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { domainEventHandlers } from "@/lib/events/handlers";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mock the database layer ──────────────────────────────────────────────────
 const mockExecuteTakeFirstOrThrow = vi.fn();
@@ -24,22 +25,28 @@ vi.mock("@/lib/sql/database", () => ({
   },
 }));
 
-// ── Mock handlers ────────────────────────────────────────────────────────────
+// ── Mock handlers (override individual keys) ─────────────────────────────────
 const mockHandlerFn = vi.fn();
-vi.mock("@/lib/events/handlers", () => ({
-  domainEventHandlers: new Proxy(
-    {},
-    {
-      get: () => mockHandlerFn,
-    }
-  ),
-}));
+const originalHandlers = {
+  created: domainEventHandlers["order.created"],
+  closed: domainEventHandlers["order.closed"],
+  upserted: domainEventHandlers["product.upserted"],
+};
 
 describe("dispatchDomainEvent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockExecuteTakeFirstOrThrow.mockResolvedValue({ id: 42 });
     mockExecute.mockResolvedValue([]);
+    domainEventHandlers["order.created"] = mockHandlerFn as any;
+    domainEventHandlers["order.closed"] = mockHandlerFn as any;
+    domainEventHandlers["product.upserted"] = mockHandlerFn as any;
+  });
+
+  afterEach(() => {
+    domainEventHandlers["order.created"] = originalHandlers.created;
+    domainEventHandlers["order.closed"] = originalHandlers.closed;
+    domainEventHandlers["product.upserted"] = originalHandlers.upserted;
   });
 
   it("persists a pending event, calls the handler, marks processed, and returns the result", async () => {

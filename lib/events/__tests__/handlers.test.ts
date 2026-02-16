@@ -44,32 +44,32 @@ vi.mock("@/lib/sql/functions/extras", () => ({
 // Import after mocks
 import { domainEventHandlers } from "@/lib/events/handlers";
 import {
-  deleteCategory,
-  toggleCategoryItem,
-  upsertCategory,
+    deleteCategory,
+    toggleCategoryItem,
+    upsertCategory,
 } from "@/lib/sql/functions/categories";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
 import {
-  deleteExtra,
-  toggleOrderItemExtra,
-  upsertExtra,
+    deleteExtra,
+    toggleOrderItemExtra,
+    upsertExtra,
 } from "@/lib/sql/functions/extras";
 import { insertOrder } from "@/lib/sql/functions/insertOrder";
 import {
-  addItem,
-  deleteItem,
-  toggleItem,
+    addItem,
+    deleteItem,
+    toggleItem,
 } from "@/lib/sql/functions/inventory";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import {
-  addTransaction,
-  deleteTransaction,
+    addTransaction,
+    deleteTransaction,
 } from "@/lib/sql/functions/transactions";
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import {
-  removeProducts,
-  togglePaymentOption,
-  toggleTakeAway,
+    removeProducts,
+    togglePaymentOption,
+    toggleTakeAway,
 } from "@/lib/sql/functions/updateTakeAway";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
 
