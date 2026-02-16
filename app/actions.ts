@@ -1,21 +1,11 @@
 "use server"
 
-import { insertOrder } from "@/lib/sql/functions/insertOrder";
-import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
-import { closeOrder } from "@/lib/sql/functions/closeOrder";
-import { getProducts } from "@/lib/sql/functions/getProducts";
-import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
-import { errorHandler } from "@/lib/utils/errorHandler";
-import { Product } from "@/lib/types";
-import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
+import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
-import { splitOrder } from "@/lib/sql/functions/splitOrder";
-import { removeProducts, togglePaymentOption, toggleTakeAway } from "@/lib/sql/functions/updateTakeAway";
-import { addItem, deleteItem, toggleItem } from "@/lib/sql/functions/inventory";
-import { addTransaction, deleteTransaction } from "@/lib/sql/functions/transactions";
-import { deleteCategory, toggleCategoryItem, upsertCategory } from "@/lib/sql/functions/categories";
-import { CategoriesTable } from "@/lib/sql/types";
-import { Selectable } from "kysely";
+import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
+import { getProducts } from "@/lib/sql/functions/getProducts";
+import { Product } from "@/lib/types";
+import { errorHandler } from "@/lib/utils/errorHandler";
 
 export async function handleSelectProducts(formData: FormData) {
   return errorHandler({
@@ -33,12 +23,24 @@ export async function handleInsertOrder(formData: FormData) {
   return errorHandler({
     actionName: 'handleCreateOrder',
     async callback() {
-      const order = await insertOrder("America/Mexico_City");
+      const order = await dispatchDomainEvent({
+        type: "order.created",
+        payload: {
+          timeZone: "America/Mexico_City",
+        },
+      });
       formData.append('orderId', order.id)
       if (formData.has('productId')) {
         const orderIdValue = order.id;
         const productIdValue = `${formData.get('productId')}`;
-        await updateOrderItem(orderIdValue, productIdValue, 'INSERT');
+        await dispatchDomainEvent({
+          type: "order.item.updated",
+          payload: {
+            orderId: orderIdValue,
+            productId: productIdValue,
+            type: "INSERT",
+          },
+        });
       }
     },
     formData
@@ -55,7 +57,19 @@ export async function handleUpdateOrderItem(formData: FormData) {
       const typeValue = `${formData.get('type')}`;
       const orderIdValue = `${formData.get('orderId')}`;
       const productIdValue = `${formData.get('productId')}`;
-      return updateOrderItem(orderIdValue, productIdValue, typeValue);
+
+      if (typeValue !== 'INSERT' && typeValue !== 'DELETE') {
+        throw new Error(`Unexpected type: ${typeValue}`);
+      }
+
+      return dispatchDomainEvent({
+        type: "order.item.updated",
+        payload: {
+          orderId: orderIdValue,
+          productId: productIdValue,
+          type: typeValue,
+        },
+      });
     },
     formData
   }).then((response) => {
@@ -70,9 +84,12 @@ export async function handleSplitOrder(formData: FormData) {
     async callback() {
       const orderId = `${formData.get('orderId')}`;
       const item_ids = formData.getAll('item_id').map(ii => parseInt(`${ii}`));
-      return await splitOrder({
-        old_order_id: orderId,
-        item_ids
+      return dispatchDomainEvent({
+        type: "order.split",
+        payload: {
+          oldOrderId: orderId,
+          itemIds: item_ids,
+        },
       })
     },
     formData
@@ -84,7 +101,12 @@ export async function handleCloseOrder(formData: FormData) {
     actionName: 'handleCloseOrder',
     async callback() {
       const orderIdValue = `${formData.get('orderId')}`;
-      return await closeOrder(orderIdValue);
+      return dispatchDomainEvent({
+        type: "order.closed",
+        payload: {
+          orderId: orderIdValue,
+        },
+      });
     },
     formData
   });
@@ -114,11 +136,14 @@ export async function handleUpsertProduct(formData: FormData) {
         throw new Error('Invalid data: Name and price are required.');
       }
 
-      const product: Product = await upsertProduct({
-        id,
-        name,
-        price,
-        tags,
+      const product: Product = await dispatchDomainEvent({
+        type: "product.upserted",
+        payload: {
+          id,
+          name,
+          price,
+          tags,
+        },
       });
 
       return { product };
@@ -138,7 +163,12 @@ export async function handleUpdatePayment(formData: FormData) {
         throw new Error('Invalid data.');
       }
 
-      return togglePaymentOption(itemIds);
+      return dispatchDomainEvent({
+        type: "order.payment.toggled",
+        payload: {
+          itemIds,
+        },
+      });
     },
     formData
   })
@@ -154,7 +184,12 @@ export async function handleToggleTakeAway(formData: FormData) {
         throw new Error('Invalid data.');
       }
 
-      return toggleTakeAway(itemIds);
+      return dispatchDomainEvent({
+        type: "order.takeaway.toggled",
+        payload: {
+          itemIds,
+        },
+      });
     },
     formData
   })
@@ -171,7 +206,13 @@ export async function handleRemoveProducts(formData: FormData) {
         throw new Error('No items provided for removal.');
       }
 
-      return (await removeProducts(orderId, itemIds)).pop()?.numDeletedRows;
+      return (await dispatchDomainEvent({
+        type: "order.products.removed",
+        payload: {
+          orderId,
+          itemIds,
+        },
+      })).pop()?.numDeletedRows;
     },
     formData,
   });
@@ -199,10 +240,14 @@ export async function addNewItemAction(formData: FormData) {
       const key = formData.get('quantity_type_key')?.toString();
       const categoryId = formData.get('categoryId')?.toString();
       if (name && name.trim() && key && key.trim()) {
-        const newItem = await addItem(name, key);
-        if( newItem && categoryId){
-          await toggleCategoryItem(categoryId, newItem.id)
-        }
+        await dispatchDomainEvent({
+          type: "inventory.item.added",
+          payload: {
+            name,
+            quantityTypeKey: key,
+            categoryId,
+          },
+        });
         return true;
       }
       return false;
@@ -217,7 +262,12 @@ export async function toggleItemStatusAction(formData: FormData) {
     async callback() {
       const id = formData.get('id')?.toString();
       if (id && id.trim()) {
-        await toggleItem(id);
+        await dispatchDomainEvent({
+          type: "inventory.item.toggled",
+          payload: {
+            id,
+          },
+        });
         return true
       }
       return false
@@ -232,7 +282,12 @@ export async function removeItemAction(formData: FormData) {
     async callback() {
       const id = formData.get('id')?.toString();
       if (id && id.trim()) {
-        await deleteItem(id);
+        await dispatchDomainEvent({
+          type: "inventory.item.deleted",
+          payload: {
+            id,
+          },
+        });
         return true
       }
       return false
@@ -252,7 +307,16 @@ export async function addTransactionAction(formData: FormData) {
       const quantityTypeValue = formData.get('quantity_type_value')?.toString();
 
       if (itemId && type && !isNaN(price) && !isNaN(quantity) && quantityTypeValue) {
-        await addTransaction(itemId, type, price, quantity, quantityTypeValue);
+        await dispatchDomainEvent({
+          type: "inventory.transaction.added",
+          payload: {
+            itemId,
+            type,
+            price,
+            quantity,
+            quantityTypeValue,
+          },
+        });
       }
     },
     formData
@@ -265,7 +329,12 @@ export async function deleteTransactionAction(formData: FormData) {
     async callback() {
       const id = parseInt(formData.get('id')?.toString() || '0', 10);
       if (id) {
-        await deleteTransaction(id)
+        await dispatchDomainEvent({
+          type: "inventory.transaction.deleted",
+          payload: {
+            id,
+          },
+        })
       }
     },
     formData
@@ -281,7 +350,12 @@ export async function removeCategoryAction(formData: FormData) {
       if (!id) {
         throw new Error('Category ID is required');
       }
-      return await deleteCategory(id);
+      return dispatchDomainEvent({
+        type: "inventory.category.deleted",
+        payload: {
+          id,
+        },
+      });
     }
   })
 }
@@ -296,7 +370,13 @@ export async function updateCategoryAction(formData: FormData) {
       if (!name) {
         throw new Error('Category name is required');
       }
-      return await upsertCategory(name, id);
+      return dispatchDomainEvent({
+        type: "inventory.category.upserted",
+        payload: {
+          id,
+          name,
+        },
+      });
     }
   })
 }
@@ -312,7 +392,13 @@ export async function toggleCategoryItemAction(formData: FormData) {
       if (!categoryId || !itemId) {
         throw new Error('Both category ID and item ID are required');
       }
-      return toggleCategoryItem(categoryId, itemId);
+      return dispatchDomainEvent({
+        type: "inventory.category.item.toggled",
+        payload: {
+          categoryId,
+          itemId,
+        },
+      });
     }
   })
 }

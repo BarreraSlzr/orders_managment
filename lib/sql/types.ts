@@ -1,4 +1,4 @@
-import { Generated, ColumnType, Selectable } from 'kysely'
+import { ColumnType, Generated, Selectable } from 'kysely'
 
 interface BaseTable {
   id: Generated<string>
@@ -102,6 +102,16 @@ interface SuppliersItemTable {
   supplier_id: string;
 }
 
+interface DomainEventsTable {
+  id: Generated<number>;
+  event_type: string;
+  payload: ColumnType<string, string, string>;
+  status: ColumnType<"pending" | "processed" | "failed", "pending" | "processed" | "failed", "pending" | "processed" | "failed">;
+  result: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  error_message: string | null;
+  created: ColumnType<Date, string | undefined, never>;
+}
+
 // Keys of this interface are table names.
 export interface Database {
   products: ProductTable;
@@ -112,6 +122,7 @@ export interface Database {
   transactions: TransactionsTable;
   categories: CategoriesTable;
   category_inventory_item: CategoryInventoryItemTable;
+  domain_events: DomainEventsTable;
   // product_consumptions: ProductConsumptionsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;

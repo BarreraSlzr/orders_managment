@@ -55,3 +55,17 @@ pnpm dev
 ```
 
 Deploy it to the cloud with [Vercel](https://vercel.com/new?utm_source=github&utm_medium=readme&utm_campaign=vercel-examples) ([Documentation](https://nextjs.org/docs/deployment)).
+
+## Event-Driven Mutation Flow
+
+This project now routes write operations through explicit domain events.
+
+- Mutation entrypoints (`app/actions.ts`) dispatch typed events.
+- Event handlers live in `lib/events/handlers.ts`.
+- Dispatching/persistence lives in `lib/events/dispatch.ts`.
+- Events are persisted in the `domain_events` table with status: `pending`, `processed`, or `failed`.
+
+### Database Notes
+
+- `lib/sql/seed.ts` now provisions `domain_events` for event-store persistence.
+- Existing `calculate_order_total` trigger remains active and compatible with event-based order item writes.
