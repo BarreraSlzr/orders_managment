@@ -1,14 +1,26 @@
-import React from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useInventory } from '@/context/InventoryProvider'
-import { measureTypes } from '@/lib/utils/measureTypes'
-import { ListItem } from './ItemList'
-import { Item } from '@/hooks/inventory/useInventoryItems'
-import { AnimatePresence } from 'framer-motion'
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useInventory } from "@/context/InventoryProvider";
+import { Item } from "@/hooks/inventory/useInventoryItems";
+import { measureTypes } from "@/lib/utils/measureTypes";
+import { AnimatePresence } from "framer-motion";
+import React from "react";
+import { ListItem } from "./ItemList";
 
 interface ItemDetailsModalProps {
   isOpen: boolean;
@@ -16,16 +28,20 @@ interface ItemDetailsModalProps {
   item: Item;
 }
 
-export function TransactionFormModal({ isOpen, onClose, item }: ItemDetailsModalProps) {
-  const { addTransaction, selectedItem } = useInventory()
+export function TransactionFormModal({
+  isOpen,
+  onClose,
+  item,
+}: ItemDetailsModalProps) {
+  const { addTransaction, selectedItem } = useInventory();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     const formData = new FormData(e.currentTarget as HTMLFormElement);
-    formData.append('itemId', item.id)
-    await addTransaction(formData)
-    onClose()
-  }
+    formData.append("itemId", item.id);
+    await addTransaction(formData);
+    onClose();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -33,7 +49,7 @@ export function TransactionFormModal({ isOpen, onClose, item }: ItemDetailsModal
         <DialogHeader>
           <DialogTitle>Detalles de inventario</DialogTitle>
         </DialogHeader>
-        { selectedItem && <ListItem item={selectedItem}/>}
+        {selectedItem && <ListItem item={selectedItem} />}
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="quantity" className="text-right">
@@ -56,13 +72,14 @@ export function TransactionFormModal({ isOpen, onClose, item }: ItemDetailsModal
                 <SelectValue placeholder="Selecciona una unidad" />
               </SelectTrigger>
               <SelectContent>
-                {item.quantity_type_key && measureTypes[item.quantity_type_key as keyof typeof measureTypes].map((value) => (
-                  <AnimatePresence>
-                    <SelectItem key={value} value={value}>
-                      {value}
-                    </SelectItem>
-                  </AnimatePresence>
-                ))}
+                {item.quantity_type_key &&
+                  measureTypes[
+                    item.quantity_type_key as keyof typeof measureTypes
+                  ].map((value) => (
+                    <AnimatePresence key={value}>
+                      <SelectItem value={value}>{value}</SelectItem>
+                    </AnimatePresence>
+                  ))}
               </SelectContent>
             </Select>
           </div>
@@ -87,6 +104,5 @@ export function TransactionFormModal({ isOpen, onClose, item }: ItemDetailsModal
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
-
