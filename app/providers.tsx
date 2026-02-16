@@ -7,7 +7,7 @@ import type { AppRouter } from "@/lib/trpc/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import superjson from "superjson";
 
 function getBaseUrl() {
@@ -33,9 +33,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
         <NuqsAdapter>
-          <AdminQueryListener />
-          <SSEInvalidationListener />
-          {children}
+          <Suspense>
+            <AdminQueryListener />
+            <SSEInvalidationListener />
+            {children}
+          </Suspense>
         </NuqsAdapter>
       </TRPCProvider>
     </QueryClientProvider>
