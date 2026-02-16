@@ -1,4 +1,4 @@
-export const Spinner = ({className}: JSX.IntrinsicElements['div']) => {
+export const Spinner = ({className}: React.JSX.IntrinsicElements['div']) => {
     return (
       <div className={`flex items-center justify-center ${className || ''}`.trim()}>
         <svg

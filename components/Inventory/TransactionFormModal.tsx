@@ -18,7 +18,7 @@ import {
 import { useInventory } from "@/context/InventoryProvider";
 import { Item } from "@/hooks/inventory/useInventoryItems";
 import { measureTypes } from "@/lib/utils/measureTypes";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "motion/react";
 import React from "react";
 import { ListItem } from "./ItemList";
 

@@ -9,20 +9,17 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
-import { ShoppingBag } from 'lucide-react'
 import { useOrders } from "@/context/useOrders"
-import OrdersList from "../Orders/OrderList"
+import { ShoppingBag } from 'lucide-react'
 import { Suspense } from "react"
-import { Spinner } from "../ui/spinner"
-import { Card, CardHeader } from "../ui/card"
-import OrderDetails from "../Orders/OrderDetails"
-import { OrderSummary } from "../OrderSummary"
 import OrderStatus from "../Orders/OrderControls"
+import OrderDetails from "../Orders/OrderDetails"
+import OrdersList from "../Orders/OrderList"
+import { OrderSummary } from "../OrderSummary"
+import { Card, CardHeader } from "../ui/card"
+import { Spinner } from "../ui/spinner"
 
-interface OrderSummaryProps {
-}
-
-export function OpenOrderSheet({ }: OrderSummaryProps) {
+export function OpenOrderSheet() {
     const { orders, currentOrder } = useOrders()
 
     return (

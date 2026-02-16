@@ -10,7 +10,7 @@ interface ReceiptHeaderProps {
   };
 }
 
-export function ReceiptHeader({ order, serverInfo, className }: ReceiptHeaderProps & JSX.IntrinsicElements['p']) {
+export function ReceiptHeader({ order, serverInfo, className }: ReceiptHeaderProps & React.JSX.IntrinsicElements['p']) {
   return (
     <>
       <p className={className}>

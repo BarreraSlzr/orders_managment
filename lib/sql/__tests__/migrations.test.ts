@@ -2,9 +2,11 @@ import { allMigrations } from "@/lib/sql/migrations";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mock the database to avoid real DB calls ─────────────────────────────────
-const mockExecute = vi.fn();
-const mockExecuteQuery = vi.fn();
-const mockExecuteTakeFirst = vi.fn();
+const { mockExecute, mockExecuteQuery, mockExecuteTakeFirst } = vi.hoisted(() => ({
+  mockExecute: vi.fn(),
+  mockExecuteQuery: vi.fn(),
+  mockExecuteTakeFirst: vi.fn(),
+}));
 
 vi.mock("@/lib/sql/database", () => ({
   db: {

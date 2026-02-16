@@ -8,14 +8,11 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
+import { useProductsFilter } from "@/context/useProductsFilter"
 import { Search } from 'lucide-react'
 import { FilterControls } from "../FilterControls"
-import { useProductsFilter } from "@/context/useProductsFilter"
 
-interface OrderSummaryProps {
-}
-
-export function TagsSheet({ }: OrderSummaryProps) {
+export function TagsSheet() {
     const { selectedTags, searchQuery } = useProductsFilter()
 
     return (
