@@ -69,3 +69,50 @@ This project now routes write operations through explicit domain events.
 
 - `lib/sql/seed.ts` now provisions `domain_events` for event-store persistence.
 - Existing `calculate_order_total` trigger remains active and compatible with event-based order item writes.
+## Authentication & Authorization
+
+Cookie-based session management using HMAC-SHA256 signatures (Web Crypto API, zero dependencies).
+
+### Setup
+
+1. Copy the auth env vars template:
+
+   ```bash
+   cp .env.local.example .env.local
+   ```
+
+2. Generate a secret and paste it into `.env.local`:
+
+   ```bash
+   openssl rand -hex 32
+   ```
+
+3. Set the env vars:
+
+   | Variable | Required | Default | Description |
+   |---|---|---|---|
+   | `AUTH_SECRET` | **yes** | — | HMAC signing key (≥ 32 chars) |
+   | `AUTH_COOKIE_NAME` | no | `__session` | Session cookie name |
+   | `AUTH_SESSION_TTL` | no | `604800` (7 days) | Session lifetime in seconds |
+   | `AUTH_ALLOWED_ORIGINS` | no | — | Comma-separated origins for CORS |
+   | `AUTH_COOKIE_DOMAIN` | no | — | Cookie domain for cross-service SSO (e.g. `.example.com`) |
+
+### How It Works
+
+- **Middleware** ([middleware.ts](middleware.ts)) protects all routes except `/api/auth/*`, `/_next/*`, and `/favicon.ico`. When `AUTH_SECRET` is not set, auth is bypassed (dev convenience).
+- **Session tokens** ([lib/auth/session.ts](lib/auth/session.ts)) are `base64url(payload).base64url(hmac)` — lightweight, Edge-compatible, no JWT library needed.
+- **Cross-service cookies** ([lib/auth/cookies.ts](lib/auth/cookies.ts)) use `AUTH_COOKIE_DOMAIN` so a single login covers `orders.example.com`, `inventory.example.com`, etc.
+
+### Auth API Routes
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/auth/login?sub=<id>&redirect=/` | Issue session cookie (MVP stub) |
+| GET/POST | `/api/auth/logout` | Clear session cookie |
+| GET | `/api/auth/me` | Return current session or 401 |
+
+### Running Auth Tests
+
+```bash
+bun vitest run lib/auth/__tests__
+```
