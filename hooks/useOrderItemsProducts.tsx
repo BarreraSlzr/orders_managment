@@ -13,6 +13,9 @@ export function useOrderItemsProducts(): OrderItemsContextActions {
   const updateItemMutation = useMutation(
     trpc.orders.updateItem.mutationOptions(),
   );
+  const toggleExtraMutation = useMutation(
+    trpc.extras.toggleOnItem.mutationOptions(),
+  );
 
   return {
     handleAddOrder: async function(productId?: string) {
@@ -31,6 +34,18 @@ export function useOrderItemsProducts(): OrderItemsContextActions {
         orderId: currentOrder.id,
         productId,
         type,
+      });
+      if (orderUpdated) updateCurrentOrder(orderUpdated as OrderItemsView);
+    },
+    handleToggleExtra: async function(params: {
+      orderItemId: number;
+      extraId: string;
+    }) {
+      if (!currentOrder) return;
+      const orderUpdated = await toggleExtraMutation.mutateAsync({
+        orderItemId: params.orderItemId,
+        extraId: params.extraId,
+        orderId: currentOrder.id,
       });
       if (orderUpdated) updateCurrentOrder(orderUpdated as OrderItemsView);
     },

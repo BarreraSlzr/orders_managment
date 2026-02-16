@@ -5,7 +5,7 @@ import { getOrder } from './getOrder';
 
 // Define a function to get the OrderItemsView by orderId
 export async function getOrderItemsView(orderId: string): Promise<OrderItemsView> {
-  // Step 1: Aggregate the order items for the given orderId (but not nested json_agg)
+  // Step 1: Aggregate the order items for the given orderId, including extras per item
   const orderItems = await db.executeQuery<OrderItem>(CompiledQuery.raw(`
     SELECT
       order_items.order_id,
@@ -16,7 +16,20 @@ export async function getOrderItemsView(orderId: string): Promise<OrderItemsView
         json_build_object(
           'id', order_items.id,
           'is_takeaway', order_items.is_takeaway,
-          'payment_option_id', order_items.payment_option_id
+          'payment_option_id', order_items.payment_option_id,
+          'extras', COALESCE((
+            SELECT json_agg(
+              json_build_object(
+                'id', oie.id,
+                'extra_id', e.id,
+                'name', e.name,
+                'price', e.price
+              )
+            )
+            FROM order_item_extras oie
+            JOIN extras e ON e.id = oie.extra_id AND e.deleted IS NULL
+            WHERE oie.order_item_id = order_items.id
+          ), '[]'::json)
         )
       ) AS items
     FROM

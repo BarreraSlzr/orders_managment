@@ -4,6 +4,11 @@ import {
     upsertCategory,
 } from "@/lib/sql/functions/categories";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
+import {
+    deleteExtra,
+    toggleOrderItemExtra,
+    upsertExtra,
+} from "@/lib/sql/functions/extras";
 import { insertOrder } from "@/lib/sql/functions/insertOrder";
 import {
     addItem,
@@ -112,5 +117,21 @@ export const domainEventHandlers: {
   },
   "inventory.category.item.toggled": async ({ payload }) => {
     return toggleCategoryItem(payload.categoryId, payload.itemId);
+  },
+  "extra.upserted": async ({ payload }) => {
+    return upsertExtra({
+      id: payload.id,
+      name: payload.name,
+      price: payload.price,
+    });
+  },
+  "extra.deleted": async ({ payload }) => {
+    return deleteExtra(payload.id);
+  },
+  "order.item.extra.toggled": async ({ payload }) => {
+    return toggleOrderItemExtra({
+      orderItemId: payload.orderItemId,
+      extraId: payload.extraId,
+    });
   },
 };

@@ -46,11 +46,36 @@ interface PaymentOptionsTable {
   name: string
 }
 
+interface ExtrasTable {
+  id: Generated<string>
+  created: ColumnType<Date, string | undefined, never>
+  deleted: ColumnType<Date | null, string | null | undefined, Date | null>
+  updated: ColumnType<Date, string | undefined, Date>
+  name: string
+  price: number
+}
+
+interface OrderItemExtrasTable {
+  id: Generated<number>
+  order_item_id: number
+  extra_id: string
+  created: ColumnType<Date, string | undefined, never>
+}
+
+export type Extra = Selectable<ExtrasTable>;
+
+export interface OrderItemExtra {
+  id: number;
+  extra_id: string;
+  name: string;
+  price: number;
+}
+
 export interface OrderItem {
   product_id: string;
   name: string;
   price: number;
-  items: Pick<Selectable<OrderItemTable>, 'id'|'is_takeaway'|'payment_option_id'>[];
+  items: (Pick<Selectable<OrderItemTable>, 'id'|'is_takeaway'|'payment_option_id'> & { extras: OrderItemExtra[] })[];
 }
 
 export interface OrderItemsView extends Selectable<OrderTable> {
@@ -118,6 +143,8 @@ export interface Database {
   orders: OrderTable;
   order_items: OrderItemTable;
   payment_options: PaymentOptionsTable;
+  extras: ExtrasTable;
+  order_item_extras: OrderItemExtrasTable;
   inventory_items: InventoryItemsTable;
   transactions: TransactionsTable;
   categories: CategoriesTable;
