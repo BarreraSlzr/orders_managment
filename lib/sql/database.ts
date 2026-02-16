@@ -15,7 +15,13 @@ export function getDb() {
 /** @deprecated Use getDb() for lazy initialization. Kept for backward compat. */
 export const db = new Proxy({} as ReturnType<typeof createKysely<Database>>, {
   get(_target, prop) {
-    return (getDb() as unknown as Record<string | symbol, unknown>)[prop];
+    const real = getDb();
+    const value = (real as unknown as Record<string | symbol, unknown>)[prop];
+    // Bind methods so they retain access to Kysely's private fields (#props)
+    if (typeof value === "function") {
+      return value.bind(real);
+    }
+    return value;
   },
 });
 
