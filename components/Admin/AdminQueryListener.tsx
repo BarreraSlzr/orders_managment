@@ -44,6 +44,20 @@ function parseAdminParam({
   };
 }
 
+/** Simple role param: ?role=admin or ?role=manager */
+type RoleParseResult =
+  | { ok: true; role: string }
+  | { ok: false };
+
+function parseRoleParam({ value }: { value: string | null }): RoleParseResult {
+  if (!value) return { ok: false };
+  const role = value.trim().toLowerCase();
+  if (role === "admin" || role === "manager") {
+    return { ok: true, role };
+  }
+  return { ok: false };
+}
+
 async function submitAdminVerification(params: {
   payload: AdminIdentity;
   password: string;
@@ -65,42 +79,86 @@ async function submitAdminVerification(params: {
   return { ok: false, error: data.error || "Unauthorized" };
 }
 
+async function submitRoleVerification(params: {
+  role: string;
+  password: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const response = await fetch("/api/admin/verify", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      admin: {
+        role: params.role,
+        key: "role-access",
+        username: params.role,
+        email: `${params.role}@local`,
+      },
+      password: params.password,
+    }),
+  });
+
+  if (response.ok) return { ok: true };
+
+  const data = await response.json().catch(() => ({}));
+  return { ok: false, error: data.error || "Unauthorized" };
+}
+
 export default function AdminQueryListener() {
   const [adminParam, setAdminParam] = useQueryState("admin");
-  const parsed = useMemo(() => parseAdminParam({ value: adminParam }), [
-    adminParam,
-  ]);
+  const [roleParam, setRoleParam] = useQueryState("role");
+  const parsed = useMemo(
+    () => parseAdminParam({ value: adminParam }),
+    [adminParam]
+  );
+  const roleParsed = useMemo(
+    () => parseRoleParam({ value: roleParam }),
+    [roleParam]
+  );
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"admin" | "role">("admin");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!adminParam) {
-      setOpen(false);
-      setPassword("");
+    // ?role=admin takes priority as simpler entry point
+    if (roleParam && roleParsed.ok) {
+      setMode("role");
+      setOpen(true);
       setError(null);
-      setStatus("idle");
       return;
     }
 
+    if (!adminParam) {
+      if (!roleParam) {
+        setOpen(false);
+        setPassword("");
+        setError(null);
+        setStatus("idle");
+      }
+      return;
+    }
+
+    setMode("admin");
     setOpen(true);
     if (!parsed.ok) {
       setError(parsed.error);
     }
-  }, [adminParam, parsed]);
+  }, [adminParam, parsed, roleParam, roleParsed]);
 
   if (!open) return null;
 
-  const isInvalid = !parsed.ok;
+  const isInvalid = mode === "admin" && !parsed.ok;
 
   const handleClose = () => {
     setAdminParam(null);
+    setRoleParam(null);
     setOpen(false);
   };
 
   const handleSubmit = async () => {
-    if (!parsed.ok) return;
     if (!password) {
       setError("Password is required.");
       return;
@@ -109,15 +167,27 @@ export default function AdminQueryListener() {
     setStatus("loading");
     setError(null);
 
-    const result = await submitAdminVerification({
-      payload: parsed.value,
-      password,
-    });
+    let result: { ok: boolean; error?: string };
+
+    if (mode === "role" && roleParsed.ok) {
+      result = await submitRoleVerification({
+        role: roleParsed.role,
+        password,
+      });
+    } else if (mode === "admin" && parsed.ok) {
+      result = await submitAdminVerification({
+        payload: parsed.value,
+        password,
+      });
+    } else {
+      return;
+    }
 
     if (result.ok) {
       setStatus("success");
       setPassword("");
       setAdminParam(null);
+      setRoleParam(null);
       setTimeout(() => {
         setOpen(false);
       }, 800);
@@ -128,13 +198,21 @@ export default function AdminQueryListener() {
     setError(result.error || "Unauthorized");
   };
 
+  const displayRole = mode === "role" && roleParsed.ok
+    ? roleParsed.role
+    : mode === "admin" && parsed.ok
+    ? parsed.value.role
+    : null;
+
   return (
     <div className="fixed bottom-6 right-6 z-50 w-[320px] rounded-lg border border-slate-200 bg-white p-4 shadow-xl">
       <div className="mb-2 flex items-start justify-between">
         <div>
-          <p className="text-sm font-semibold text-slate-900">Admin Access</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {displayRole ? `${displayRole.charAt(0).toUpperCase() + displayRole.slice(1)} Access` : "Admin Access"}
+          </p>
           <p className="text-xs text-slate-500">
-            Enter the admin password to continue.
+            Enter the password to continue.
           </p>
         </div>
         <button
@@ -146,11 +224,17 @@ export default function AdminQueryListener() {
         </button>
       </div>
 
-      {parsed.ok && (
+      {mode === "admin" && parsed.ok && (
         <div className="mb-3 rounded-md bg-slate-50 p-2 text-xs text-slate-600">
           <div>Role: {parsed.value.role}</div>
           <div>User: {parsed.value.username}</div>
           <div>Email: {parsed.value.email}</div>
+        </div>
+      )}
+
+      {mode === "role" && roleParsed.ok && (
+        <div className="mb-3 rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+          <div>Role: {roleParsed.role}</div>
         </div>
       )}
 

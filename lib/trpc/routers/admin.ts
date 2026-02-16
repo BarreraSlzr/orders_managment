@@ -2,9 +2,14 @@ import { exportAllData, getTableCounts, validateSnapshot } from "@/lib/sql/backu
 import { getMigrationStatus } from "@/lib/sql/migrate";
 import { allMigrations } from "@/lib/sql/migrations";
 import { z } from "zod";
-import { adminProcedure, router } from "../init";
+import { adminProcedure, protectedProcedure, router } from "../init";
 
 export const adminRouter = router({
+  /** Check whether the current user has admin privileges */
+  status: protectedProcedure.query(({ ctx }) => {
+    return { isAdmin: ctx.isAdmin };
+  }),
+
   /** Get current migration status */
   migrationStatus: adminProcedure.query(async () => {
     return getMigrationStatus({ migrations: allMigrations });
