@@ -36,7 +36,7 @@ export function useOrders({
   // Fetch current order details via tRPC
   const detailOpts = trpc.orders.getDetails.queryOptions(
     { id: currentOrderId! },
-    { enabled: !!currentOrderId, refetchInterval: 1000 * 60 * 5 },
+    { enabled: !!currentOrderId },
   );
   const detailQuery = useQuery(detailOpts);
 

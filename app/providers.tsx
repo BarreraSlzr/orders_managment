@@ -1,6 +1,7 @@
 "use client";
 
 import AdminQueryListener from "@/components/Admin/AdminQueryListener";
+import SSEInvalidationListener from "@/components/SSE/SSEInvalidationListener";
 import { TRPCProvider } from "@/lib/trpc/react";
 import type { AppRouter } from "@/lib/trpc/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -33,6 +34,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
         <NuqsAdapter>
           <AdminQueryListener />
+          <SSEInvalidationListener />
           {children}
         </NuqsAdapter>
       </TRPCProvider>

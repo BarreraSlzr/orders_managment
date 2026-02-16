@@ -197,6 +197,48 @@ export async function createSuppliersItemTable() {
     .then(() => console.info(`Created "suppliers_item" table`));
 }
 
+// ── pg_notify trigger for SSE cache invalidation ─────────────────────────
+const notifyTableChange = `
+CREATE OR REPLACE FUNCTION notify_table_change() RETURNS TRIGGER AS $$
+DECLARE
+  payload jsonb;
+BEGIN
+  payload := jsonb_build_object(
+    'table', TG_TABLE_NAME,
+    'operation', TG_OP,
+    'id', COALESCE(NEW.id, OLD.id)
+  );
+  PERFORM pg_notify('table_changes', payload::text);
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+`;
+
+function createNotifyTrigger(tableName: string) {
+  return `
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = '${tableName}_notify'
+  ) THEN
+    CREATE TRIGGER ${tableName}_notify
+    AFTER INSERT OR UPDATE OR DELETE ON ${tableName}
+    FOR EACH ROW EXECUTE FUNCTION notify_table_change();
+  END IF;
+END $$;
+`;
+}
+
+const NOTIFY_TABLES = [
+  'orders',
+  'order_items',
+  'products',
+  'inventory_items',
+  'categories',
+  'transactions',
+] as const;
+
+// ── order total trigger ──────────────────────────────────────────────────
 const calculateOrderTotal = `
 CREATE OR REPLACE FUNCTION calculate_order_total() RETURNS TRIGGER AS $$
 BEGIN
@@ -270,6 +312,13 @@ export async function seed() {
       .then(() =>
         console.info(`Created "update_order_total" trigger for "calculate_order_total"`)
       ),
+    // pg_notify function + triggers for SSE cache invalidation
+    db.executeQuery(CompiledQuery.raw(notifyTableChange, []))
+      .then(() => console.info('Created "notify_table_change" function')),
+    ...NOTIFY_TABLES.map((table) =>
+      db.executeQuery(CompiledQuery.raw(createNotifyTrigger(table), []))
+        .then(() => console.info(`Created "${table}_notify" trigger`))
+    ),
     importProductsFromJson(),
   ]).then(() => console.info("DB schema finished"))
 }  
