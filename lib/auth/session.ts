@@ -14,6 +14,16 @@ export interface SessionPayload {
   iat: number;
   /** Expiry (epoch seconds) */
   exp: number;
+  /** Tenant identifier for multi-tenant scope */
+  tenant_id?: string;
+  /** User role for RBAC */
+  role?: "admin" | "manager" | "staff";
+  /** Permission list for fine-grained access */
+  permissions?: string[];
+  /** Human-friendly username */
+  username?: string;
+  /** Tenant display name */
+  tenant_name?: string;
   /** Arbitrary metadata carried in the session */
   [key: string]: unknown;
 }
@@ -94,6 +104,10 @@ export async function verifySessionToken(
   try {
     const key = await getCryptoKey(secret);
     const sigBytes = fromBase64Url(sigB64);
+    // Reject non-canonical base64url encodings
+    if (toBase64Url(sigBytes.buffer as ArrayBuffer) !== sigB64) {
+      return null;
+    }
     const valid = await crypto.subtle.verify(
       "HMAC",
       key,

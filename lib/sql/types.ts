@@ -12,6 +12,25 @@ interface BaseTable {
   updated: ColumnType<Date, string | undefined, never>
 }
 
+interface TenantTable {
+  id: Generated<string>;
+  name: string;
+  created: ColumnType<Date, string | undefined, never>;
+  updated: ColumnType<Date, string | undefined, never>;
+}
+
+interface UserTable {
+  id: Generated<string>;
+  tenant_id: string;
+  username: string;
+  role: "admin" | "manager" | "staff";
+  password_hash: string;
+  password_salt: string;
+  permissions: ColumnType<string[] | null, string[] | undefined, string[] | null | undefined>;
+  created: ColumnType<Date, string | undefined, never>;
+  updated: ColumnType<Date, string | undefined, never>;
+}
+
 interface OrderTable extends BaseTable {
   closed: ColumnType<undefined, undefined, Date>
   position: number
@@ -20,12 +39,14 @@ interface OrderTable extends BaseTable {
 
 
 interface ProductTable extends BaseTable {
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   name: string
   price: number
   tags: string
 }
 
 interface OrderTable extends BaseTable {
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   closed: ColumnType<undefined, undefined, Date>
   position: number
   total: ColumnType<number, never, never>
@@ -34,6 +55,7 @@ interface OrderTable extends BaseTable {
 interface OrderItemTable {
   id: Generated<number>
   created: ColumnType<Date, string | undefined, never>
+  tenant_id: ColumnType<string | null, string | undefined, never>
   order_id: string
   product_id: string
   is_takeaway: ColumnType<boolean, boolean | undefined, boolean | undefined>
@@ -43,6 +65,7 @@ interface OrderItemTable {
 interface PaymentOptionsTable {
   id: Generated<number>
   created: ColumnType<Date, string | undefined, never>
+  tenant_id: ColumnType<string | null, string | undefined, never>
   name: string
 }
 
@@ -51,6 +74,7 @@ interface ExtrasTable {
   created: ColumnType<Date, string | undefined, never>
   deleted: ColumnType<Date | null, string | null | undefined, Date | null>
   updated: ColumnType<Date, string | undefined, Date>
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   name: string
   price: number
 }
@@ -60,6 +84,7 @@ interface OrderItemExtrasTable {
   order_item_id: number
   extra_id: string
   created: ColumnType<Date, string | undefined, never>
+  tenant_id: ColumnType<string | null, string | undefined, never>;
 }
 
 export type Extra = Selectable<ExtrasTable>;
@@ -83,6 +108,7 @@ export interface OrderItemsView extends Selectable<OrderTable> {
 }
 
 export interface InventoryItemsTable extends BaseTable {
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   name: string;
   status: 'pending' | 'completed';
   quantity_type_key: string;
@@ -93,18 +119,21 @@ export interface TransactionsTable {
   item_id: string;
   type: 'IN' | 'OUT';
   created: ColumnType<Date, string | undefined, never>;
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   price: number;
   quantity: number;
   quantity_type_value: string;
 }
 
 export interface CategoriesTable extends BaseTable {
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   name: string;
 }
 
 interface CategoryInventoryItemTable {
   category_id: string;
   item_id: string;
+  tenant_id: ColumnType<string | null, string | undefined, never>;
 }
 
 interface ProductConsumptionsTable extends BaseTable {
@@ -135,10 +164,13 @@ interface DomainEventsTable {
   result: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   error_message: string | null;
   created: ColumnType<Date, string | undefined, never>;
+  tenant_id: ColumnType<string | null, string | undefined, never>;
 }
 
 // Keys of this interface are table names.
 export interface Database {
+  tenants: TenantTable;
+  users: UserTable;
   products: ProductTable;
   orders: OrderTable;
   order_items: OrderItemTable;

@@ -71,6 +71,7 @@ export async function getOrderItemsView(orderId: string): Promise<OrderItemsView
     closed: order.closed,
     position: order.position,
     total: order.total,
+    tenant_id: order.tenant_id,
     products: Array.from(groupedItems.values()), // Attach the aggregated items
   };
 }
