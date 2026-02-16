@@ -1,4 +1,5 @@
 import { router } from "./init";
+import { adminRouter } from "./routers/admin";
 import { extrasRouter } from "./routers/extras";
 import { inventoryRouter } from "./routers/inventory";
 import { ordersRouter } from "./routers/orders";
@@ -9,6 +10,7 @@ export const appRouter = router({
   products: productsRouter,
   inventory: inventoryRouter,
   extras: extrasRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;
