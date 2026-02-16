@@ -18,6 +18,7 @@ import { NextResponse } from "next/server";
 const PUBLIC_PATHS = [
   "/api/auth",
   "/api/admin/verify",
+  "/api/trpc",
   "/_next",
   "/favicon.ico",
 ];

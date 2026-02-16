@@ -1,60 +1,74 @@
-import { addNewItemAction, toggleItemStatusAction, removeItemAction } from '@/app/actions';
-import { InventoryItemsTable } from '@/lib/sql/types';
-import { fetcher } from "@/lib/utils/fetcher";
-import { Selectable } from 'kysely';
-import { useState } from "react";
-import useSWR from "swr";
-import { Category } from './useCategories';
+import { InventoryItemsTable } from "@/lib/sql/types";
+import { useTRPC } from "@/lib/trpc/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Selectable } from "kysely";
+import { useCallback, useState } from "react";
+import { Category } from "./useCategories";
 
-export type Item = Selectable<InventoryItemsTable>
+export type Item = Selectable<InventoryItemsTable>;
 
-export const useItems = (selectedCategory?: Pick<Category, 'id'> | null) => {
-    const { data: items, mutate: mutateItems } = useSWR<Item[]>(
-        `/api/inventory/items${selectedCategory?.id ? `?category=${selectedCategory.id}` : ''}`, 
-        fetcher, {
-        revalidateOnFocus: true,
-    });
-    const [selectedItem, setSelectedItemState] = useState<Item | null>(null);
+export const useItems = (selectedCategory?: Pick<Category, "id"> | null) => {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
 
+  const listOpts = trpc.inventory.items.list.queryOptions(
+    { categoryId: selectedCategory?.id },
+    { refetchOnWindowFocus: true },
+  );
+  const { data: items } = useQuery(listOpts);
 
-    const addItem = async (formData: FormData) => {
-        const itemsIds = new Set(items?.map(({ id }) => id));
-        if(selectedCategory?.id){
-            formData.append('categoryId', selectedCategory.id);
-        }
-        await addNewItemAction(formData);
-        await mutateItems();
-        const newItem = items?.find(item => itemsIds.has(item.id)) || null;
-        setSelectedItemState(newItem);
-    };
+  const addMutation = useMutation(trpc.inventory.items.add.mutationOptions());
+  const toggleMutation = useMutation(
+    trpc.inventory.items.toggle.mutationOptions(),
+  );
+  const deleteMutation = useMutation(
+    trpc.inventory.items.delete.mutationOptions(),
+  );
 
-    const deleteItem = async (id: string) => {
-        const formData = new FormData();
-        formData.append('id', id);
-        await removeItemAction(formData);
-        mutateItems();
-        if (selectedItem && selectedItem.id === id) {
-            setSelectedItemState(null);
-        }
-    };
+  const [selectedItem, setSelectedItemState] = useState<Item | null>(null);
 
-    const toggleItem = async (item: Item) => {
-        const formData = new FormData();
-        formData.append('id', item.id);
-        await toggleItemStatusAction(formData);
-        await mutateItems();
-        if (item && item.status === 'pending') {
-            item.status = 'completed';
-            setSelectedItemState(item);
-        }
-    };
+  const invalidateItems = useCallback(
+    () =>
+      queryClient.invalidateQueries({
+        queryKey: listOpts.queryKey,
+      }),
+    [queryClient, listOpts.queryKey],
+  );
 
-    return {
-        items: items || [],
-        selectedItem,
-        setSelectedItem: setSelectedItemState,
-        addItem,
-        deleteItem,
-        toggleItem,
+  const addItem = async (formData: FormData) => {
+    const name = formData.get("name") as string;
+    const quantityTypeKey = formData.get("quantityTypeKey") as string;
+    const categoryId =
+      selectedCategory?.id ||
+      (formData.get("categoryId") as string) ||
+      undefined;
+
+    await addMutation.mutateAsync({ name, quantityTypeKey, categoryId });
+    await invalidateItems();
+  };
+
+  const deleteItem = async (id: string) => {
+    await deleteMutation.mutateAsync({ id });
+    await invalidateItems();
+    if (selectedItem && selectedItem.id === id) {
+      setSelectedItemState(null);
     }
+  };
+
+  const toggleItem = async (item: Item) => {
+    await toggleMutation.mutateAsync({ id: item.id });
+    await invalidateItems();
+    if (item && item.status === "pending") {
+      setSelectedItemState({ ...item, status: "completed" });
+    }
+  };
+
+  return {
+    items: (items || []) as Item[],
+    selectedItem,
+    setSelectedItem: setSelectedItemState,
+    addItem,
+    deleteItem,
+    toggleItem,
+  };
 };

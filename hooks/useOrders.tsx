@@ -1,124 +1,188 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import useSWR from 'swr';
-import { handleCloseOrder, handleRemoveProducts, handleSplitOrder, handleToggleTakeAway, handleUpdatePayment } from '@/app/actions';
-import { OrdersQuery, Order, OrderContextState, OrderContextActions } from '@/lib/types';
-import { OrderItemsView } from '@/lib/sql/types';
+import { OrderItemsView } from "@/lib/sql/types";
+import { useTRPC } from "@/lib/trpc/react";
+import {
+  Order,
+  OrderContextActions,
+  OrderContextState,
+  OrdersQuery,
+} from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface InitOrdersProps {
   orders?: Order[];
   query?: OrdersQuery;
 }
 
-export function useOrders({ orders: initialOrders = [], query: initialQuery = {} }: InitOrdersProps): OrderContextState & OrderContextActions {
+export function useOrders({
+  query: initialQuery = {},
+}: InitOrdersProps): OrderContextState & OrderContextActions {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState<OrdersQuery>(initialQuery);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [currentOrder, setCurrentOrder] = useState<OrderItemsView | null>(null);
-  
-  // Fetch `OrderItemsView` data for `currentOrder`
-  const { data: OrderItemsView, isLoading: isLoadingDetail, mutate: revalidateCurrentOrder } = useSWR(
-    currentOrderId ? `/api/orders/${currentOrderId}` : null,
-    { refreshInterval: 1000 * 60 * 5,
-      fetcher: (resource: any, init: any) => fetch(resource, init).then((res) => res.json())},
+
+  // Fetch orders list via tRPC
+  const listOpts = trpc.orders.list.queryOptions({
+    timeZone: query.timeZone ?? "America/Mexico_City",
+    date: query.date,
+    status: query.status,
+  });
+  const ordersResult = useQuery(listOpts);
+
+  // Fetch current order details via tRPC
+  const detailOpts = trpc.orders.getDetails.queryOptions(
+    { id: currentOrderId! },
+    { enabled: !!currentOrderId, refetchInterval: 1000 * 60 * 5 },
   );
-  // Fetch `Order` data for the main `orders` list
-  const { data: fetchedOrders, isLoading, mutate: revalidateOrders } = useSWR<Order[]>(
-    `/api/orders?${new URLSearchParams(query as Record<string, string>).toString()}`,
-    {
-      fallbackData: initialOrders,
-      fetcher: (resource: any, init: any) => fetch(resource, init).then((res) => res.json()),
-    }
+  const detailQuery = useQuery(detailOpts);
+
+  // Mutations
+  const splitMutation = useMutation(trpc.orders.split.mutationOptions());
+  const closeMutation = useMutation(trpc.orders.close.mutationOptions());
+  const removeProductsMutation = useMutation(
+    trpc.orders.removeProducts.mutationOptions(),
+  );
+  const togglePaymentMutation = useMutation(
+    trpc.orders.togglePayment.mutationOptions(),
+  );
+  const toggleTakeawayMutation = useMutation(
+    trpc.orders.toggleTakeaway.mutationOptions(),
   );
 
+  // Invalidation helpers
+  const invalidateOrders = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: listOpts.queryKey }),
+    [queryClient, listOpts.queryKey],
+  );
+  const invalidateDetail = useCallback(() => {
+    if (currentOrderId) {
+      queryClient.invalidateQueries({ queryKey: detailOpts.queryKey });
+    }
+  }, [queryClient, detailOpts.queryKey, currentOrderId]);
+
+  // Sync currentOrder state with fetched detail
   useEffect(() => {
     if (!currentOrderId) {
-      setCurrentOrder(null); // Explicitly reset currentOrder when currentOrderId is null
-    } else {
-      setCurrentOrder(OrderItemsView); // Sync with fetched data
+      setCurrentOrder(null);
+    } else if (detailQuery.data) {
+      setCurrentOrder(detailQuery.data);
     }
-  }, [currentOrderId, OrderItemsView]);
+  }, [currentOrderId, detailQuery.data]);
 
   useEffect(() => {
     const closeHandler = () => setCurrentOrder(null);
-    window.addEventListener('close-order-details', closeHandler);
-    return () => window.removeEventListener('close-order-details', closeHandler);
+    window.addEventListener("close-order-details", closeHandler);
+    return () =>
+      window.removeEventListener("close-order-details", closeHandler);
   }, []);
 
-  const orders = new Map<string, Order>(fetchedOrders?.map((order) => [order.id, order]) ?? []);
+  const orders = useMemo(
+    () =>
+      new Map<string, Order>(
+        ordersResult.data?.map((o: Order) => [o.id, o]) ?? [],
+      ),
+    [ordersResult.data],
+  );
 
   const fetchOrders = async (updatedQuery: Partial<OrdersQuery> = {}) => {
     setQuery((prev) => ({ ...prev, ...updatedQuery }));
-    await revalidateOrders();
+    await invalidateOrders();
   };
 
   const updateOrder = (updatedOrder: OrderItemsView | null) => {
     if (updatedOrder) {
       if (!orders.has(updatedOrder.id)) {
-        revalidateOrders();
+        invalidateOrders();
       }
       setCurrentOrderId(updatedOrder.id);
     } else {
       setCurrentOrderId(null);
     }
-    revalidateCurrentOrder();
+    invalidateDetail();
   };
 
   return {
-    isPending: (isLoading || isLoadingDetail),
+    isPending: ordersResult.isLoading || detailQuery.isLoading,
     orders,
     currentOrder,
     fetchOrders,
     updateCurrentOrder: updateOrder,
+
     async handleUpdateItemDetails(actionType, formData) {
-      const action = async () => {
+      const orderId = formData.get("orderId") as string;
+      const itemIdsRaw = formData.getAll("itemIds").map((v) => Number(v));
+
+      let success = false;
+      try {
         switch (actionType) {
-          case 'remove':
-            return (await handleRemoveProducts(formData)).success;
-          case 'toggleTakeAway':
-            return (await handleToggleTakeAway(formData)).success;
-          case 'updatePayment':
-            return (await handleUpdatePayment(formData)).success;
+          case "remove":
+            await removeProductsMutation.mutateAsync({
+              orderId,
+              itemIds: itemIdsRaw,
+            });
+            success = true;
+            break;
+          case "toggleTakeAway":
+            await toggleTakeawayMutation.mutateAsync({ itemIds: itemIdsRaw });
+            success = true;
+            break;
+          case "updatePayment":
+            await togglePaymentMutation.mutateAsync({ itemIds: itemIdsRaw });
+            success = true;
+            break;
           default:
             throw new Error(`Unknown action type: ${actionType}`);
         }
-      };
+      } catch {
+        success = false;
+      }
 
-      const success = await action();
       if (success) {
-        await revalidateCurrentOrder();
-        await revalidateOrders();
+        await invalidateDetail();
+        await invalidateOrders();
       }
       return success;
     },
+
     async handleSplitOrder(formData: FormData) {
-      const result = await handleSplitOrder(formData);
-      if (result.success) {
-          const { products: items, ...newOrder } = result.result.newOrder;
-          orders.set(result.result.oldOrder.id, result.result.oldOrder);
-          orders.set(newOrder.id, newOrder);
-          await revalidateOrders();
-          updateOrder(result.result.newOrder);
+      const orderId = formData.get("orderId") as string;
+      const itemIds = formData.getAll("itemIds").map((v) => Number(v));
+      try {
+        const result = await splitMutation.mutateAsync({ orderId, itemIds });
+        await invalidateOrders();
+        if (result) {
+          updateOrder((result.newOrder as unknown) as OrderItemsView);
+        }
+        return true;
+      } catch {
+        return false;
       }
-      return result.success;
     },
+
     async handleCloseOrder(formData: FormData) {
-      const result = await handleCloseOrder(formData);
-      if( result.success){
+      const orderId = formData.get("orderId") as string;
+      try {
+        await closeMutation.mutateAsync({ orderId });
         setCurrentOrder(null);
         setCurrentOrderId(null);
-        await revalidateOrders();
+        await invalidateOrders();
+        return true;
+      } catch {
+        return false;
       }
-      return result.success;
     },
+
     async setCurrentOrderDetails(order: Order | null) {
       if (!order) {
         setCurrentOrderId(null);
         return;
       }
       setCurrentOrderId(order.id);
-      revalidateCurrentOrder();
-      setCurrentOrder(OrderItemsView);
+      invalidateDetail();
     },
   };
 }
