@@ -19,7 +19,7 @@ export async function createTRPCContext(params: {
   let session: SessionPayload | null = null;
   let isAdmin = false;
 
-  // Session auth
+  // Session auth — validate the actual token from cookies
   const cookieName = process.env.AUTH_COOKIE_NAME || "__session";
   const sessionToken = params.cookies[cookieName];
   if (sessionToken) {
@@ -30,7 +30,7 @@ export async function createTRPCContext(params: {
     }
   }
 
-  // Admin API key
+  // Admin API key — validate bearer token or cookie against the real key
   try {
     const adminConfig = getAdminConfig();
     isAdmin = hasAdminApiKey({
@@ -40,6 +40,16 @@ export async function createTRPCContext(params: {
     });
   } catch {
     // admin config not set → not admin
+  }
+
+  // Dev-only fallback: when auth infrastructure is not configured,
+  // synthesise a dev session so procedures still work locally.
+  // This is the ONLY place dev bypass lives — procedures always
+  // validate ctx.session / ctx.isAdmin without shortcuts.
+  if (!session && !process.env.AUTH_SECRET) {
+    const now = Math.floor(Date.now() / 1000);
+    session = { sub: "dev", iat: now, exp: now + 86_400 };
+    isAdmin = true;
   }
 
   return { session, isAdmin };
@@ -54,7 +64,8 @@ export const publicProcedure = t.procedure;
 export const createCallerFactory = t.createCallerFactory;
 
 /**
- * Authenticated procedure — requires a valid session.
+ * Authenticated procedure — requires a valid session in ctx.
+ * Always enforced; dev bypass is handled in createTRPCContext.
  */
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.session) {
@@ -64,7 +75,8 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
 });
 
 /**
- * Admin procedure — requires admin API key (bearer or cookie).
+ * Admin procedure — requires a validated admin API key in ctx.
+ * Always enforced; dev bypass is handled in createTRPCContext.
  */
 export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.isAdmin) {

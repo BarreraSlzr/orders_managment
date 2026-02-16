@@ -3,18 +3,18 @@ import { getCategories } from "@/lib/sql/functions/categories";
 import { getItems } from "@/lib/sql/functions/inventory";
 import { getTransactions } from "@/lib/sql/functions/transactions";
 import { z } from "zod";
-import { publicProcedure, router } from "../init";
+import { adminProcedure, protectedProcedure, router } from "../init";
 
 export const inventoryRouter = router({
   // ── Items ──────────────────────────────────────────────────────────
   items: router({
-    list: publicProcedure
+    list: protectedProcedure
       .input(z.object({ categoryId: z.string().optional() }).optional())
       .query(async ({ input }) => {
         return getItems(input?.categoryId);
       }),
 
-    add: publicProcedure
+    add: adminProcedure
       .input(
         z.object({
           name: z.string().min(1),
@@ -29,7 +29,7 @@ export const inventoryRouter = router({
         });
       }),
 
-    toggle: publicProcedure
+    toggle: adminProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input }) => {
         return dispatchDomainEvent({
@@ -38,7 +38,7 @@ export const inventoryRouter = router({
         });
       }),
 
-    delete: publicProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input }) => {
         return dispatchDomainEvent({
@@ -50,13 +50,13 @@ export const inventoryRouter = router({
 
   // ── Transactions ───────────────────────────────────────────────────
   transactions: router({
-    list: publicProcedure
+    list: protectedProcedure
       .input(z.object({ itemId: z.string() }))
       .query(async ({ input }) => {
         return getTransactions(input.itemId);
       }),
 
-    add: publicProcedure
+    add: adminProcedure
       .input(
         z.object({
           itemId: z.string(),
@@ -73,7 +73,7 @@ export const inventoryRouter = router({
         });
       }),
 
-    delete: publicProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => {
         return dispatchDomainEvent({
@@ -85,11 +85,11 @@ export const inventoryRouter = router({
 
   // ── Categories ─────────────────────────────────────────────────────
   categories: router({
-    list: publicProcedure.query(async () => {
+    list: protectedProcedure.query(async () => {
       return getCategories();
     }),
 
-    upsert: publicProcedure
+    upsert: adminProcedure
       .input(
         z.object({
           id: z.string().optional(),
@@ -103,7 +103,7 @@ export const inventoryRouter = router({
         });
       }),
 
-    delete: publicProcedure
+    delete: adminProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input }) => {
         return dispatchDomainEvent({
@@ -112,7 +112,7 @@ export const inventoryRouter = router({
         });
       }),
 
-    toggleItem: publicProcedure
+    toggleItem: adminProcedure
       .input(
         z.object({
           categoryId: z.string(),
