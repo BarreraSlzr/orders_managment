@@ -1,12 +1,12 @@
-import { z } from "zod";
-import { publicProcedure, router } from "../init";
-import { getProducts } from "@/lib/sql/functions/getProducts";
-import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { db } from "@/lib/sql/database";
+import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
+import { getProducts } from "@/lib/sql/functions/getProducts";
+import { z } from "zod";
+import { adminProcedure, protectedProcedure, router } from "../init";
 
 export const productsRouter = router({
-  list: publicProcedure
+  list: protectedProcedure
     .input(
       z
         .object({
@@ -19,7 +19,7 @@ export const productsRouter = router({
       return getProducts(input?.search, input?.tags);
     }),
 
-  upsert: publicProcedure
+  upsert: adminProcedure
     .input(
       z.object({
         id: z.string().optional(),
@@ -40,14 +40,14 @@ export const productsRouter = router({
       });
     }),
 
-  delete: publicProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       await db.deleteFrom("products").where("id", "=", input.id).execute();
       return { success: true, id: input.id };
     }),
 
-  export: publicProcedure.query(async () => {
+  export: protectedProcedure.query(async () => {
     const result = await exportProductsJSON();
     return { json: JSON.stringify(result?.rows || []) };
   }),

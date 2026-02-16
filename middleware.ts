@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/api/admin/verify",
   "/api/trpc",
+  "/api/sse",
   "/_next",
   "/favicon.ico",
 ];

@@ -2,10 +2,10 @@ import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { getOrders } from "@/lib/sql/functions/getOrders";
 import { z } from "zod";
-import { publicProcedure, router } from "../init";
+import { protectedProcedure, router } from "../init";
 
 export const ordersRouter = router({
-  list: publicProcedure
+  list: protectedProcedure
     .input(
       z.object({
         timeZone: z.string().default("America/Mexico_City"),
@@ -17,13 +17,13 @@ export const ordersRouter = router({
       return getOrders(input);
     }),
 
-  getDetails: publicProcedure
+  getDetails: protectedProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       return getOrderItemsView(input.id);
     }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
         timeZone: z.string().default("America/Mexico_City"),
@@ -50,7 +50,7 @@ export const ordersRouter = router({
       return getOrderItemsView(order.id);
     }),
 
-  updateItem: publicProcedure
+  updateItem: protectedProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -66,7 +66,7 @@ export const ordersRouter = router({
       return getOrderItemsView(input.orderId);
     }),
 
-  split: publicProcedure
+  split: protectedProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -83,7 +83,7 @@ export const ordersRouter = router({
       });
     }),
 
-  close: publicProcedure
+  close: protectedProcedure
     .input(z.object({ orderId: z.string() }))
     .mutation(async ({ input }) => {
       return dispatchDomainEvent({
@@ -92,7 +92,7 @@ export const ordersRouter = router({
       });
     }),
 
-  togglePayment: publicProcedure
+  togglePayment: protectedProcedure
     .input(z.object({ itemIds: z.array(z.number()) }))
     .mutation(async ({ input }) => {
       return dispatchDomainEvent({
@@ -101,7 +101,7 @@ export const ordersRouter = router({
       });
     }),
 
-  toggleTakeaway: publicProcedure
+  toggleTakeaway: protectedProcedure
     .input(z.object({ itemIds: z.array(z.number()) }))
     .mutation(async ({ input }) => {
       return dispatchDomainEvent({
@@ -110,7 +110,7 @@ export const ordersRouter = router({
       });
     }),
 
-  removeProducts: publicProcedure
+  removeProducts: protectedProcedure
     .input(
       z.object({
         orderId: z.string(),
