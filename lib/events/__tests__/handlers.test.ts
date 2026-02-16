@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 // ── Mock all SQL function modules ────────────────────────────────────────────
 vi.mock("@/lib/sql/functions/insertOrder", () => ({
@@ -70,7 +70,7 @@ describe("domainEventHandlers", () => {
 
   it("order.created → calls insertOrder", async () => {
     const order = { id: "o1", position: 1 };
-    vi.mocked(insertOrder).mockResolvedValue(order as any);
+    (insertOrder as Mock).mockResolvedValue(order as any);
 
     const result = await domainEventHandlers["order.created"]({
       payload: { timeZone: "America/Mexico_City" },
@@ -81,7 +81,7 @@ describe("domainEventHandlers", () => {
   });
 
   it("order.item.updated → calls updateOrderItem", async () => {
-    vi.mocked(updateOrderItem).mockResolvedValue(null);
+    (updateOrderItem as Mock).mockResolvedValue(null);
 
     await domainEventHandlers["order.item.updated"]({
       payload: { orderId: "o1", productId: "p1", type: "INSERT" },
@@ -92,7 +92,7 @@ describe("domainEventHandlers", () => {
 
   it("order.split → calls splitOrder", async () => {
     const splitResult = { newOrder: {}, oldOrder: {} };
-    vi.mocked(splitOrder).mockResolvedValue(splitResult as any);
+    (splitOrder as Mock).mockResolvedValue(splitResult as any);
 
     const result = await domainEventHandlers["order.split"]({
       payload: { oldOrderId: "o1", itemIds: [1, 2] },
@@ -107,7 +107,7 @@ describe("domainEventHandlers", () => {
 
   it("order.closed → calls closeOrder", async () => {
     const closed = { id: "o1" };
-    vi.mocked(closeOrder).mockResolvedValue(closed as any);
+    (closeOrder as Mock).mockResolvedValue(closed as any);
 
     const result = await domainEventHandlers["order.closed"]({
       payload: { orderId: "o1" },
@@ -119,7 +119,7 @@ describe("domainEventHandlers", () => {
 
   it("order.payment.toggled → calls togglePaymentOption", async () => {
     const items = [{ id: 1, product_id: "p1", payment_option_id: 2, is_takeaway: false }];
-    vi.mocked(togglePaymentOption).mockResolvedValue(items as any);
+    (togglePaymentOption as Mock).mockResolvedValue(items as any);
 
     const result = await domainEventHandlers["order.payment.toggled"]({
       payload: { itemIds: [1] },
@@ -131,7 +131,7 @@ describe("domainEventHandlers", () => {
 
   it("order.takeaway.toggled → calls toggleTakeAway", async () => {
     const items = [{ id: 1, product_id: "p1", payment_option_id: 1, is_takeaway: true }];
-    vi.mocked(toggleTakeAway).mockResolvedValue(items as any);
+    (toggleTakeAway as Mock).mockResolvedValue(items as any);
 
     const result = await domainEventHandlers["order.takeaway.toggled"]({
       payload: { itemIds: [1] },
@@ -143,7 +143,7 @@ describe("domainEventHandlers", () => {
 
   it("order.products.removed → calls removeProducts", async () => {
     const deleted = [{ numDeletedRows: BigInt(2) }];
-    vi.mocked(removeProducts).mockResolvedValue(deleted as any);
+    (removeProducts as Mock).mockResolvedValue(deleted as any);
 
     const result = await domainEventHandlers["order.products.removed"]({
       payload: { orderId: "o1", itemIds: [1, 2] },
@@ -157,7 +157,7 @@ describe("domainEventHandlers", () => {
 
   it("product.upserted → calls upsertProduct", async () => {
     const product = { id: "p1", name: "Taco", price: 2500, tags: "food" };
-    vi.mocked(upsertProduct).mockResolvedValue(product as any);
+    (upsertProduct as Mock).mockResolvedValue(product as any);
 
     const result = await domainEventHandlers["product.upserted"]({
       payload: { id: "p1", name: "Taco", price: 2500, tags: "food" },
@@ -175,7 +175,7 @@ describe("domainEventHandlers", () => {
   // ── Inventory events ──────────────────────────────────────────────────────
 
   it("inventory.item.added → calls addItem (no category)", async () => {
-    vi.mocked(addItem).mockResolvedValue({ id: "i1" } as any);
+    (addItem as Mock).mockResolvedValue({ id: "i1" } as any);
 
     const result = await domainEventHandlers["inventory.item.added"]({
       payload: { name: "Flour", quantityTypeKey: "weight" },
@@ -187,8 +187,8 @@ describe("domainEventHandlers", () => {
   });
 
   it("inventory.item.added → calls addItem + toggleCategoryItem when categoryId provided", async () => {
-    vi.mocked(addItem).mockResolvedValue({ id: "i1" } as any);
-    vi.mocked(toggleCategoryItem).mockResolvedValue("Added");
+    (addItem as Mock).mockResolvedValue({ id: "i1" } as any);
+    (toggleCategoryItem as Mock).mockResolvedValue("Added");
 
     const result = await domainEventHandlers["inventory.item.added"]({
       payload: { name: "Flour", quantityTypeKey: "weight", categoryId: "c1" },
@@ -200,7 +200,7 @@ describe("domainEventHandlers", () => {
   });
 
   it("inventory.item.toggled → calls toggleItem", async () => {
-    vi.mocked(toggleItem).mockResolvedValue(undefined as any);
+    (toggleItem as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.item.toggled"]({
       payload: { id: "i1" },
@@ -210,7 +210,7 @@ describe("domainEventHandlers", () => {
   });
 
   it("inventory.item.deleted → calls deleteItem", async () => {
-    vi.mocked(deleteItem).mockResolvedValue(undefined as any);
+    (deleteItem as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.item.deleted"]({
       payload: { id: "i1" },
@@ -222,7 +222,7 @@ describe("domainEventHandlers", () => {
   // ── Transaction events ────────────────────────────────────────────────────
 
   it("inventory.transaction.added → calls addTransaction", async () => {
-    vi.mocked(addTransaction).mockResolvedValue(undefined as any);
+    (addTransaction as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.transaction.added"]({
       payload: {
@@ -238,7 +238,7 @@ describe("domainEventHandlers", () => {
   });
 
   it("inventory.transaction.deleted → calls deleteTransaction", async () => {
-    vi.mocked(deleteTransaction).mockResolvedValue(undefined as any);
+    (deleteTransaction as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.transaction.deleted"]({
       payload: { id: 99 },
@@ -251,7 +251,7 @@ describe("domainEventHandlers", () => {
 
   it("inventory.category.upserted → calls upsertCategory", async () => {
     const cat = { id: "c1", name: "Drinks" };
-    vi.mocked(upsertCategory).mockResolvedValue(cat as any);
+    (upsertCategory as Mock).mockResolvedValue(cat as any);
 
     const result = await domainEventHandlers["inventory.category.upserted"]({
       payload: { name: "Drinks", id: "c1" },
@@ -262,7 +262,7 @@ describe("domainEventHandlers", () => {
   });
 
   it("inventory.category.deleted → calls deleteCategory", async () => {
-    vi.mocked(deleteCategory).mockResolvedValue({ deleted: ["c1"] });
+    (deleteCategory as Mock).mockResolvedValue({ deleted: ["c1"] });
 
     const result = await domainEventHandlers["inventory.category.deleted"]({
       payload: { id: "c1" },
@@ -273,7 +273,7 @@ describe("domainEventHandlers", () => {
   });
 
   it("inventory.category.item.toggled → calls toggleCategoryItem", async () => {
-    vi.mocked(toggleCategoryItem).mockResolvedValue("Added");
+    (toggleCategoryItem as Mock).mockResolvedValue("Added");
 
     const result = await domainEventHandlers["inventory.category.item.toggled"]({
       payload: { categoryId: "c1", itemId: "i1" },
