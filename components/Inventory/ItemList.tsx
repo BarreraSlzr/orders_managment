@@ -1,10 +1,9 @@
 "use client";
 
-import React from 'react';
-import { Trash2 } from 'lucide-react';
 import { useInventory } from '@/context/InventoryProvider';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Item } from '@/hooks/inventory/useInventoryItems';
+import { Trash2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 
 export function ListItem({item }:{ item: Item }) {
   const { toggleItem, deleteItem } = useInventory();
