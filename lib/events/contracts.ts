@@ -21,52 +21,65 @@ export type DomainEventType =
   | "inventory.category.item.toggled"
   | "extra.upserted"
   | "extra.deleted"
-  | "order.item.extra.toggled";
+  | "order.item.extra.toggled"
+  | "admin.audit.logged";
 
 export interface DomainEventPayloadMap {
   "order.created": {
+    tenantId: string;
     timeZone: string;
   };
   "order.item.updated": {
+    tenantId: string;
     orderId: string;
     productId: string;
     type: "INSERT" | "DELETE";
   };
   "order.split": {
+    tenantId: string;
     oldOrderId: string;
     itemIds: OrderItemTable["id"][];
   };
   "order.closed": {
+    tenantId: string;
     orderId: string;
   };
   "order.payment.toggled": {
+    tenantId: string;
     itemIds: OrderItemTable["id"][];
   };
   "order.takeaway.toggled": {
+    tenantId: string;
     itemIds: OrderItemTable["id"][];
   };
   "order.products.removed": {
+    tenantId: string;
     orderId: string;
     itemIds: OrderItemTable["id"][];
   };
   "product.upserted": {
+    tenantId: string;
     id?: string;
     name: string;
     price: number;
     tags: string;
   };
   "inventory.item.added": {
+    tenantId: string;
     name: string;
     quantityTypeKey: string;
     categoryId?: string;
   };
   "inventory.item.toggled": {
+    tenantId: string;
     id: string;
   };
   "inventory.item.deleted": {
+    tenantId: string;
     id: string;
   };
   "inventory.transaction.added": {
+    tenantId: string;
     itemId: string;
     type: "IN" | "OUT";
     price: number;
@@ -74,30 +87,45 @@ export interface DomainEventPayloadMap {
     quantityTypeValue: string;
   };
   "inventory.transaction.deleted": {
+    tenantId: string;
     id: number;
   };
   "inventory.category.upserted": {
+    tenantId: string;
     name: string;
     id?: string;
   };
   "inventory.category.deleted": {
+    tenantId: string;
     id: string;
   };
   "inventory.category.item.toggled": {
+    tenantId: string;
     categoryId: string;
     itemId: string;
   };
   "extra.upserted": {
+    tenantId: string;
     id?: string;
     name: string;
     price: number;
   };
   "extra.deleted": {
+    tenantId: string;
     id: string;
   };
   "order.item.extra.toggled": {
+    tenantId: string;
     orderItemId: number;
     extraId: string;
+  };
+  "admin.audit.logged": {
+    tenantId: string;
+    adminId: string;
+    role?: string;
+    action: string;
+    targetTenantId?: string;
+    metadata?: Record<string, unknown> | null;
   };
 }
 
@@ -138,6 +166,9 @@ export interface DomainEventResultMap {
     action: "added" | "removed";
     orderItemId: number;
     extraId: string;
+  };
+  "admin.audit.logged": {
+    id: number;
   };
 }
 
