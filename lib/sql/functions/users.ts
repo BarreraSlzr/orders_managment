@@ -1,4 +1,4 @@
-import { db } from "../database";
+import { db, sql } from "../database";
 
 export type UserRole = "admin" | "manager" | "staff";
 
@@ -20,6 +20,7 @@ export async function createUser(params: {
   passwordSalt: string;
   permissions?: string[];
 }): Promise<UserRecord> {
+  const permissions = params.permissions ?? [];
   const row = await db
     .insertInto("users")
     .values({
@@ -28,7 +29,7 @@ export async function createUser(params: {
       role: params.role,
       password_hash: params.passwordHash,
       password_salt: params.passwordSalt,
-      permissions: params.permissions ?? [],
+      permissions: sql`${JSON.stringify(permissions)}::jsonb`,
     })
     .returning([
       "id",
@@ -95,6 +96,134 @@ export async function listStaffByTenant(params: {
   }));
 }
 
+export async function listUsersByTenant(params: {
+  tenantId: string;
+  roles: UserRole[];
+}): Promise<
+  Array<Pick<UserRecord, "id" | "username" | "role" | "permissions">>
+> {
+  const rows = await db
+    .selectFrom("users")
+    .select(["id", "username", "role", "permissions"])
+    .where("tenant_id", "=", params.tenantId)
+    .where("role", "in", params.roles)
+    .orderBy("role", "asc")
+    .orderBy("username", "asc")
+    .execute();
+
+  return rows.map((row) => ({
+    ...row,
+    permissions: row.permissions ?? [],
+  }));
+}
+
+export async function listUsersByTenants(params: {
+  tenantIds: string[];
+  roles: UserRole[];
+}): Promise<
+  Array<
+    Pick<UserRecord, "id" | "username" | "role" | "permissions" | "tenant_id"> & {
+      tenant_name: string;
+    }
+  >
+> {
+  if (params.tenantIds.length === 0) {
+    return [];
+  }
+
+  const rows = await db
+    .selectFrom("users")
+    .innerJoin("tenants", "tenants.id", "users.tenant_id")
+    .select([
+      "users.id as id",
+      "users.username as username",
+      "users.role as role",
+      "users.permissions as permissions",
+      "users.tenant_id as tenant_id",
+      "tenants.name as tenant_name",
+    ])
+    .where("users.tenant_id", "in", params.tenantIds)
+    .where("users.role", "in", params.roles)
+    .orderBy("tenants.name", "asc")
+    .orderBy("users.role", "asc")
+    .orderBy("users.username", "asc")
+    .execute();
+
+  return rows.map((row) => ({
+    ...row,
+    permissions: row.permissions ?? [],
+  }));
+}
+
+export async function getUserWithTenantById(params: {
+  userId: string;
+}): Promise<(UserRecord & { tenant_name: string }) | null> {
+  const row = await db
+    .selectFrom("users")
+    .innerJoin("tenants", "tenants.id", "users.tenant_id")
+    .select([
+      "users.id as id",
+      "users.tenant_id as tenant_id",
+      "users.username as username",
+      "users.role as role",
+      "users.password_hash as password_hash",
+      "users.password_salt as password_salt",
+      "users.permissions as permissions",
+      "tenants.name as tenant_name",
+    ])
+    .where("users.id", "=", params.userId)
+    .executeTakeFirst();
+
+  if (!row) return null;
+
+  return {
+    ...row,
+    permissions: row.permissions ?? [],
+  };
+}
+
+export async function updateUserProfile(params: {
+  userId: string;
+  tenantId?: string;
+  username?: string;
+  passwordHash?: string;
+  passwordSalt?: string;
+  permissions?: string[];
+}): Promise<Pick<UserRecord, "id" | "username" | "role" | "permissions">> {
+  const updates: Record<string, unknown> = {};
+
+  if (typeof params.username === "string" && params.username.trim()) {
+    updates.username = params.username.trim();
+  }
+
+  if (params.passwordHash && params.passwordSalt) {
+    updates.password_hash = params.passwordHash;
+    updates.password_salt = params.passwordSalt;
+  }
+
+  if (params.permissions) {
+    updates.permissions = sql`${JSON.stringify(params.permissions)}::jsonb`;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new Error("No updates provided");
+  }
+
+  let query = db.updateTable("users").set(updates).where("id", "=", params.userId);
+  if (params.tenantId) {
+    query = query.where("tenant_id", "=", params.tenantId);
+  }
+
+  const row = await query
+    .returning(["id", "username", "role", "permissions"])
+    .executeTakeFirstOrThrow();
+
+  return {
+    ...row,
+    permissions: row.permissions ?? [],
+  };
+}
+
 export async function updateUserPermissions(params: {
   tenantId: string;
   userId: string;
@@ -102,7 +231,7 @@ export async function updateUserPermissions(params: {
 }): Promise<{ id: string; permissions: string[] }> {
   const row = await db
     .updateTable("users")
-    .set({ permissions: params.permissions })
+    .set({ permissions: sql`${JSON.stringify(params.permissions)}::jsonb` })
     .where("id", "=", params.userId)
     .where("tenant_id", "=", params.tenantId)
     .returning(["id", "permissions"])
