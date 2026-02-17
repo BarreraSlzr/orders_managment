@@ -3,18 +3,18 @@ import { getCategories } from "@/lib/sql/functions/categories";
 import { getItems } from "@/lib/sql/functions/inventory";
 import { getTransactions } from "@/lib/sql/functions/transactions";
 import { z } from "zod";
-import { adminProcedure, protectedProcedure, router } from "../init";
+import { managerProcedure, tenantProcedure, router } from "../init";
 
 export const inventoryRouter = router({
   // ── Items ──────────────────────────────────────────────────────────
   items: router({
-    list: protectedProcedure
+    list: tenantProcedure
       .input(z.object({ categoryId: z.string().optional() }).optional())
-      .query(async ({ input }) => {
-        return getItems(input?.categoryId);
+      .query(async ({ ctx, input }) => {
+        return getItems({ tenantId: ctx.tenantId, categoryId: input?.categoryId });
       }),
 
-    add: adminProcedure
+    add: managerProcedure
       .input(
         z.object({
           name: z.string().min(1),
@@ -22,41 +22,41 @@ export const inventoryRouter = router({
           categoryId: z.string().optional(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.item.added",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
 
-    toggle: adminProcedure
+    toggle: managerProcedure
       .input(z.object({ id: z.string() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.item.toggled",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
 
-    delete: adminProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.string() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.item.deleted",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
   }),
 
   // ── Transactions ───────────────────────────────────────────────────
   transactions: router({
-    list: protectedProcedure
+    list: tenantProcedure
       .input(z.object({ itemId: z.string() }))
-      .query(async ({ input }) => {
-        return getTransactions(input.itemId);
+      .query(async ({ ctx, input }) => {
+        return getTransactions({ tenantId: ctx.tenantId, itemId: input.itemId });
       }),
 
-    add: adminProcedure
+    add: managerProcedure
       .input(
         z.object({
           itemId: z.string(),
@@ -66,63 +66,63 @@ export const inventoryRouter = router({
           quantityTypeValue: z.string(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.transaction.added",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
 
-    delete: adminProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.transaction.deleted",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
   }),
 
   // ── Categories ─────────────────────────────────────────────────────
   categories: router({
-    list: protectedProcedure.query(async () => {
-      return getCategories();
+    list: tenantProcedure.query(async ({ ctx }) => {
+      return getCategories({ tenantId: ctx.tenantId });
     }),
 
-    upsert: adminProcedure
+    upsert: managerProcedure
       .input(
         z.object({
           id: z.string().optional(),
           name: z.string().min(1),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.category.upserted",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
 
-    delete: adminProcedure
+    delete: managerProcedure
       .input(z.object({ id: z.string() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.category.deleted",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
 
-    toggleItem: adminProcedure
+    toggleItem: managerProcedure
       .input(
         z.object({
           categoryId: z.string(),
           itemId: z.string(),
         })
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
           type: "inventory.category.item.toggled",
-          payload: input,
+          payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
   }),

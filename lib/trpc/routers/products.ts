@@ -7,10 +7,10 @@ import {
   type ProductRow,
 } from "@/lib/utils/parseProductsCSV";
 import { z } from "zod";
-import { adminProcedure, protectedProcedure, router } from "../init";
+import { managerProcedure, tenantProcedure, router } from "../init";
 
 export const productsRouter = router({
-  list: protectedProcedure
+  list: tenantProcedure
     .input(
       z
         .object({
@@ -19,11 +19,15 @@ export const productsRouter = router({
         })
         .optional()
     )
-    .query(async ({ input }) => {
-      return getProducts(input?.search, input?.tags);
+    .query(async ({ ctx, input }) => {
+      return getProducts({
+        tenantId: ctx.tenantId,
+        search: input?.search,
+        tags: input?.tags,
+      });
     }),
 
-  upsert: adminProcedure
+  upsert: managerProcedure
     .input(
       z.object({
         id: z.string().optional(),
@@ -32,10 +36,11 @@ export const productsRouter = router({
         tags: z.string(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       return dispatchDomainEvent({
         type: "product.upserted",
         payload: {
+          tenantId: ctx.tenantId,
           id: input.id ?? "",
           name: input.name,
           price: input.price,
@@ -44,15 +49,19 @@ export const productsRouter = router({
       });
     }),
 
-  delete: adminProcedure
+  delete: managerProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await db.deleteFrom("products").where("id", "=", input.id).execute();
+    .mutation(async ({ ctx, input }) => {
+      await db
+        .deleteFrom("products")
+        .where("id", "=", input.id)
+        .where("tenant_id", "=", ctx.tenantId)
+        .execute();
       return { success: true, id: input.id };
     }),
 
-  export: protectedProcedure.query(async () => {
-    const result = await exportProductsJSON();
+  export: tenantProcedure.query(async ({ ctx }) => {
+    const result = await exportProductsJSON({ tenantId: ctx.tenantId });
     return { json: JSON.stringify(result?.rows || []) };
   }),
 
@@ -60,9 +69,9 @@ export const productsRouter = router({
    * Bulk CSV upload — parses CSV text, validates rows, deduplicates
    * against existing products (by name), then upserts via domain events.
    */
-  csvUpload: adminProcedure
+  csvUpload: managerProcedure
     .input(z.object({ csv: z.string().min(1, "CSV content is required") }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const parsed = parseProductsCSV({ csv: input.csv });
 
       if (parsed.rows.length === 0) {
@@ -75,7 +84,7 @@ export const productsRouter = router({
       }
 
       // Fetch existing products to detect duplicates by name
-      const existing = await getProducts();
+      const existing = await getProducts({ tenantId: ctx.tenantId });
       const existingByName = new Map(
         existing.map((p) => [p.name.toLowerCase(), p])
       );
@@ -92,6 +101,7 @@ export const productsRouter = router({
           await dispatchDomainEvent({
             type: "product.upserted",
             payload: {
+              tenantId: ctx.tenantId,
               id: row.id ?? existingProduct?.id ?? "",
               name: row.name,
               price: row.price,
@@ -122,9 +132,9 @@ export const productsRouter = router({
    * Reset & Import — deletes ALL existing products and imports from CSV.
    * Destructive operation — admin only.
    */
-  resetAndImport: adminProcedure
+  resetAndImport: managerProcedure
     .input(z.object({ csv: z.string().min(1, "CSV content is required") }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const parsed = parseProductsCSV({ csv: input.csv });
 
       if (parsed.rows.length === 0) {
@@ -137,7 +147,10 @@ export const productsRouter = router({
       }
 
       // Delete all existing products
-      await db.deleteFrom("products").execute();
+      await db
+        .deleteFrom("products")
+        .where("tenant_id", "=", ctx.tenantId)
+        .execute();
 
       let imported = 0;
       let skipped = 0;
@@ -150,6 +163,7 @@ export const productsRouter = router({
           await dispatchDomainEvent({
             type: "product.upserted",
             payload: {
+              tenantId: ctx.tenantId,
               id: row.id ?? "",
               name: row.name,
               price: row.price,
