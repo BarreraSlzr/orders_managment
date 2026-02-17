@@ -15,9 +15,10 @@ import { Item } from "@/hooks/inventory/useInventoryItems";
 
 export default function AddItemForm() {
   const { addItem, items, categories, selectedCategory } = useInventory();
+  const emptyCategoryValue = "none";
   const [newItemText, setNewItemText] = useState("");
   const [quantityTypeKey, setQuantityTypeKey] = useState("");
-  const [categoryId, setCategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState(emptyCategoryValue);
   const [suggestions, setSuggestions] = useState<Item[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -33,8 +34,8 @@ export default function AddItemForm() {
   }, [newItemText, items]);
 
   useEffect(() => {
-    setCategoryId(selectedCategory?.id ?? "");
-  }, [selectedCategory]);
+    setCategoryId(selectedCategory?.id ?? emptyCategoryValue);
+  }, [selectedCategory, emptyCategoryValue]);
 
   const selectSuggestion = (item: Item) => {
     setNewItemText(item.name);
@@ -49,13 +50,13 @@ export default function AddItemForm() {
     if (newItemText.trim() && quantityTypeKey) {
       const formData = new FormData(e.currentTarget as HTMLFormElement);
       formData.set("quantityTypeKey", quantityTypeKey);
-      if (categoryId) {
+      if (categoryId !== emptyCategoryValue) {
         formData.set("categoryId", categoryId);
       }
       await addItem(formData);
       setNewItemText("");
       setQuantityTypeKey("");
-      setCategoryId(selectedCategory?.id ?? "");
+      setCategoryId(selectedCategory?.id ?? emptyCategoryValue);
       setSuggestions([]);
     }
   };
@@ -94,7 +95,7 @@ export default function AddItemForm() {
             <SelectValue placeholder="Categoria" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Sin categoria</SelectItem>
+            <SelectItem value={emptyCategoryValue}>Sin categoria</SelectItem>
             {categories.map((category) => (
               <SelectItem key={category.id} value={category.id}>
                 {category.name}

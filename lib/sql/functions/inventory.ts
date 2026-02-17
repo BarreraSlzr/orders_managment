@@ -1,6 +1,7 @@
 "use server"
 
 import { db } from "../database";
+import { sql } from "kysely";
 
 export async function getItems(params: {
   tenantId: string;
@@ -8,11 +9,6 @@ export async function getItems(params: {
 }) {
   return await db
     .selectFrom('inventory_items')
-    .leftJoin('category_inventory_item', (join) =>
-      join
-        .onRef('inventory_items.id', '=', 'category_inventory_item.item_id')
-        .on('category_inventory_item.tenant_id', '=', params.tenantId)
-    )
     .select([
       'id',
       'name',
@@ -20,11 +16,21 @@ export async function getItems(params: {
       'deleted',
       'quantity_type_key',
       'status',
-      'updated'
+      'updated',
+      sql<boolean>`exists (
+        select 1 from category_inventory_item as ci
+        where ci.item_id = inventory_items.id
+          and ci.tenant_id = ${params.tenantId}
+      )`.as('hasCategory')
     ])
     .where('inventory_items.tenant_id', '=', params.tenantId)
-    .$if(!!params.categoryId, (qb) => qb
-      .where('category_inventory_item.category_id', '=', `${params.categoryId}`)
+    .$if(!!params.categoryId, (qb) =>
+      qb.where(sql`exists (
+        select 1 from category_inventory_item as ci
+        where ci.item_id = inventory_items.id
+          and ci.tenant_id = ${params.tenantId}
+          and ci.category_id = ${params.categoryId}
+      )`)
     )
     .execute();
 }
