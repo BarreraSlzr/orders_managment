@@ -5,7 +5,9 @@ import { Selectable } from "kysely";
 import { useCallback, useState } from "react";
 import { Category } from "./useCategories";
 
-export type Item = Selectable<InventoryItemsTable>;
+export type Item = Selectable<InventoryItemsTable> & {
+  hasCategory: boolean;
+};
 
 export const useItems = (selectedCategory?: Pick<Category, "id"> | null) => {
   const trpc = useTRPC();

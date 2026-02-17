@@ -21,6 +21,7 @@ import { measureTypes } from "@/lib/utils/measureTypes";
 import { AnimatePresence } from "motion/react";
 import React from "react";
 import { ListItem } from "./ItemList";
+import { TransactionHistory } from "./TransactionHistory";
 
 interface ItemDetailsModalProps {
   isOpen: boolean;
@@ -33,14 +34,41 @@ export function TransactionFormModal({
   onClose,
   item,
 }: ItemDetailsModalProps) {
-  const { addTransaction, selectedItem } = useInventory();
+  const {
+    addTransaction,
+    deleteTransaction,
+    selectedItem,
+    transactions,
+  } = useInventory();
+  const [type, setType] = React.useState<"IN" | "OUT">("IN");
+  const [quantityTypeValue, setQuantityTypeValue] = React.useState("");
+  const unitOptions = React.useMemo(
+    () =>
+      item.quantity_type_key
+        ? measureTypes[item.quantity_type_key as keyof typeof measureTypes]
+        : [],
+    [item.quantity_type_key],
+  );
+
+  React.useEffect(() => {
+    setQuantityTypeValue(unitOptions[0] ?? "");
+  }, [item.quantity_type_key, unitOptions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     formData.append("itemId", item.id);
+    formData.set("type", type);
+    formData.set("quantityTypeValue", quantityTypeValue);
+    if (!quantityTypeValue) return;
     await addTransaction(formData);
     onClose();
+  };
+
+  const handleDelete = async (transactionId: number) => {
+    const formData = new FormData();
+    formData.set("id", String(transactionId));
+    await deleteTransaction(formData);
   };
 
   return (
@@ -52,11 +80,29 @@ export function TransactionFormModal({
         {selectedItem && <ListItem item={selectedItem} />}
         <form onSubmit={handleSubmit} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="type" className="text-right">
+              Movimiento
+            </Label>
+            <Select
+              value={type}
+              onValueChange={(value) => setType(value as "IN" | "OUT")}
+            >
+              <SelectTrigger id="type" className="col-span-3">
+                <SelectValue placeholder="Selecciona" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="IN">Entrada</SelectItem>
+                <SelectItem value="OUT">Salida</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="quantity" className="text-right">
               Cantidad
             </Label>
             <Input
               id="quantity"
+              name="quantity"
               type="number"
               className="col-span-3"
               defaultValue={1}
@@ -67,19 +113,21 @@ export function TransactionFormModal({
             <Label htmlFor="quantityTypeValue" className="text-right">
               Unidad
             </Label>
-            <Select required>
+            <Select
+              value={quantityTypeValue}
+              onValueChange={setQuantityTypeValue}
+              required
+              disabled={unitOptions.length === 0}
+            >
               <SelectTrigger className="col-span-3">
                 <SelectValue placeholder="Selecciona una unidad" />
               </SelectTrigger>
               <SelectContent>
-                {item.quantity_type_key &&
-                  measureTypes[
-                    item.quantity_type_key as keyof typeof measureTypes
-                  ].map((value) => (
-                    <AnimatePresence key={value}>
-                      <SelectItem value={value}>{value}</SelectItem>
-                    </AnimatePresence>
-                  ))}
+                {unitOptions.map((value) => (
+                  <AnimatePresence key={value}>
+                    <SelectItem value={value}>{value}</SelectItem>
+                  </AnimatePresence>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -89,6 +137,7 @@ export function TransactionFormModal({
             </Label>
             <Input
               id="price"
+              name="price"
               type="number"
               defaultValue={1}
               className="col-span-3"
@@ -99,9 +148,15 @@ export function TransactionFormModal({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit">Guardar</Button>
+            <Button type="submit" disabled={!quantityTypeValue}>
+              Guardar
+            </Button>
           </DialogFooter>
         </form>
+        <TransactionHistory
+          transactions={transactions}
+          onDelete={handleDelete}
+        />
       </DialogContent>
     </Dialog>
   );

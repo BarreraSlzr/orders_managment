@@ -196,6 +196,9 @@ graph LR
         M4["✓ Bulk Import"]
         M5["✓ Manage Extras"]
         M6["✓ Close Orders"]
+        M7["✓ Manage Inventory"]
+        M8["✓ Create Categories"]
+        M9["✓ Add Transactions"]
     end
 
     subgraph "Staff (Tenant Only)"
@@ -204,6 +207,8 @@ graph LR
         S3["✓ Update Order Items"]
         S4["✓ View Products"]
         S5["✓ View Inventory"]
+        S6["✓ View Transactions"]
+        S7["✓ View Categories"]
     end
 
     style A1 fill:#ff6b6b
@@ -218,11 +223,16 @@ graph LR
     style M4 fill:#ffa500
     style M5 fill:#ffa500
     style M6 fill:#ffa500
+    style M7 fill:#ffa500
+    style M8 fill:#ffa500
+    style M9 fill:#ffa500
     style S1 fill:#51cf66
     style S2 fill:#51cf66
     style S3 fill:#51cf66
     style S4 fill:#51cf66
     style S5 fill:#51cf66
+    style S6 fill:#51cf66
+    style S7 fill:#51cf66
 ```
 
 ---
@@ -662,9 +672,294 @@ adminProcedure.query(async ({ ctx }) => {
 // Result: Full database snapshot, logged in admin_audit_logs
 ```
 
+### Pattern: Manage inventory items (manager only)
+
+```typescript
+// Frontend
+const items = await trpc.inventory.items.list.query({
+  categoryId: "uuid-optional", // Optional category filter
+});
+
+// Backend execution
+tenantProcedure.query(async ({ ctx, input }) => {
+  //
+  // Validations:
+  // 1. ctx.session exists (protectedProcedure)
+  // 2. ctx.tenantId exists (tenantProcedure)
+  //
+  
+  return getItems({
+    tenantId: ctx.tenantId,      // ← Auto-scoped
+    categoryId: input?.categoryId,
+  });
+});
+
+// Database query with category check
+// SELECT *, EXISTS(
+//   SELECT 1 FROM category_inventory_item
+//   WHERE item_id = inventory_items.id
+//     AND tenant_id = $tenantId
+// ) AS hasCategory
+// FROM inventory_items
+// WHERE tenant_id = $tenantId
+// Result: Only items from user's tenant
+
+// Add inventory item (manager only)
+await trpc.inventory.items.add.mutation({
+  name: "Harina de trigo",
+  quantityTypeKey: "kg",
+  categoryId: "uuid-optional",
+});
+// Requires managerProcedure (role check + tenant scoping)
+// Emits domain event: "inventory.item.added"
+
+// Add transaction (manager only)
+await trpc.inventory.transactions.add.mutation({
+  itemId: "item-uuid",
+  type: "IN",  // or "OUT"
+  quantity: 25,
+  price: 45000, // in cents
+  quantityTypeValue: "kg",
+});
+// Requires managerProcedure
+// Emits domain event: "inventory.transaction.added"
+```
+
+### Pattern: Manage inventory categories (manager only)
+
+```typescript
+// List categories (staff can view)
+const categories = await trpc.inventory.categories.list.query();
+// Uses tenantProcedure (view access for all roles)
+
+// Create/update category (manager only)
+await trpc.inventory.categories.upsert.mutation({
+  id: "uuid-optional", // Omit for new category
+  name: "Ingredientes secos",
+});
+// Requires managerProcedure
+// Emits domain event: "inventory.category.upserted"
+
+// Toggle item in category (manager only)
+await trpc.inventory.categories.toggleItem.mutation({
+  categoryId: "category-uuid",
+  itemId: "item-uuid",
+});
+// Adds or removes association in category_inventory_item table
+// Requires managerProcedure
+// Emits domain event: "inventory.category.item.toggled"
+```
+
 ---
 
-## 10. Architecture Summary
+## 10. Inventory Management: RBAC & Event-Driven Architecture
+
+### Inventory Module Overview
+
+The inventory system manages stock items, categories, and transactions with full tenant scoping and event-driven architecture. All mutations emit domain events for auditability and future extensibility (e.g., low-stock alerts, category suggestions).
+
+### Inventory Tables & Relationships
+
+```mermaid
+erDiagram
+    TENANTS ||--o{ INVENTORY_ITEMS : "owns"
+    TENANTS ||--o{ CATEGORIES : "owns"
+    TENANTS ||--o{ TRANSACTIONS : "tracks"
+    TENANTS ||--o{ CATEGORY_INVENTORY_ITEM : "associates"
+    
+    INVENTORY_ITEMS ||--o{ TRANSACTIONS : "has"
+    CATEGORIES ||--o{ CATEGORY_INVENTORY_ITEM : "contains"
+    INVENTORY_ITEMS ||--o{ CATEGORY_INVENTORY_ITEM : "belongs_to"
+    
+    INVENTORY_ITEMS {
+        uuid id PK
+        uuid tenant_id FK "NOT NULL"
+        string name
+        string status "pending|completed"
+        string quantity_type_key "kg|L|units"
+        timestamptz created
+        timestamptz updated
+    }
+    
+    CATEGORIES {
+        uuid id PK
+        uuid tenant_id FK "NOT NULL"
+        string name
+        timestamptz created
+        timestamptz updated
+    }
+    
+    TRANSACTIONS {
+        serial id PK
+        uuid tenant_id FK "NOT NULL"
+        uuid item_id FK
+        string type "IN|OUT"
+        integer quantity
+        integer price "in cents"
+        string quantity_type_value
+        timestamptz created
+    }
+    
+    CATEGORY_INVENTORY_ITEM {
+        uuid category_id FK
+        uuid item_id FK
+        uuid tenant_id FK "NOT NULL"
+    }
+```
+
+### Inventory Endpoints: Permission Matrix
+
+| Endpoint | Procedure | Role | Purpose |
+|----------|-----------|------|---------|
+| **inventory.items.list** | `tenantProcedure` | Staff, Manager | View all inventory items (optional category filter) |
+| **inventory.items.add** | `managerProcedure` | Manager | Create new inventory item |
+| **inventory.items.toggle** | `managerProcedure` | Manager | Toggle item status (pending ↔ completed) |
+| **inventory.items.delete** | `managerProcedure` | Manager | Delete inventory item |
+| **inventory.transactions.list** | `tenantProcedure` | Staff, Manager | View transaction history for an item |
+| **inventory.transactions.add** | `managerProcedure` | Manager | Record IN/OUT transaction |
+| **inventory.transactions.delete** | `managerProcedure` | Manager | Delete transaction record |
+| **inventory.categories.list** | `tenantProcedure` | Staff, Manager | View all categories |
+| **inventory.categories.upsert** | `managerProcedure` | Manager | Create or update category |
+| **inventory.categories.delete** | `managerProcedure` | Manager | Delete category |
+| **inventory.categories.toggleItem** | `managerProcedure` | Manager | Add/remove item from category |
+
+### Event-Driven Mutation Pattern
+
+All inventory mutations follow the event-driven pattern:
+
+```typescript
+// 1. tRPC mutation receives input
+managerProcedure
+  .input(AddItemSchema)
+  .mutation(async ({ ctx, input }) => {
+    // 2. Dispatch domain event (not direct DB call)
+    return dispatchDomainEvent({
+      type: "inventory.item.added",
+      payload: { tenantId: ctx.tenantId, ...input },
+    });
+  });
+
+// 3. Event handler processes the event
+eventBus.on("inventory.item.added", async (event) => {
+  // 4. Execute DB operation
+  const item = await addItem(event.payload);
+  
+  // 5. Handle category association if provided
+  if (event.payload.categoryId) {
+    await toggleCategoryItem({
+      tenantId: event.payload.tenantId,
+      categoryId: event.payload.categoryId,
+      itemId: item.id,
+    });
+  }
+});
+```
+
+### Tenant Scoping in Inventory Queries
+
+**Example: List items with category association check**
+
+```typescript
+export async function getItems(params: {
+  tenantId: string;
+  categoryId?: string;
+}) {
+  return await db
+    .selectFrom('inventory_items')
+    .select([
+      'id', 'name', 'status', 'quantity_type_key',
+      // Check if item has ANY category (avoids JOIN duplication)
+      sql<boolean>`exists (
+        select 1 from category_inventory_item as ci
+        where ci.item_id = inventory_items.id
+          and ci.tenant_id = ${params.tenantId}
+      )`.as('hasCategory')
+    ])
+    .where('inventory_items.tenant_id', '=', params.tenantId)
+    .$if(!!params.categoryId, (qb) =>
+      // Filter by specific category if provided
+      qb.where(sql`exists (
+        select 1 from category_inventory_item as ci
+        where ci.item_id = inventory_items.id
+          and ci.tenant_id = ${params.tenantId}
+          and ci.category_id = ${params.categoryId}
+      )`)
+    )
+    .execute();
+}
+```
+
+**Key Points:**
+- Uses `EXISTS` subquery instead of `JOIN` to avoid row duplication
+- Always filters by `tenant_id` at multiple layers (item, category association)
+- Returns `hasCategory` flag for UI indicators (e.g., "Sin categoria" badge)
+
+### Domain Events Emitted
+
+| Event Type | Payload | Trigger |
+|------------|---------|---------|
+| `inventory.item.added` | `{ tenantId, name, quantityTypeKey, categoryId? }` | Manager adds item |
+| `inventory.item.toggled` | `{ tenantId, id }` | Manager toggles item status |
+| `inventory.item.deleted` | `{ tenantId, id }` | Manager deletes item |
+| `inventory.transaction.added` | `{ tenantId, itemId, type, quantity, price, quantityTypeValue }` | Manager records transaction |
+| `inventory.transaction.deleted` | `{ tenantId, id }` | Manager deletes transaction |
+| `inventory.category.upserted` | `{ tenantId, id?, name }` | Manager creates/updates category |
+| `inventory.category.deleted` | `{ tenantId, id }` | Manager deletes category |
+| `inventory.category.item.toggled` | `{ tenantId, categoryId, itemId }` | Manager adds/removes item from category |
+
+### UI Flow: Adding Inventory Item with Category
+
+```mermaid
+sequenceDiagram
+    participant Manager as Manager (Web)
+    participant tRPC as tRPC Router
+    participant EventBus as Event Bus
+    participant Handler as Event Handler
+    participant DB as Database
+
+    Manager->>tRPC: inventory.items.add<br/>{ name, quantityTypeKey, categoryId }
+    Note over tRPC: managerProcedure validates:<br/>✓ Session<br/>✓ Tenant ID<br/>✓ Role = manager
+    
+    tRPC->>EventBus: dispatchDomainEvent()<br/>type: "inventory.item.added"
+    tRPC-->>Manager: Event ID
+    
+    EventBus->>Handler: emit("inventory.item.added")
+    Handler->>DB: addItem({ tenantId, name, quantityTypeKey })
+    DB-->>Handler: { id, ... }
+    
+    Handler->>DB: toggleCategoryItem({ categoryId, itemId })
+    Note over DB: INSERT into category_inventory_item<br/>WHERE tenant_id = $tenantId
+    DB-->>Handler: "Added"
+    
+    Handler-->>EventBus: Event processed
+```
+
+### Transaction Tracking
+
+Transactions record inventory movements (IN = stock added, OUT = stock depleted):
+
+```typescript
+interface Transaction {
+  id: number;                    // Auto-increment
+  tenant_id: string;             // Tenant scoping
+  item_id: string;               // FK to inventory_items
+  type: "IN" | "OUT";            // Movement direction
+  quantity: number;              // Amount moved
+  price: number;                 // Cost in cents
+  quantity_type_value: string;   // Unit (kg, L, units)
+  created: Date;                 // ISO timestamp
+}
+```
+
+**UI Features:**
+- Transaction history with type filters (all/IN/OUT)
+- Date range filtering (dateFrom/dateTo)
+- Formatted display with badges, price, and date
+- Manager-only deletion capability
+
+---
+
+## 11. Architecture Summary
 
 ```mermaid
 graph TB
@@ -684,6 +979,8 @@ graph TB
     subgraph "SQL Functions Layer"
         GETORD["getOrders()"]
         GETPROD["getProducts()"]
+        GETITEMS["getItems()"]
+        GETTRANS["getTransactions()"]
         EXPORT["exportAllData()"]
         GETAUDIT["listAdminAuditLogs()"]
     end
@@ -691,6 +988,8 @@ graph TB
     subgraph "Database Layer"
         ORDERS_T["orders<br/>(tenant_id FK)"]
         PRODUCTS_T["products<br/>(tenant_id FK)"]
+        INVENTORY_T["inventory_items<br/>(tenant_id FK)"]
+        TRANS_T["transactions<br/>(tenant_id FK)"]
         AUDIT_T["admin_audit_logs<br/>(admin_id FK)"]
         TENANTS_T["tenants<br/>(PK enforcer)"]
     end
@@ -701,18 +1000,25 @@ graph TB
     ADMIN -->|x-admin-key| ADM
 
     TENANT --> GETORD
+    TENANT --> GETITEMS
+    TENANT --> GETTRANS
     MANAGER --> GETPROD
     ADM --> GETAUDIT
     ADM --> EXPORT
 
     GETORD --> ORDERS_T
     GETPROD --> PRODUCTS_T
+    GETITEMS --> INVENTORY_T
+    GETTRANS --> TRANS_T
     GETAUDIT --> AUDIT_T
     EXPORT --> PRODUCTS_T
     EXPORT --> ORDERS_T
+    EXPORT --> INVENTORY_T
 
     ORDERS_T --> TENANTS_T
     PRODUCTS_T --> TENANTS_T
+    INVENTORY_T --> TENANTS_T
+    TRANS_T --> TENANTS_T
     AUDIT_T --> TENANTS_T
 
     style WEB fill:#51cf66
@@ -725,7 +1031,7 @@ graph TB
 
 ---
 
-## 11. Key Files Reference
+## 12. Key Files Reference
 
 | File | Purpose | Key Code |
 |------|---------|----------|
@@ -734,15 +1040,19 @@ graph TB
 | **lib/auth/admin.ts** | Admin key validation | `hasAdminApiKey()`, `getAdminConfig()` |
 | **lib/sql/database.ts** | Kysely setup | `db` instance, dialect config |
 | **lib/sql/migrations.ts** | Schema + constraints | v4 (tenants/users), v6 (audit logs) |
+| **lib/sql/functions/inventory.ts** | Inventory items queries | `getItems()`, `addItem()`, `toggleItem()`, `deleteItem()` |
+| **lib/sql/functions/categories.ts** | Category management | `getCategories()`, `upsertCategory()`, `toggleCategoryItem()` |
+| **lib/sql/functions/transactions.ts** | Transaction tracking | `getTransactions()`, `addTransaction()`, `deleteTransaction()` |
 | **lib/sql/functions/** | Scoped queries | `getOrders()`, `getProducts()`, etc. |
 | **lib/trpc/routers/admin.ts** | Admin endpoints | `exportData`, `listAuditLogs`, etc. |
 | **lib/trpc/routers/orders.ts** | Tenant endpoints | `list`, `create`, `update` (all scoped) |
+| **lib/trpc/routers/inventory.ts** | Inventory endpoints | `items.*`, `transactions.*`, `categories.*` |
 | **lib/events/dispatch.ts** | Event emission | `dispatchDomainEvent()` |
 | **lib/events/handlers.ts** | Admin audit handler | `admin.audit.logged` listener |
 
 ---
 
-## 12. Deployment Checklist
+## 13. Deployment Checklist
 
 - [ ] `ADMIN_SECRET` set in `.env` (x-admin-key validation)
 - [ ] `AUTH_SECRET` set for session token signing
@@ -753,6 +1063,7 @@ graph TB
 - [ ] `__session` cookie httpOnly and sameSite attributes set
 - [ ] Audit logs queryable for compliance checks
 - [ ] Domain events handler subscribed to `admin.audit.logged`
+- [ ] Inventory domain event handlers registered (`inventory.*`)
 
 ---
 

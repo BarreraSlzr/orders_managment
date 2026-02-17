@@ -1,21 +1,33 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import AddItemForm from './AddItemForm';
-import ItemList from './ItemList';
-import {  InventoryProvider, useInventory } from '@/context/InventoryProvider';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { TransactionFormModal } from './TransactionFormModal';
-import { CategorizedCardList } from './Categories';
+import React, { useEffect, useState } from "react";
+import AddItemForm from "./AddItemForm";
+import ItemList from "./ItemList";
+import { InventoryProvider, useInventory } from "@/context/InventoryProvider";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { TransactionFormModal } from "./TransactionFormModal";
+import { CategorizedCardList } from "./Categories";
+import { TransactionHistory } from "./TransactionHistory";
 
 function TodoListContent() {
-  const { selectedCategory, selectedItem } = useInventory();
+  const {
+    selectedCategory,
+    selectedItem,
+    transactions,
+    deleteTransaction,
+  } = useInventory();
   const [showCompleted, setShowCompleted] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
     setModalOpen(!!selectedItem);
-  }, [selectedItem])
+  }, [selectedItem]);
+
+  const handleDelete = async (transactionId: number) => {
+    const formData = new FormData();
+    formData.set("id", String(transactionId));
+    await deleteTransaction(formData);
+  };
 
   return (
     <div>
@@ -25,21 +37,59 @@ function TodoListContent() {
       <AddItemForm />
       <div className="space-y-4">
         <section aria-labelledby="unchecked-items">
-          <h2 id="unchecked-items" className="text-lg font-semibold mb-2 text-gray-700">Pendiente</h2>
-          <ItemList status={'pending'} />
+          <h2
+            id="unchecked-items"
+            className="text-lg font-semibold mb-2 text-gray-700"
+          >
+            Pendiente
+          </h2>
+          <ItemList status={"pending"} />
         </section>
         <section aria-labelledby="checked-items">
-          <h2 id="checked-items" className="text-lg font-semibold mb-2 text-gray-700 flex items-center">
+          <h2
+            id="checked-items"
+            className="text-lg font-semibold mb-2 text-gray-700 flex items-center"
+          >
             Completado
             <button
               onClick={() => setShowCompleted(!showCompleted)}
               className="ml-2 text-yellow-600 hover:text-yellow-700 focus:outline-none"
-              aria-label={showCompleted ? "Oculta inventario completado" : "Muestra inventario completado"}
+              aria-label={
+                showCompleted
+                  ? "Oculta inventario completado"
+                  : "Muestra inventario completado"
+              }
             >
-              {showCompleted ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+              {showCompleted ? (
+                <ChevronUp className="w-5 h-5" />
+              ) : (
+                <ChevronDown className="w-5 h-5" />
+              )}
             </button>
           </h2>
-          {showCompleted && <ItemList status={'completed'} />}
+          {showCompleted && <ItemList status={"completed"} />}
+        </section>
+        <section
+          aria-labelledby="transaction-history"
+          className="rounded-xl border bg-white/80 p-4"
+        >
+          <h2
+            id="transaction-history"
+            className="text-lg font-semibold text-gray-700"
+          >
+            Movimientos recientes
+          </h2>
+          {selectedItem ? (
+            <TransactionHistory
+              transactions={transactions}
+              onDelete={handleDelete}
+              title={`Historial de ${selectedItem.name}`}
+            />
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Selecciona un item para ver su historial.
+            </p>
+          )}
         </section>
       </div>
       {selectedItem && (
@@ -60,7 +110,7 @@ export default function TodoListPage() {
         <div>
           <CategorizedCardList />
         </div>
-        <div className='flex-grow'>
+        <div className="flex-grow">
           <TodoListContent />
         </div>
       </div>
