@@ -3,6 +3,7 @@
  * auth-aware context and superjson transformer.
  */
 import { getAdminConfig, hasAdminApiKey } from "@/lib/auth/admin";
+import { parseUserRole } from "@/lib/auth/roles";
 import { verifySessionToken, type SessionPayload } from "@/lib/auth/session";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
@@ -72,6 +73,28 @@ export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return next({ ctx: { ...ctx, session: ctx.session } });
+});
+
+/**
+ * Tenant-scoped procedure — requires session + tenant_id in ctx.
+ */
+export const tenantProcedure = protectedProcedure.use(({ ctx, next }) => {
+  const tenantId = ctx.session?.tenant_id;
+  if (!tenantId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({ ctx: { ...ctx, tenantId } });
+});
+
+/**
+ * Manager-scoped procedure — requires session role manager/admin.
+ */
+export const managerProcedure = tenantProcedure.use(({ ctx, next }) => {
+  const role = parseUserRole(ctx.session?.role);
+  if (role !== "manager" && role !== "admin") {
+    throw new TRPCError({ code: "FORBIDDEN" });
+  }
+  return next({ ctx });
 });
 
 /**

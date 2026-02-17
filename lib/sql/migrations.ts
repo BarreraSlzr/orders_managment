@@ -527,17 +527,18 @@ BEGIN
   ALTER TABLE category_inventory_item ADD COLUMN IF NOT EXISTS tenant_id uuid;
   ALTER TABLE domain_events ADD COLUMN IF NOT EXISTS tenant_id uuid;
 
-  UPDATE products SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE orders SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE order_items SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE payment_options SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE extras SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE order_item_extras SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE inventory_items SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE transactions SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE categories SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE category_inventory_item SET tenant_id = default_tenant WHERE tenant_id IS NULL;
-  UPDATE domain_events SET tenant_id = default_tenant WHERE tenant_id IS NULL;
+  -- Set all to default tenant (both NULL and existing non-matching values)
+  UPDATE products SET tenant_id = default_tenant;
+  UPDATE orders SET tenant_id = default_tenant;
+  UPDATE order_items SET tenant_id = default_tenant;
+  UPDATE payment_options SET tenant_id = default_tenant;
+  UPDATE extras SET tenant_id = default_tenant;
+  UPDATE order_item_extras SET tenant_id = default_tenant;
+  UPDATE inventory_items SET tenant_id = default_tenant;
+  UPDATE transactions SET tenant_id = default_tenant;
+  UPDATE categories SET tenant_id = default_tenant;
+  UPDATE category_inventory_item SET tenant_id = default_tenant;
+  UPDATE domain_events SET tenant_id = default_tenant;
 
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint WHERE conname = 'products_tenant_id_fkey'
@@ -671,6 +672,65 @@ END $$;
   },
 };
 
+// ── v6: Admin audit logs ───────────────────────────────────────────────────
+
+const migration006: Migration = {
+  version: 6,
+  description: "Add admin_audit_logs table for persistent admin access logs",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  CREATE TABLE IF NOT EXISTS admin_audit_logs (
+    id serial PRIMARY KEY,
+    admin_id uuid NOT NULL,
+    role varchar,
+    action varchar NOT NULL,
+    tenant_id uuid,
+    target_tenant_id uuid,
+    metadata jsonb,
+    created timestamptz DEFAULT now()
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'admin_audit_logs_admin_id_fkey'
+  ) THEN
+    ALTER TABLE admin_audit_logs
+      ADD CONSTRAINT admin_audit_logs_admin_id_fkey
+      FOREIGN KEY (admin_id) REFERENCES users(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'admin_audit_logs_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE admin_audit_logs
+      ADD CONSTRAINT admin_audit_logs_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'admin_audit_logs_target_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE admin_audit_logs
+      ADD CONSTRAINT admin_audit_logs_target_tenant_id_fkey
+      FOREIGN KEY (target_tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  CREATE INDEX IF NOT EXISTS admin_audit_logs_admin_id_idx ON admin_audit_logs(admin_id);
+  CREATE INDEX IF NOT EXISTS admin_audit_logs_tenant_id_idx ON admin_audit_logs(tenant_id);
+  CREATE INDEX IF NOT EXISTS admin_audit_logs_target_tenant_id_idx ON admin_audit_logs(target_tenant_id);
+  CREATE INDEX IF NOT EXISTS admin_audit_logs_created_idx ON admin_audit_logs(created);
+END $$;
+`
+      )
+    );
+
+    console.info("[v6] admin_audit_logs table created.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -679,4 +739,5 @@ export const allMigrations: Migration[] = [
   migration003,
   migration004,
   migration005,
+  migration006,
 ];

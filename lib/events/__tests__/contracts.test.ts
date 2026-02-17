@@ -32,10 +32,11 @@ describe("Event contracts – completeness", () => {
     "extra.upserted",
     "extra.deleted",
     "order.item.extra.toggled",
+    "admin.audit.logged",
   ];
 
   it("DomainEventType union contains all expected event types", () => {
-    expect(allEventTypes).toHaveLength(19);
+    expect(allEventTypes).toHaveLength(20);
   });
 
   it("every event type is a non-empty string", () => {
@@ -55,7 +56,7 @@ describe("Event contracts – completeness", () => {
   it("DispatchDomainEventParams accepts valid payloads for order.created", () => {
     const params: DispatchDomainEventParams<"order.created"> = {
       type: "order.created",
-      payload: { timeZone: "America/Mexico_City" },
+      payload: { tenantId: "t1", timeZone: "America/Mexico_City" },
     };
     expect(params.type).toBe("order.created");
     expect(params.payload.timeZone).toBe("America/Mexico_City");
@@ -64,7 +65,7 @@ describe("Event contracts – completeness", () => {
   it("DispatchDomainEventParams accepts valid payloads for product.upserted", () => {
     const params: DispatchDomainEventParams<"product.upserted"> = {
       type: "product.upserted",
-      payload: { name: "Taco", price: 2500, tags: "food" },
+      payload: { tenantId: "t1", name: "Taco", price: 2500, tags: "food" },
     };
     expect(params.type).toBe("product.upserted");
     expect(params.payload.name).toBe("Taco");
@@ -74,6 +75,7 @@ describe("Event contracts – completeness", () => {
     const params: DispatchDomainEventParams<"inventory.transaction.added"> = {
       type: "inventory.transaction.added",
       payload: {
+        tenantId: "t1",
         itemId: "item-1",
         type: "IN",
         price: 50,
@@ -88,8 +90,23 @@ describe("Event contracts – completeness", () => {
   it("DispatchDomainEventParams accepts valid payloads for inventory.category.item.toggled", () => {
     const params: DispatchDomainEventParams<"inventory.category.item.toggled"> = {
       type: "inventory.category.item.toggled",
-      payload: { categoryId: "c1", itemId: "i1" },
+      payload: { tenantId: "t1", categoryId: "c1", itemId: "i1" },
     };
     expect(params.payload.categoryId).toBe("c1");
+  });
+
+  it("DispatchDomainEventParams accepts valid payloads for admin.audit.logged", () => {
+    const params: DispatchDomainEventParams<"admin.audit.logged"> = {
+      type: "admin.audit.logged",
+      payload: {
+        tenantId: "t1",
+        adminId: "admin-1",
+        action: "listTenants",
+        role: "admin",
+        targetTenantId: "t2",
+        metadata: { source: "tests" },
+      },
+    };
+    expect(params.payload.action).toBe("listTenants");
   });
 });

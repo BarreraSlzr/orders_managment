@@ -40,6 +40,9 @@ vi.mock("@/lib/sql/functions/extras", () => ({
   deleteExtra: vi.fn(),
   toggleOrderItemExtra: vi.fn(),
 }));
+vi.mock("@/lib/sql/functions/adminAudit", () => ({
+  createAdminAuditLog: vi.fn(),
+}));
 
 // Import after mocks
 import { domainEventHandlers } from "@/lib/events/handlers";
@@ -72,6 +75,7 @@ import {
     toggleTakeAway,
 } from "@/lib/sql/functions/updateTakeAway";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
+import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
 
 describe("domainEventHandlers", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -83,10 +87,13 @@ describe("domainEventHandlers", () => {
     (insertOrder as Mock).mockResolvedValue(order as any);
 
     const result = await domainEventHandlers["order.created"]({
-      payload: { timeZone: "America/Mexico_City" },
+      payload: { tenantId: "t1", timeZone: "America/Mexico_City" },
     });
 
-    expect(insertOrder).toHaveBeenCalledWith("America/Mexico_City");
+    expect(insertOrder).toHaveBeenCalledWith({
+      tenantId: "t1",
+      timeZone: "America/Mexico_City",
+    });
     expect(result).toEqual(order);
   });
 
@@ -94,10 +101,15 @@ describe("domainEventHandlers", () => {
     (updateOrderItem as Mock).mockResolvedValue(null);
 
     await domainEventHandlers["order.item.updated"]({
-      payload: { orderId: "o1", productId: "p1", type: "INSERT" },
+      payload: { tenantId: "t1", orderId: "o1", productId: "p1", type: "INSERT" },
     });
 
-    expect(updateOrderItem).toHaveBeenCalledWith("o1", "p1", "INSERT");
+    expect(updateOrderItem).toHaveBeenCalledWith({
+      tenantId: "t1",
+      orderId: "o1",
+      productId: "p1",
+      type: "INSERT",
+    });
   });
 
   it("order.split → calls splitOrder", async () => {
@@ -105,12 +117,13 @@ describe("domainEventHandlers", () => {
     (splitOrder as Mock).mockResolvedValue(splitResult as any);
 
     const result = await domainEventHandlers["order.split"]({
-      payload: { oldOrderId: "o1", itemIds: [1, 2] },
+      payload: { tenantId: "t1", oldOrderId: "o1", itemIds: [1, 2] },
     });
 
     expect(splitOrder).toHaveBeenCalledWith({
-      old_order_id: "o1",
-      item_ids: [1, 2],
+      tenantId: "t1",
+      oldOrderId: "o1",
+      itemIds: [1, 2],
     });
     expect(result).toEqual(splitResult);
   });
@@ -120,10 +133,10 @@ describe("domainEventHandlers", () => {
     (closeOrder as Mock).mockResolvedValue(closed as any);
 
     const result = await domainEventHandlers["order.closed"]({
-      payload: { orderId: "o1" },
+      payload: { tenantId: "t1", orderId: "o1" },
     });
 
-    expect(closeOrder).toHaveBeenCalledWith("o1");
+    expect(closeOrder).toHaveBeenCalledWith({ tenantId: "t1", orderId: "o1" });
     expect(result).toEqual(closed);
   });
 
@@ -132,10 +145,13 @@ describe("domainEventHandlers", () => {
     (togglePaymentOption as Mock).mockResolvedValue(items as any);
 
     const result = await domainEventHandlers["order.payment.toggled"]({
-      payload: { itemIds: [1] },
+      payload: { tenantId: "t1", itemIds: [1] },
     });
 
-    expect(togglePaymentOption).toHaveBeenCalledWith([1]);
+    expect(togglePaymentOption).toHaveBeenCalledWith({
+      tenantId: "t1",
+      itemIds: [1],
+    });
     expect(result).toEqual(items);
   });
 
@@ -144,10 +160,13 @@ describe("domainEventHandlers", () => {
     (toggleTakeAway as Mock).mockResolvedValue(items as any);
 
     const result = await domainEventHandlers["order.takeaway.toggled"]({
-      payload: { itemIds: [1] },
+      payload: { tenantId: "t1", itemIds: [1] },
     });
 
-    expect(toggleTakeAway).toHaveBeenCalledWith([1]);
+    expect(toggleTakeAway).toHaveBeenCalledWith({
+      tenantId: "t1",
+      itemIds: [1],
+    });
     expect(result).toEqual(items);
   });
 
@@ -156,10 +175,14 @@ describe("domainEventHandlers", () => {
     (removeProducts as Mock).mockResolvedValue(deleted as any);
 
     const result = await domainEventHandlers["order.products.removed"]({
-      payload: { orderId: "o1", itemIds: [1, 2] },
+      payload: { tenantId: "t1", orderId: "o1", itemIds: [1, 2] },
     });
 
-    expect(removeProducts).toHaveBeenCalledWith("o1", [1, 2]);
+    expect(removeProducts).toHaveBeenCalledWith({
+      tenantId: "t1",
+      orderId: "o1",
+      itemIds: [1, 2],
+    });
     expect(result).toEqual(deleted);
   });
 
@@ -170,10 +193,11 @@ describe("domainEventHandlers", () => {
     (upsertProduct as Mock).mockResolvedValue(product as any);
 
     const result = await domainEventHandlers["product.upserted"]({
-      payload: { id: "p1", name: "Taco", price: 2500, tags: "food" },
+      payload: { tenantId: "t1", id: "p1", name: "Taco", price: 2500, tags: "food" },
     });
 
     expect(upsertProduct).toHaveBeenCalledWith({
+      tenantId: "t1",
       id: "p1",
       name: "Taco",
       price: 2500,
@@ -188,10 +212,14 @@ describe("domainEventHandlers", () => {
     (addItem as Mock).mockResolvedValue({ id: "i1" } as any);
 
     const result = await domainEventHandlers["inventory.item.added"]({
-      payload: { name: "Flour", quantityTypeKey: "weight" },
+      payload: { tenantId: "t1", name: "Flour", quantityTypeKey: "weight" },
     });
 
-    expect(addItem).toHaveBeenCalledWith("Flour", "weight");
+    expect(addItem).toHaveBeenCalledWith({
+      tenantId: "t1",
+      name: "Flour",
+      quantityTypeKey: "weight",
+    });
     expect(result).toEqual({ id: "i1" });
     expect(toggleCategoryItem).not.toHaveBeenCalled();
   });
@@ -201,11 +229,24 @@ describe("domainEventHandlers", () => {
     (toggleCategoryItem as Mock).mockResolvedValue("Added");
 
     const result = await domainEventHandlers["inventory.item.added"]({
-      payload: { name: "Flour", quantityTypeKey: "weight", categoryId: "c1" },
+      payload: {
+        tenantId: "t1",
+        name: "Flour",
+        quantityTypeKey: "weight",
+        categoryId: "c1",
+      },
     });
 
-    expect(addItem).toHaveBeenCalledWith("Flour", "weight");
-    expect(toggleCategoryItem).toHaveBeenCalledWith("c1", "i1");
+    expect(addItem).toHaveBeenCalledWith({
+      tenantId: "t1",
+      name: "Flour",
+      quantityTypeKey: "weight",
+    });
+    expect(toggleCategoryItem).toHaveBeenCalledWith({
+      tenantId: "t1",
+      categoryId: "c1",
+      itemId: "i1",
+    });
     expect(result).toEqual({ id: "i1", categoryStatus: "Added" });
   });
 
@@ -213,20 +254,20 @@ describe("domainEventHandlers", () => {
     (toggleItem as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.item.toggled"]({
-      payload: { id: "i1" },
+      payload: { tenantId: "t1", id: "i1" },
     });
 
-    expect(toggleItem).toHaveBeenCalledWith("i1");
+    expect(toggleItem).toHaveBeenCalledWith({ tenantId: "t1", id: "i1" });
   });
 
   it("inventory.item.deleted → calls deleteItem", async () => {
     (deleteItem as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.item.deleted"]({
-      payload: { id: "i1" },
+      payload: { tenantId: "t1", id: "i1" },
     });
 
-    expect(deleteItem).toHaveBeenCalledWith("i1");
+    expect(deleteItem).toHaveBeenCalledWith({ tenantId: "t1", id: "i1" });
   });
 
   // ── Transaction events ────────────────────────────────────────────────────
@@ -236,6 +277,7 @@ describe("domainEventHandlers", () => {
 
     await domainEventHandlers["inventory.transaction.added"]({
       payload: {
+        tenantId: "t1",
         itemId: "i1",
         type: "IN",
         price: 100,
@@ -244,17 +286,24 @@ describe("domainEventHandlers", () => {
       },
     });
 
-    expect(addTransaction).toHaveBeenCalledWith("i1", "IN", 100, 5, "kg");
+    expect(addTransaction).toHaveBeenCalledWith({
+      tenantId: "t1",
+      itemId: "i1",
+      type: "IN",
+      price: 100,
+      quantity: 5,
+      quantityTypeValue: "kg",
+    });
   });
 
   it("inventory.transaction.deleted → calls deleteTransaction", async () => {
     (deleteTransaction as Mock).mockResolvedValue(undefined as any);
 
     await domainEventHandlers["inventory.transaction.deleted"]({
-      payload: { id: 99 },
+      payload: { tenantId: "t1", id: 99 },
     });
 
-    expect(deleteTransaction).toHaveBeenCalledWith(99);
+    expect(deleteTransaction).toHaveBeenCalledWith({ tenantId: "t1", id: 99 });
   });
 
   // ── Category events ───────────────────────────────────────────────────────
@@ -264,10 +313,14 @@ describe("domainEventHandlers", () => {
     (upsertCategory as Mock).mockResolvedValue(cat as any);
 
     const result = await domainEventHandlers["inventory.category.upserted"]({
-      payload: { name: "Drinks", id: "c1" },
+      payload: { tenantId: "t1", name: "Drinks", id: "c1" },
     });
 
-    expect(upsertCategory).toHaveBeenCalledWith("Drinks", "c1");
+    expect(upsertCategory).toHaveBeenCalledWith({
+      tenantId: "t1",
+      name: "Drinks",
+      id: "c1",
+    });
     expect(result).toEqual(cat);
   });
 
@@ -275,10 +328,10 @@ describe("domainEventHandlers", () => {
     (deleteCategory as Mock).mockResolvedValue({ deleted: ["c1"] });
 
     const result = await domainEventHandlers["inventory.category.deleted"]({
-      payload: { id: "c1" },
+      payload: { tenantId: "t1", id: "c1" },
     });
 
-    expect(deleteCategory).toHaveBeenCalledWith("c1");
+    expect(deleteCategory).toHaveBeenCalledWith({ tenantId: "t1", id: "c1" });
     expect(result).toEqual({ deleted: ["c1"] });
   });
 
@@ -286,10 +339,14 @@ describe("domainEventHandlers", () => {
     (toggleCategoryItem as Mock).mockResolvedValue("Added");
 
     const result = await domainEventHandlers["inventory.category.item.toggled"]({
-      payload: { categoryId: "c1", itemId: "i1" },
+      payload: { tenantId: "t1", categoryId: "c1", itemId: "i1" },
     });
 
-    expect(toggleCategoryItem).toHaveBeenCalledWith("c1", "i1");
+    expect(toggleCategoryItem).toHaveBeenCalledWith({
+      tenantId: "t1",
+      categoryId: "c1",
+      itemId: "i1",
+    });
     expect(result).toBe("Added");
   });
 
@@ -300,10 +357,11 @@ describe("domainEventHandlers", () => {
     (upsertExtra as Mock).mockResolvedValue(extra as any);
 
     const result = await domainEventHandlers["extra.upserted"]({
-      payload: { name: "Cheese", price: 500 },
+      payload: { tenantId: "t1", name: "Cheese", price: 500 },
     });
 
     expect(upsertExtra).toHaveBeenCalledWith({
+      tenantId: "t1",
       id: undefined,
       name: "Cheese",
       price: 500,
@@ -316,10 +374,10 @@ describe("domainEventHandlers", () => {
     (deleteExtra as Mock).mockResolvedValue(extra as any);
 
     const result = await domainEventHandlers["extra.deleted"]({
-      payload: { id: "e1" },
+      payload: { tenantId: "t1", id: "e1" },
     });
 
-    expect(deleteExtra).toHaveBeenCalledWith("e1");
+    expect(deleteExtra).toHaveBeenCalledWith({ tenantId: "t1", id: "e1" });
     expect(result).toEqual(extra);
   });
 
@@ -328,13 +386,40 @@ describe("domainEventHandlers", () => {
     (toggleOrderItemExtra as Mock).mockResolvedValue(toggleResult);
 
     const result = await domainEventHandlers["order.item.extra.toggled"]({
-      payload: { orderItemId: 42, extraId: "e1" },
+      payload: { tenantId: "t1", orderItemId: 42, extraId: "e1" },
     });
 
     expect(toggleOrderItemExtra).toHaveBeenCalledWith({
+      tenantId: "t1",
       orderItemId: 42,
       extraId: "e1",
     });
     expect(result).toEqual(toggleResult);
+  });
+
+  it("admin.audit.logged → calls createAdminAuditLog", async () => {
+    const auditResult = { id: 99 };
+    (createAdminAuditLog as Mock).mockResolvedValue(auditResult as any);
+
+    const result = await domainEventHandlers["admin.audit.logged"]({
+      payload: {
+        tenantId: "t1",
+        adminId: "admin-1",
+        action: "listTenants",
+        role: "admin",
+        targetTenantId: "t2",
+        metadata: { source: "tests" },
+      },
+    });
+
+    expect(createAdminAuditLog).toHaveBeenCalledWith({
+      action: "listTenants",
+      adminId: "admin-1",
+      role: "admin",
+      tenantId: "t1",
+      targetTenantId: "t2",
+      metadata: { source: "tests" },
+    });
+    expect(result).toEqual(auditResult);
   });
 });

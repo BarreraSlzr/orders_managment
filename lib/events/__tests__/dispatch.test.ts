@@ -55,7 +55,7 @@ describe("dispatchDomainEvent", () => {
 
     const result = await dispatchDomainEvent({
       type: "order.created",
-      payload: { timeZone: "America/Mexico_City" },
+      payload: { tenantId: "t1", timeZone: "America/Mexico_City" },
     });
 
     // Event was inserted
@@ -63,7 +63,7 @@ describe("dispatchDomainEvent", () => {
 
     // Handler was called with the payload
     expect(mockHandlerFn).toHaveBeenCalledWith({
-      payload: { timeZone: "America/Mexico_City" },
+      payload: { tenantId: "t1", timeZone: "America/Mexico_City" },
     });
 
     // Result is returned
@@ -77,7 +77,7 @@ describe("dispatchDomainEvent", () => {
     await expect(
       dispatchDomainEvent({
         type: "order.closed",
-        payload: { orderId: "some-id" },
+        payload: { tenantId: "t1", orderId: "some-id" },
       })
     ).rejects.toThrow("DB connection lost");
   });
@@ -88,7 +88,7 @@ describe("dispatchDomainEvent", () => {
     await expect(
       dispatchDomainEvent({
         type: "order.closed",
-        payload: { orderId: "some-id" },
+        payload: { tenantId: "t1", orderId: "some-id" },
       })
     ).rejects.toBe("string-error");
   });
@@ -98,12 +98,22 @@ describe("dispatchDomainEvent", () => {
 
     const result = await dispatchDomainEvent({
       type: "product.upserted",
-      payload: { name: "Taco", price: 2500, tags: "food,mexican" },
+      payload: {
+        tenantId: "t1",
+        name: "Taco",
+        price: 2500,
+        tags: "food,mexican",
+      },
     });
 
     expect(result).toEqual({ id: "prod-1", name: "Taco" });
     expect(mockHandlerFn).toHaveBeenCalledWith({
-      payload: { name: "Taco", price: 2500, tags: "food,mexican" },
+      payload: {
+        tenantId: "t1",
+        name: "Taco",
+        price: 2500,
+        tags: "food,mexican",
+      },
     });
   });
 });

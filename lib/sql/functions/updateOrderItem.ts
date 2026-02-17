@@ -3,12 +3,13 @@
 import { db } from "../database";
 import { OrderItemTable } from "@/lib/types";
 
-export async function updateOrderItem(
-  orderId: string,
-  productId: string,
-  type: string //'INSERT' | 'DELETE'
-): Promise<OrderItemTable | null> {
-  if (type === 'DELETE') {
+export async function updateOrderItem(params: {
+  tenantId: string;
+  orderId: string;
+  productId: string;
+  type: 'INSERT' | 'DELETE';
+}): Promise<OrderItemTable | null> {
+  if (params.type === 'DELETE') {
     // Perform DELETE operation
     await db
       .deleteFrom('order_items')
@@ -16,18 +17,21 @@ export async function updateOrderItem(
         .selectFrom('order_items')
         .select('id')
         .limit(1) // Deletes only one matching item
-        .where('order_id', '=', orderId)
-        .where('product_id', '=', productId)
+        .where('order_id', '=', params.orderId)
+        .where('product_id', '=', params.productId)
+        .where('tenant_id', '=', params.tenantId)
         )
+      .where('tenant_id', '=', params.tenantId)
       .execute();
     return null;
-  } else if (type === 'INSERT') {
+  } else if (params.type === 'INSERT') {
     // Perform INSERT operation
     const result = await db
       .insertInto('order_items')
       .values({
-        order_id: orderId,
-        product_id: productId,
+        tenant_id: params.tenantId,
+        order_id: params.orderId,
+        product_id: params.productId,
         payment_option_id: 1
       })
       .returningAll()
@@ -36,5 +40,5 @@ export async function updateOrderItem(
     return result;
   }
 
-  throw new Error(`Unexpected type: ${type}`);
+  throw new Error(`Unexpected type: ${params.type}`);
 }

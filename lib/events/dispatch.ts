@@ -15,6 +15,7 @@ export async function dispatchDomainEvent<TType extends DomainEventType>(
       event_type: params.type,
       payload: JSON.stringify(params.payload),
       status: "pending",
+      tenant_id: params.payload.tenantId,
     })
     .returning(["id"])
     .executeTakeFirstOrThrow();

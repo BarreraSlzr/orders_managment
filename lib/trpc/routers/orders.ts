@@ -2,10 +2,11 @@ import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { getOrders } from "@/lib/sql/functions/getOrders";
 import { z } from "zod";
-import { protectedProcedure, router } from "../init";
+import { tenantProcedure, router } from "../init";
+import { requireRole } from "../tenancy";
 
 export const ordersRouter = router({
-  list: protectedProcedure
+  list: tenantProcedure
     .input(
       z.object({
         timeZone: z.string().default("America/Mexico_City"),
@@ -13,33 +14,40 @@ export const ordersRouter = router({
         status: z.string().optional(),
       })
     )
-    .query(async ({ input }) => {
-      return getOrders(input);
+    .query(async ({ ctx, input }) => {
+      return getOrders({
+        tenantId: ctx.tenantId,
+        timeZone: input.timeZone,
+        date: input.date,
+        status: input.status,
+      });
     }),
 
-  getDetails: protectedProcedure
+  getDetails: tenantProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      return getOrderItemsView(input.id);
+    .query(async ({ ctx, input }) => {
+      return getOrderItemsView({ tenantId: ctx.tenantId, orderId: input.id });
     }),
 
-  create: protectedProcedure
+  create: tenantProcedure
     .input(
       z.object({
         timeZone: z.string().default("America/Mexico_City"),
         productId: z.string().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       const order = await dispatchDomainEvent({
         type: "order.created",
-        payload: { timeZone: input.timeZone },
+        payload: { tenantId: ctx.tenantId, timeZone: input.timeZone },
       });
 
       if (input.productId) {
         await dispatchDomainEvent({
           type: "order.item.updated",
           payload: {
+            tenantId: ctx.tenantId,
             orderId: order.id,
             productId: input.productId,
             type: "INSERT",
@@ -47,10 +55,10 @@ export const ordersRouter = router({
         });
       }
 
-      return getOrderItemsView(order.id);
+      return getOrderItemsView({ tenantId: ctx.tenantId, orderId: order.id });
     }),
 
-  updateItem: protectedProcedure
+  updateItem: tenantProcedure
     .input(
       z.object({
         orderId: z.string(),
@@ -58,69 +66,76 @@ export const ordersRouter = router({
         type: z.enum(["INSERT", "DELETE"]),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       await dispatchDomainEvent({
         type: "order.item.updated",
-        payload: input,
+        payload: { tenantId: ctx.tenantId, ...input },
       });
-      return getOrderItemsView(input.orderId);
+      return getOrderItemsView({ tenantId: ctx.tenantId, orderId: input.orderId });
     }),
 
-  split: protectedProcedure
+  split: tenantProcedure
     .input(
       z.object({
         orderId: z.string(),
         itemIds: z.array(z.number()),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       return dispatchDomainEvent({
         type: "order.split",
         payload: {
+          tenantId: ctx.tenantId,
           oldOrderId: input.orderId,
           itemIds: input.itemIds,
         },
       });
     }),
 
-  close: protectedProcedure
+  close: tenantProcedure
     .input(z.object({ orderId: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       return dispatchDomainEvent({
         type: "order.closed",
-        payload: input,
+        payload: { tenantId: ctx.tenantId, ...input },
       });
     }),
 
-  togglePayment: protectedProcedure
+  togglePayment: tenantProcedure
     .input(z.object({ itemIds: z.array(z.number()) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       return dispatchDomainEvent({
         type: "order.payment.toggled",
-        payload: input,
+        payload: { tenantId: ctx.tenantId, ...input },
       });
     }),
 
-  toggleTakeaway: protectedProcedure
+  toggleTakeaway: tenantProcedure
     .input(z.object({ itemIds: z.array(z.number()) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       return dispatchDomainEvent({
         type: "order.takeaway.toggled",
-        payload: input,
+        payload: { tenantId: ctx.tenantId, ...input },
       });
     }),
 
-  removeProducts: protectedProcedure
+  removeProducts: tenantProcedure
     .input(
       z.object({
         orderId: z.string(),
         itemIds: z.array(z.number()),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
       const result = await dispatchDomainEvent({
         type: "order.products.removed",
-        payload: input,
+        payload: { tenantId: ctx.tenantId, ...input },
       });
       return result.pop()?.numDeletedRows;
     }),

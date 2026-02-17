@@ -167,6 +167,17 @@ interface DomainEventsTable {
   tenant_id: ColumnType<string | null, string | undefined, never>;
 }
 
+interface AdminAuditLogsTable {
+  id: Generated<number>;
+  admin_id: string;
+  role: string | null;
+  action: string;
+  tenant_id: ColumnType<string | null, string | undefined, never>;
+  target_tenant_id: ColumnType<string | null, string | undefined, never>;
+  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  created: ColumnType<Date, string | undefined, never>;
+}
+
 // Keys of this interface are table names.
 export interface Database {
   tenants: TenantTable;
@@ -182,6 +193,7 @@ export interface Database {
   categories: CategoriesTable;
   category_inventory_item: CategoryInventoryItemTable;
   domain_events: DomainEventsTable;
+  admin_audit_logs: AdminAuditLogsTable;
   // product_consumptions: ProductConsumptionsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;

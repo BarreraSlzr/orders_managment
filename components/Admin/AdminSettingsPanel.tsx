@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
+import { formatDate } from "@/lib/utils/formatDate";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
@@ -24,18 +25,26 @@ import {
 import { useCallback, useRef, useState } from "react";
 import { CSVPreviewTable } from "./CSVPreviewTable";
 
-type Tab = "csv" | "export" | "status" | "onboard-manager" | "onboard-staff";
+type Tab =
+  | "csv"
+  | "export"
+  | "status"
+  | "audit"
+  | "onboard-manager"
+  | "onboard-staff";
 
 export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>("csv");
   const { isAdmin, role } = useAdminStatus();
   const canOnboardManager = isAdmin;
   const canOnboardStaff = role === "manager";
+  const canViewAudit = isAdmin;
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "csv", label: "CSV Import" },
     { key: "export", label: "Export" },
     { key: "status", label: "DB Status" },
+    ...(canViewAudit ? [{ key: "audit" as Tab, label: "Audit Logs" }] : []),
     ...(canOnboardManager
       ? [{ key: "onboard-manager" as Tab, label: "Onboard Manager" }]
       : []),
@@ -79,6 +88,7 @@ export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
           {activeTab === "csv" && <CSVImportTab />}
           {activeTab === "export" && <ExportTab />}
           {activeTab === "status" && <DBStatusTab />}
+          {activeTab === "audit" && canViewAudit && <AuditLogTab />}
           {activeTab === "onboard-manager" && canOnboardManager && (
             <OnboardManagerTab />
           )}
@@ -87,6 +97,153 @@ export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ── Audit Logs Tab ────────────────────────────────────────────────────────
+
+function AuditLogTab() {
+  const trpc = useTRPC();
+  const [adminId, setAdminId] = useState("");
+  const [action, setAction] = useState("");
+  const [targetTenantId, setTargetTenantId] = useState("");
+  const [limit, setLimit] = useState(50);
+
+  const auditQuery = useQuery(
+    trpc.admin.listAuditLogs.queryOptions({
+      limit,
+      adminId: adminId.trim() || undefined,
+      action: action.trim() || undefined,
+      targetTenantId: targetTenantId.trim() || undefined,
+    }),
+  );
+
+  const handleRefresh = useCallback(() => {
+    auditQuery.refetch();
+  }, [auditQuery]);
+
+  return (
+    <div className="space-y-4">
+      <div className="text-sm text-muted-foreground">
+        Review admin actions with audit IDs to verify cross-tenant operations.
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="audit-admin">Admin ID</Label>
+          <Input
+            id="audit-admin"
+            value={adminId}
+            onChange={(e) => setAdminId(e.target.value)}
+            placeholder="filter by admin id"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="audit-action">Action</Label>
+          <Input
+            id="audit-action"
+            value={action}
+            onChange={(e) => setAction(e.target.value)}
+            placeholder="filter by action"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="audit-target-tenant">Target Tenant ID</Label>
+          <Input
+            id="audit-target-tenant"
+            value={targetTenantId}
+            onChange={(e) => setTargetTenantId(e.target.value)}
+            placeholder="filter by tenant id"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="audit-limit">Limit</Label>
+          <Input
+            id="audit-limit"
+            type="number"
+            min={1}
+            max={200}
+            value={limit}
+            onChange={(e) =>
+              setLimit(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
+            }
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" onClick={handleRefresh}>
+          <RefreshCw className="h-3.5 w-3.5 mr-1" />
+          Refresh
+        </Button>
+        {auditQuery.isFetching && (
+          <span className="text-xs text-muted-foreground">Loading…</span>
+        )}
+      </div>
+
+      {auditQuery.error && (
+        <p className="text-xs text-red-600">{auditQuery.error.message}</p>
+      )}
+
+      {auditQuery.data && auditQuery.data.length === 0 && (
+        <p className="text-xs text-muted-foreground">No audit logs found.</p>
+      )}
+
+      {auditQuery.data && auditQuery.data.length > 0 && (
+        <div className="overflow-x-auto border rounded">
+          <table className="min-w-full text-xs">
+            <thead className="bg-muted">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Audit ID</th>
+                <th className="text-left px-3 py-2 font-semibold">Action</th>
+                <th className="text-left px-3 py-2 font-semibold">Admin</th>
+                <th className="text-left px-3 py-2 font-semibold">Role</th>
+                <th className="text-left px-3 py-2 font-semibold">
+                  Admin Tenant
+                </th>
+                <th className="text-left px-3 py-2 font-semibold">
+                  Target Tenant
+                </th>
+                <th className="text-left px-3 py-2 font-semibold">Created</th>
+                <th className="text-left px-3 py-2 font-semibold">Metadata</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditQuery.data.map((log) => {
+                const metadata = log.metadata
+                  ? JSON.stringify(log.metadata)
+                  : "";
+                const metadataPreview =
+                  metadata.length > 120
+                    ? `${metadata.slice(0, 120)}…`
+                    : metadata;
+
+                return (
+                  <tr key={log.id} className="border-t">
+                    <td className="px-3 py-2 font-mono">{log.id}</td>
+                    <td className="px-3 py-2">{log.action}</td>
+                    <td className="px-3 py-2">
+                      {log.admin_username || log.admin_id}
+                    </td>
+                    <td className="px-3 py-2">{log.role ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      {log.tenant_name || log.tenant_id || "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {log.target_tenant_name || log.target_tenant_id || "—"}
+                    </td>
+                    <td className="px-3 py-2">{formatDate(log.created)}</td>
+                    <td className="px-3 py-2 font-mono text-[11px]">
+                      {metadataPreview || "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

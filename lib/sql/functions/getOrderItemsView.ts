@@ -4,7 +4,10 @@ import { OrderItem, OrderItemsView } from '../types';
 import { getOrder } from './getOrder';
 
 // Define a function to get the OrderItemsView by orderId
-export async function getOrderItemsView(orderId: string): Promise<OrderItemsView> {
+export async function getOrderItemsView(params: {
+  tenantId: string;
+  orderId: string;
+}): Promise<OrderItemsView> {
   // Step 1: Aggregate the order items for the given orderId, including extras per item
   const orderItems = await db.executeQuery<OrderItem>(CompiledQuery.raw(`
     SELECT
@@ -29,20 +32,24 @@ export async function getOrderItemsView(orderId: string): Promise<OrderItemsView
             FROM order_item_extras oie
             JOIN extras e ON e.id = oie.extra_id AND e.deleted IS NULL
             WHERE oie.order_item_id = order_items.id
+              AND oie.tenant_id = $2
+              AND e.tenant_id = $2
           ), '[]'::json)
         )
       ) AS items
     FROM
       order_items
     JOIN products ON products.id = order_items.product_id
+      AND products.tenant_id = $2
     WHERE
       order_items.order_id = $1
+      AND order_items.tenant_id = $2
     GROUP BY
       products.name,
       products.price,
       order_items.order_id,
       order_items.product_id;
-    `, [orderId]));
+    `, [params.orderId, params.tenantId]));
 
   // Step 2: Group the aggregated items by product_id
   const groupedItems = orderItems.rows.reduce((acc, item) => {
@@ -60,7 +67,7 @@ export async function getOrderItemsView(orderId: string): Promise<OrderItemsView
   }, new Map<string, any>());
 
   //Fetch the order details for the given orderId
-  const order = await getOrder(orderId);
+  const order = await getOrder({ tenantId: params.tenantId, id: params.orderId });
 
   //Return the final structured data
   return {
