@@ -25,7 +25,7 @@ export async function getItems(params: {
     ])
     .where('inventory_items.tenant_id', '=', params.tenantId)
     .$if(!!params.categoryId, (qb) =>
-      qb.where(sql`exists (
+      qb.where(sql<boolean>`exists (
         select 1 from category_inventory_item as ci
         where ci.item_id = inventory_items.id
           and ci.tenant_id = ${params.tenantId}
