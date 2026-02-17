@@ -321,9 +321,6 @@ sequenceDiagram
     
     tRPC-->>Client: { result: [...] }
     
-    style Auth fill:#51cf66
-    style Tenant fill:#4c6ef5
-    style DB fill:#ffa500
 ```
 
 ### Cross-Tenant Admin Request (View audit logs)
@@ -350,9 +347,6 @@ sequenceDiagram
     
     tRPC-->>Client: { result: [...] }
     
-    style Auth fill:#ff6b6b
-    style Admin fill:#ff6b6b
-    style DB fill:#ff6b6b
 ```
 
 ### Unauthorized Access Attempt
@@ -375,8 +369,6 @@ sequenceDiagram
     
     tRPC-->>Client: { error: "UNAUTHORIZED" }
     
-    style Auth fill:#ff6b6b
-    style Tenant fill:#ff6b6b
 ```
 
 ---
