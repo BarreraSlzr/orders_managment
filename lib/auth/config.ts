@@ -29,6 +29,9 @@ export function getAuthConfig(): AuthConfig {
     );
   }
 
+  const rawCookieDomain = process.env.AUTH_COOKIE_DOMAIN || "";
+  const cookieDomain = rawCookieDomain.includes("*") ? "" : rawCookieDomain;
+
   _config = {
     secret,
     cookieName: process.env.AUTH_COOKIE_NAME || "__session",
@@ -37,7 +40,7 @@ export function getAuthConfig(): AuthConfig {
       .split(",")
       .map((o) => o.trim())
       .filter(Boolean),
-    cookieDomain: process.env.AUTH_COOKIE_DOMAIN || "",
+    cookieDomain,
   };
 
   return _config;

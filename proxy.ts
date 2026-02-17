@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
   "/api/admin/verify",
   "/api/trpc",
   "/api/sse",
+  "/login",
   "/_next",
   "/favicon.ico",
 ];
@@ -90,8 +91,8 @@ function unauthorizedResponse(request: NextRequest): NextResponse {
     );
   }
 
-  // Page routes redirect to the auth endpoint
-  const loginUrl = new URL("/api/auth/login", request.url);
+  // Page routes redirect to the login page
+  const loginUrl = new URL("/login", request.url);
   loginUrl.searchParams.set("redirect", pathname);
   return NextResponse.redirect(loginUrl);
 }

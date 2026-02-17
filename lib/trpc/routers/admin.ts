@@ -6,10 +6,11 @@ import { listAdminAuditLogs } from "@/lib/sql/functions/adminAudit";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { createTenant, getTenantByName, listTenants } from "@/lib/sql/functions/tenants";
-import { createUser } from "@/lib/sql/functions/users";
+import { createUser, listUsersByTenants } from "@/lib/sql/functions/users";
 import { parseProductsCSV } from "@/lib/utils/parseProductsCSV";
 import { getMigrationStatus } from "@/lib/sql/migrate";
 import { allMigrations } from "@/lib/sql/migrations";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, publicProcedure, router } from "../init";
 
@@ -81,6 +82,78 @@ export const adminRouter = router({
     });
     return listTenants();
   }),
+
+  /** List roster across tenants (system admin) */
+  listTenantRoster: adminProcedure
+    .input(z.object({ tenantId: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const tenantId = ctx.session?.tenant_id;
+      const tenantName = ctx.session?.tenant_name;
+
+      if (!tenantId || !tenantName) {
+        throw new TRPCError({ code: "UNAUTHORIZED" });
+      }
+
+      await logAdminAccess({
+        action: "listTenantRoster",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId,
+        metadata: {
+          filterTenantId: input?.tenantId ?? null,
+        },
+      });
+
+      const isSystemAdmin = tenantName === "system";
+      const visibleRoles = ["manager", "staff"] as const;
+
+      if (!isSystemAdmin) {
+        const rows = await listUsersByTenants({
+          tenantIds: [tenantId],
+          roles: [...visibleRoles],
+        });
+
+        return {
+          tenants: [
+            {
+              id: tenantId,
+              name: tenantName,
+              managers: rows.filter((user) => user.role === "manager"),
+              staff: rows.filter((user) => user.role === "staff"),
+            },
+          ],
+        };
+      }
+
+      const tenants = await listTenants();
+      const targetTenantIds = input?.tenantId
+        ? tenants.filter((tenant) => tenant.id === input.tenantId)
+        : tenants;
+
+      const tenantIds = targetTenantIds.map((tenant) => tenant.id);
+      const rows = await listUsersByTenants({
+        tenantIds,
+        roles: [...visibleRoles],
+      });
+
+      const grouped = new Map(
+        targetTenantIds.map((tenant) => [tenant.id, { ...tenant, managers: [], staff: [] }])
+      );
+
+      for (const user of rows) {
+        const entry = grouped.get(user.tenant_id);
+        if (!entry) continue;
+        if (user.role === "manager") {
+          entry.managers.push(user);
+        } else {
+          entry.staff.push(user);
+        }
+      }
+
+      return {
+        tenants: Array.from(grouped.values()),
+      };
+    }),
 
   /** Fetch default tenant (cafe&baguettes) */
   defaultTenant: adminProcedure.query(async ({ ctx }) => {
