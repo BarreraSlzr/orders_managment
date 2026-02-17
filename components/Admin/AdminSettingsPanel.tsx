@@ -2,16 +2,13 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
-import { formatDate } from "@/lib/utils/formatDate";
+import { getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
-  Building2,
   CheckCircle,
   Download,
   FileText,
@@ -19,38 +16,21 @@ import {
   Settings,
   Trash2,
   Upload,
-  UserPlus,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { CSVPreviewTable } from "./CSVPreviewTable";
 
-type Tab =
-  | "csv"
-  | "export"
-  | "status"
-  | "audit"
-  | "onboard-manager"
-  | "onboard-staff";
+type Tab = "csv" | "export" | "links";
 
 export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<Tab>("csv");
-  const { isAdmin, role } = useAdminStatus();
-  const canOnboardManager = isAdmin;
-  const canOnboardStaff = role === "manager";
-  const canViewAudit = isAdmin;
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "csv", label: "CSV Import" },
     { key: "export", label: "Export" },
-    { key: "status", label: "DB Status" },
-    ...(canViewAudit ? [{ key: "audit" as Tab, label: "Audit Logs" }] : []),
-    ...(canOnboardManager
-      ? [{ key: "onboard-manager" as Tab, label: "Onboard Manager" }]
-      : []),
-    ...(canOnboardStaff
-      ? [{ key: "onboard-staff" as Tab, label: "Onboard Staff" }]
-      : []),
+    { key: "links", label: "Links" },
   ];
 
   return (
@@ -87,163 +67,9 @@ export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
         <CardContent className="flex-1 overflow-y-auto pt-4">
           {activeTab === "csv" && <CSVImportTab />}
           {activeTab === "export" && <ExportTab />}
-          {activeTab === "status" && <DBStatusTab />}
-          {activeTab === "audit" && canViewAudit && <AuditLogTab />}
-          {activeTab === "onboard-manager" && canOnboardManager && (
-            <OnboardManagerTab />
-          )}
-          {activeTab === "onboard-staff" && canOnboardStaff && (
-            <OnboardStaffTab />
-          )}
+          {activeTab === "links" && <QuickLinksTab />}
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-// ── Audit Logs Tab ────────────────────────────────────────────────────────
-
-function AuditLogTab() {
-  const trpc = useTRPC();
-  const [adminId, setAdminId] = useState("");
-  const [action, setAction] = useState("");
-  const [targetTenantId, setTargetTenantId] = useState("");
-  const [limit, setLimit] = useState(50);
-
-  const auditQuery = useQuery(
-    trpc.admin.listAuditLogs.queryOptions({
-      limit,
-      adminId: adminId.trim() || undefined,
-      action: action.trim() || undefined,
-      targetTenantId: targetTenantId.trim() || undefined,
-    }),
-  );
-
-  const handleRefresh = useCallback(() => {
-    auditQuery.refetch();
-  }, [auditQuery]);
-
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Review admin actions with audit IDs to verify cross-tenant operations.
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="audit-admin">Admin ID</Label>
-          <Input
-            id="audit-admin"
-            value={adminId}
-            onChange={(e) => setAdminId(e.target.value)}
-            placeholder="filter by admin id"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="audit-action">Action</Label>
-          <Input
-            id="audit-action"
-            value={action}
-            onChange={(e) => setAction(e.target.value)}
-            placeholder="filter by action"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="audit-target-tenant">Target Tenant ID</Label>
-          <Input
-            id="audit-target-tenant"
-            value={targetTenantId}
-            onChange={(e) => setTargetTenantId(e.target.value)}
-            placeholder="filter by tenant id"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="audit-limit">Limit</Label>
-          <Input
-            id="audit-limit"
-            type="number"
-            min={1}
-            max={200}
-            value={limit}
-            onChange={(e) =>
-              setLimit(Math.max(1, Math.min(200, Number(e.target.value) || 1)))
-            }
-          />
-        </div>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="outline" onClick={handleRefresh}>
-          <RefreshCw className="h-3.5 w-3.5 mr-1" />
-          Refresh
-        </Button>
-        {auditQuery.isFetching && (
-          <span className="text-xs text-muted-foreground">Loading…</span>
-        )}
-      </div>
-
-      {auditQuery.error && (
-        <p className="text-xs text-red-600">{auditQuery.error.message}</p>
-      )}
-
-      {auditQuery.data && auditQuery.data.length === 0 && (
-        <p className="text-xs text-muted-foreground">No audit logs found.</p>
-      )}
-
-      {auditQuery.data && auditQuery.data.length > 0 && (
-        <div className="overflow-x-auto border rounded">
-          <table className="min-w-full text-xs">
-            <thead className="bg-muted">
-              <tr>
-                <th className="text-left px-3 py-2 font-semibold">Audit ID</th>
-                <th className="text-left px-3 py-2 font-semibold">Action</th>
-                <th className="text-left px-3 py-2 font-semibold">Admin</th>
-                <th className="text-left px-3 py-2 font-semibold">Role</th>
-                <th className="text-left px-3 py-2 font-semibold">
-                  Admin Tenant
-                </th>
-                <th className="text-left px-3 py-2 font-semibold">
-                  Target Tenant
-                </th>
-                <th className="text-left px-3 py-2 font-semibold">Created</th>
-                <th className="text-left px-3 py-2 font-semibold">Metadata</th>
-              </tr>
-            </thead>
-            <tbody>
-              {auditQuery.data.map((log) => {
-                const metadata = log.metadata
-                  ? JSON.stringify(log.metadata)
-                  : "";
-                const metadataPreview =
-                  metadata.length > 120
-                    ? `${metadata.slice(0, 120)}…`
-                    : metadata;
-
-                return (
-                  <tr key={log.id} className="border-t">
-                    <td className="px-3 py-2 font-mono">{log.id}</td>
-                    <td className="px-3 py-2">{log.action}</td>
-                    <td className="px-3 py-2">
-                      {log.admin_username || log.admin_id}
-                    </td>
-                    <td className="px-3 py-2">{log.role ?? "—"}</td>
-                    <td className="px-3 py-2">
-                      {log.tenant_name || log.tenant_id || "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      {log.target_tenant_name || log.target_tenant_id || "—"}
-                    </td>
-                    <td className="px-3 py-2">{formatDate(log.created)}</td>
-                    <td className="px-3 py-2 font-mono text-[11px]">
-                      {metadataPreview || "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
     </div>
   );
 }
@@ -467,6 +293,7 @@ function UploadResultDisplay({
 function ExportTab() {
   const trpc = useTRPC();
   const exportQuery = useQuery(trpc.products.export.queryOptions());
+  const exportDate = getIsoTimestamp().slice(0, 10);
 
   const handleDownloadJSON = useCallback(() => {
     if (!exportQuery.data) return;
@@ -476,10 +303,10 @@ function ExportTab() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `products-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `products-${exportDate}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [exportQuery.data]);
+  }, [exportDate, exportQuery.data]);
 
   const handleDownloadCSV = useCallback(() => {
     if (!exportQuery.data) return;
@@ -501,10 +328,10 @@ function ExportTab() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `products-${exportDate}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [exportQuery.data]);
+  }, [exportDate, exportQuery.data]);
 
   return (
     <div className="space-y-4">
@@ -540,391 +367,21 @@ function ExportTab() {
   );
 }
 
-// ── DB Status Tab ────────────────────────────────────────────────────────
+// ── Quick Links Tab ───────────────────────────────────────────────────────
 
-function DBStatusTab() {
-  const trpc = useTRPC();
-  const statusQuery = useQuery(trpc.admin.migrationStatus.queryOptions());
-  const countsQuery = useQuery(trpc.admin.tableCounts.queryOptions());
-
+function QuickLinksTab() {
   return (
     <div className="space-y-4">
-      {/* Migration status */}
-      <div>
-        <p className="text-sm font-medium mb-2">Migration Status</p>
-        {statusQuery.isLoading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : statusQuery.error ? (
-          <p className="text-xs text-red-600">
-            Error: {statusQuery.error.message}
-          </p>
-        ) : statusQuery.data ? (
-          <div className="text-xs space-y-1 bg-muted rounded p-2">
-            <div>
-              Current version:{" "}
-              <span className="font-mono font-semibold">
-                {statusQuery.data.current ?? "none"}
-              </span>
-            </div>
-            <div>Applied: {statusQuery.data.applied.join(", ") || "none"}</div>
-            <div>
-              Pending:{" "}
-              <span
-                className={
-                  statusQuery.data.pending.length > 0
-                    ? "text-yellow-600 font-semibold"
-                    : ""
-                }
-              >
-                {statusQuery.data.pending.join(", ") || "none"}
-              </span>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Table counts */}
-      <div>
-        <p className="text-sm font-medium mb-2">Table Row Counts</p>
-        {countsQuery.isLoading ? (
-          <p className="text-xs text-muted-foreground">Loading…</p>
-        ) : countsQuery.error ? (
-          <p className="text-xs text-red-600">
-            Error: {countsQuery.error.message}
-          </p>
-        ) : countsQuery.data ? (
-          <div className="grid grid-cols-2 gap-1 text-xs">
-            {Object.entries(countsQuery.data).map(([table, count]) => (
-              <div
-                key={table}
-                className="flex justify-between bg-muted rounded px-2 py-1"
-              >
-                <span className="font-mono">{table}</span>
-                <span className="font-semibold tabular-nums">{count}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-// ── Onboarding Tabs ──────────────────────────────────────────────────────
-
-function OnboardManagerTab() {
-  const trpc = useTRPC();
-  const [tenantName, setTenantName] = useState("");
-  const [managerUsername, setManagerUsername] = useState("");
-  const [tempPassword, setTempPassword] = useState("");
-  const [result, setResult] = useState<{
-    tenantName: string;
-    username: string;
-    tempPassword: string;
-  } | null>(null);
-
-  const onboardMutation = useMutation(
-    trpc.admin.onboardManager.mutationOptions(),
-  );
-
-  const handleSubmit = useCallback(async () => {
-    setResult(null);
-    const res = await onboardMutation.mutateAsync({
-      tenantName,
-      managerUsername,
-      tempPassword: tempPassword || undefined,
-    });
-    setResult({
-      tenantName: res.tenantName,
-      username: res.username,
-      tempPassword: res.tempPassword,
-    });
-  }, [tenantName, managerUsername, tempPassword, onboardMutation]);
-
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Create a new tenant and its manager. A temporary password will be
-        generated if you leave it blank.
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="tenant-name">Tenant Name</Label>
-        <Input
-          id="tenant-name"
-          value={tenantName}
-          onChange={(e) => setTenantName(e.target.value)}
-          placeholder="New tenant name"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="manager-username">Manager Username</Label>
-        <Input
-          id="manager-username"
-          value={managerUsername}
-          onChange={(e) => setManagerUsername(e.target.value)}
-          placeholder="manager username"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="manager-password">Temp Password (optional)</Label>
-        <Input
-          id="manager-password"
-          value={tempPassword}
-          onChange={(e) => setTempPassword(e.target.value)}
-          placeholder="auto-generated if empty"
-        />
-      </div>
-
-      <Button
-        size="sm"
-        onClick={handleSubmit}
-        disabled={
-          !tenantName.trim() ||
-          !managerUsername.trim() ||
-          onboardMutation.isPending
-        }
-      >
-        <Building2 className="h-3.5 w-3.5 mr-1" />
-        {onboardMutation.isPending ? "Creating…" : "Create Tenant & Manager"}
-      </Button>
-
-      {onboardMutation.error && (
-        <p className="text-xs text-red-600">{onboardMutation.error.message}</p>
-      )}
-
-      {result && (
-        <div className="text-sm space-y-1 bg-muted rounded p-3">
-          <div>
-            Tenant: <span className="font-semibold">{result.tenantName}</span>
-          </div>
-          <div>
-            Username: <span className="font-semibold">{result.username}</span>
-          </div>
-          <div>
-            Temp Password:{" "}
-            <span className="font-mono">{result.tempPassword}</span>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function OnboardStaffTab() {
-  const trpc = useTRPC();
-  const queryClient = useQueryClient();
-  const [username, setUsername] = useState("");
-  const [tempPassword, setTempPassword] = useState("");
-  const [permissions, setPermissions] = useState<string[]>([
-    "orders.create",
-    "orders.update",
-    "orders.delete",
-    "orders.close",
-  ]);
-  const [result, setResult] = useState<{
-    username: string;
-    tempPassword: string;
-  } | null>(null);
-  const [savingUserId, setSavingUserId] = useState<string | null>(null);
-  const [savedStaff, setSavedStaff] = useState<Record<string, boolean>>({});
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  const onboardMutation = useMutation(
-    trpc.users.onboardStaff.mutationOptions(),
-  );
-  const listStaffQuery = useQuery(trpc.users.listStaff.queryOptions());
-  const updatePermissionsMutation = useMutation(
-    trpc.users.updatePermissions.mutationOptions(),
-  );
-
-  const handleSubmit = useCallback(async () => {
-    setResult(null);
-    const res = await onboardMutation.mutateAsync({
-      username,
-      tempPassword: tempPassword || undefined,
-      permissions,
-    });
-    setResult({ username: res.username, tempPassword: res.tempPassword });
-    setUsername("");
-    setTempPassword("");
-    await queryClient.invalidateQueries({ queryKey: [["users", "listStaff"]] });
-  }, [username, tempPassword, permissions, onboardMutation, queryClient]);
-
-  const permissionOptions = [
-    { key: "orders.create", label: "Create orders" },
-    { key: "orders.update", label: "Update orders" },
-    { key: "orders.delete", label: "Delete orders" },
-    { key: "orders.close", label: "Close orders" },
-  ];
-
-  const togglePermission = useCallback((key: string) => {
-    setPermissions((current) =>
-      current.includes(key)
-        ? current.filter((p) => p !== key)
-        : [...current, key],
-    );
-  }, []);
-
-  const handleStaffToggle = useCallback(
-    async (userId: string, key: string, current: string[]) => {
-      const next = current.includes(key)
-        ? current.filter((p) => p !== key)
-        : [...current, key];
-
-      setSavingUserId(userId);
-      setSaveError(null);
-
-      try {
-        await updatePermissionsMutation.mutateAsync({
-          userId,
-          permissions: next,
-        });
-
-        await queryClient.invalidateQueries({
-          queryKey: [["users", "listStaff"]],
-        });
-
-        setSavedStaff((prev) => ({ ...prev, [userId]: true }));
-        setTimeout(() => {
-          setSavedStaff((prev) => {
-            const nextState = { ...prev };
-            delete nextState[userId];
-            return nextState;
-          });
-        }, 2000);
-      } catch (err) {
-        setSaveError(
-          err instanceof Error ? err.message : "Failed to save permissions",
-        );
-      } finally {
-        setSavingUserId(null);
-      }
-    },
-    [updatePermissionsMutation, queryClient],
-  );
-
-  return (
-    <div className="space-y-4">
-      <div className="text-sm text-muted-foreground">
-        Create a staff account for your tenant. Leave password blank to
-        auto-generate.
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="staff-username">Staff Username</Label>
-        <Input
-          id="staff-username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="staff username"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="staff-password">Temp Password (optional)</Label>
-        <Input
-          id="staff-password"
-          value={tempPassword}
-          onChange={(e) => setTempPassword(e.target.value)}
-          placeholder="auto-generated if empty"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Permissions</Label>
-        <div className="space-y-2">
-          {permissionOptions.map((permission) => (
-            <label
-              key={permission.key}
-              className="flex items-center gap-2 text-sm"
-            >
-              <Checkbox
-                checked={permissions.includes(permission.key)}
-                onCheckedChange={() => togglePermission(permission.key)}
-              />
-              {permission.label}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <Button
-        size="sm"
-        onClick={handleSubmit}
-        disabled={!username.trim() || onboardMutation.isPending}
-      >
-        <UserPlus className="h-3.5 w-3.5 mr-1" />
-        {onboardMutation.isPending ? "Creating…" : "Create Staff"}
-      </Button>
-
-      {onboardMutation.error && (
-        <p className="text-xs text-red-600">{onboardMutation.error.message}</p>
-      )}
-
-      {result && (
-        <div className="text-sm space-y-1 bg-muted rounded p-3">
-          <div>
-            Username: <span className="font-semibold">{result.username}</span>
-          </div>
-          <div>
-            Temp Password:{" "}
-            <span className="font-mono">{result.tempPassword}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="border-t pt-4 space-y-3">
-        <div className="text-sm font-medium">Manage Staff Permissions</div>
-        {listStaffQuery.isLoading ? (
-          <p className="text-xs text-muted-foreground">Loading staff…</p>
-        ) : listStaffQuery.error ? (
-          <p className="text-xs text-red-600">{listStaffQuery.error.message}</p>
-        ) : listStaffQuery.data && listStaffQuery.data.length > 0 ? (
-          <div className="space-y-3">
-            {listStaffQuery.data.map((staff) => (
-              <div key={staff.id} className="rounded border p-3">
-                <div className="text-sm font-semibold mb-2">
-                  {staff.username}
-                </div>
-                {savingUserId === staff.id && (
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Saving…
-                  </div>
-                )}
-                {!savingUserId && savedStaff[staff.id] && (
-                  <div className="text-xs text-emerald-600 mb-2">Saved</div>
-                )}
-                <div className="grid gap-2">
-                  {permissionOptions.map((permission) => (
-                    <label
-                      key={`${staff.id}-${permission.key}`}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <Checkbox
-                        checked={staff.permissions.includes(permission.key)}
-                        onCheckedChange={() =>
-                          handleStaffToggle(
-                            staff.id,
-                            permission.key,
-                            staff.permissions,
-                          )
-                        }
-                        disabled={updatePermissionsMutation.isPending}
-                      />
-                      {permission.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">No staff users yet.</p>
-        )}
-        {saveError && <p className="text-xs text-red-600">{saveError}</p>}
+      <p className="text-sm text-muted-foreground">
+        Jump to onboarding workflows or inventory management.
+      </p>
+      <div className="flex flex-col gap-2">
+        <Button asChild size="sm">
+          <Link href="/onboardings">Go to Onboarding</Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/items">Go to Inventory</Link>
+        </Button>
       </div>
     </div>
   );
