@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "bun: dev",
+			"type": "shell",
+			"command": "bun",
+			"args": [
+				"run",
+				"next",
+				"dev",
+				"--turbo"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}
