@@ -87,6 +87,7 @@ describe("tenant scoping", () => {
     await updateUserPermissions({ tenantId: "t3", userId: "u1", permissions: [] });
 
     const tenantWhere = updateWhereCalls.find((call) => call[0] === "tenant_id");
-    expect(tenantWhere[2]).toBe("t3");
+    expect(tenantWhere).toBeDefined();
+    expect(tenantWhere![2]).toBe("t3");
   });
 });
