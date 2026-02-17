@@ -7,6 +7,9 @@
 import { clearSessionCookie } from "@/lib/auth/cookies";
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs"; // needs cookie handling — not Edge
+export const dynamic = "force-dynamic";
+
 function logout() {
   const response = NextResponse.json({ ok: true });
   clearSessionCookie(response);

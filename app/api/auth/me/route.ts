@@ -7,6 +7,9 @@
 import { verifySessionToken } from "@/lib/auth/session";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs"; // needs session verification — not Edge
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const cookieName = process.env.AUTH_COOKIE_NAME || "__session";
   const token = request.cookies.get(cookieName)?.value;

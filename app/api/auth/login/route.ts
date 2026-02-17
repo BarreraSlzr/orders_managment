@@ -14,6 +14,9 @@ import { verifyPassword } from "@/lib/auth/passwords";
 import { getUserForLogin } from "@/lib/sql/functions/users";
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs"; // needs DB access — not Edge
+export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   const sub = request.nextUrl.searchParams.get("sub");
   const redirect = request.nextUrl.searchParams.get("redirect") || "/";
