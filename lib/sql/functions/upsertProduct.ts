@@ -1,27 +1,33 @@
 import { db } from '@/lib/sql/database';
 import { Product } from '@/lib/types';
-import { InsertObject, UpdateType } from 'kysely';
-import { Database } from '../types';
 
-type Insert = InsertObject<Database, 'products'>
-type Update = UpdateType<Product> & { id: string }
-export async function upsertProduct(product: Update | Insert): Promise<Product> {
-  if (!!product.id) {
-    const { id = '', name, price, tags } = (product as Update);
+export async function upsertProduct(params: {
+  tenantId: string;
+  id?: string;
+  name: string;
+  price: number;
+  tags: string;
+}): Promise<Product> {
+  if (params.id) {
     // Update existing product
     return await db
       .updateTable('products')
-      .set({ name, price, tags })
-      .where('id', '=', id)
-      .returningAll()
-      .executeTakeFirstOrThrow();
-  } else {
-    const { name, price, tags } = (product as Insert);
-    // Insert new product
-    return await db
-      .insertInto('products')
-      .values({ name, price, tags })
+      .set({ name: params.name, price: params.price, tags: params.tags })
+      .where('id', '=', params.id)
+      .where('tenant_id', '=', params.tenantId)
       .returningAll()
       .executeTakeFirstOrThrow();
   }
+
+  // Insert new product
+  return await db
+    .insertInto('products')
+    .values({
+      tenant_id: params.tenantId,
+      name: params.name,
+      price: params.price,
+      tags: params.tags,
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow();
 }

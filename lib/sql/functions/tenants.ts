@@ -23,3 +23,11 @@ export async function getTenantByName(params: { name: string }): Promise<{
     .executeTakeFirst();
   return row ?? null;
 }
+
+export async function listTenants(): Promise<Array<{ id: string; name: string }>> {
+  return db
+    .selectFrom("tenants")
+    .select(["id", "name"])
+    .orderBy("name", "asc")
+    .execute();
+}

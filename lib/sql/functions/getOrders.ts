@@ -1,7 +1,7 @@
 "use server";
 
 import { db, sql } from "../database";
-import { OrdersQuery, Order } from "@/lib/types";
+import { Order } from "@/lib/types";
 
 // Utility to calculate the start and end of the given date in the specified timezone
 const calculateDateRange = (timeZone: string, date?: string) => {
@@ -17,15 +17,20 @@ const calculateDateRange = (timeZone: string, date?: string) => {
   return { start: todayStart, end: todayEnd };
 };
 
-export async function getOrders({
-  timeZone = "America/Mexico_City",
-  date,
-  status = '',
-}: OrdersQuery = {}): Promise<Order[]> {
+export async function getOrders(params: {
+  tenantId: string;
+  timeZone?: string;
+  date?: string;
+  status?: string;
+}): Promise<Order[]> {
+  const timeZone = params.timeZone ?? "America/Mexico_City";
+  const date = params.date;
+  const status = params.status ?? "";
   const { start, end } = calculateDateRange(timeZone, date);
 
   let query = db
-    .selectFrom("orders");
+    .selectFrom("orders")
+    .where("tenant_id", "=", params.tenantId);
 
   if (status !== '' || !!date) {
     query = query

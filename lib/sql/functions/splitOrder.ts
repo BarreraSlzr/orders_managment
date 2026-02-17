@@ -4,26 +4,34 @@ import { getOrder } from "./getOrder";
 import { insertOrder } from "./insertOrder";
 import { getOrderItemsView } from "./getOrderItemsView";
 
-interface props {
-  old_order_id: string,
-  item_ids: OrderItemTable['id'][]
+interface SplitOrderParams {
+  tenantId: string;
+  oldOrderId: string;
+  itemIds: OrderItemTable['id'][];
 }
 
-export async function splitOrder({
-  old_order_id, 
-  item_ids
-}: props) {
-  const newOrder = await insertOrder("America/Mexico_City");
+export async function splitOrder(params: SplitOrderParams) {
+  const newOrder = await insertOrder({
+    tenantId: params.tenantId,
+    timeZone: "America/Mexico_City",
+  });
 
   // Process updates for each product_id with controlled quantities
   await db
     .updateTable('order_items')
     .set({ order_id: newOrder.id })
-    .where('id', 'in', item_ids)
+    .where('id', 'in', params.itemIds)
+    .where('tenant_id', '=', params.tenantId)
     .execute();
 
   return { 
-    newOrder: await getOrderItemsView(newOrder.id),
-    oldOrder: await getOrder(old_order_id),
+    newOrder: await getOrderItemsView({
+      tenantId: params.tenantId,
+      orderId: newOrder.id,
+    }),
+    oldOrder: await getOrder({
+      tenantId: params.tenantId,
+      id: params.oldOrderId,
+    }),
   };
 }
