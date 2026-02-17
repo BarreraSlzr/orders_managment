@@ -17,9 +17,9 @@ export async function createAdminAuditLog(
     .values({
       action: params.action,
       admin_id: params.adminId,
-      role: params.role ?? null,
-      tenant_id: params.tenantId ?? null,
-      target_tenant_id: params.targetTenantId ?? null,
+      role: params.role,
+      tenant_id: params.tenantId,
+      target_tenant_id: params.targetTenantId,
       metadata: params.metadata ?? null,
     })
     .returning(["id"])

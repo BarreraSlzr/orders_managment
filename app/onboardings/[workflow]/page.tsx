@@ -261,13 +261,20 @@ export default function OnboardingRunnerPage() {
 
       if (!isEditMode) {
         const csv = typeof data.csv === "string" ? data.csv.trim() : "";
-        if (csv) {
+        if (csv && "tenantId" in result) {
           await importTenantProductsMutation.mutateAsync({
             tenantId: result.tenantId,
             csv,
           });
         }
       }
+
+      const createdTenantName =
+        !isEditMode && "tenantName" in result
+          ? result.tenantName
+          : tenantNameValue;
+      const createdTempPassword =
+        !isEditMode && "tempPassword" in result ? result.tempPassword : "";
 
       setCompletion({
         title: isEditMode ? "Manager updated" : "Tenant and manager created",
@@ -278,14 +285,14 @@ export default function OnboardingRunnerPage() {
           ? [
               {
                 label: "Tenant",
-                value: editableUser?.tenant_name ?? tenantNameValue,
+                value: editableUser?.tenant_name ?? createdTenantName,
               },
               { label: "Manager", value: result.username },
             ]
           : [
-              { label: "Tenant", value: result.tenantName },
+              { label: "Tenant", value: createdTenantName },
               { label: "Manager", value: result.username },
-              { label: "Temp password", value: result.tempPassword },
+              { label: "Temp password", value: createdTempPassword },
             ],
       });
       return;
@@ -326,6 +333,9 @@ export default function OnboardingRunnerPage() {
               permissions,
             });
 
+      const createdTempPassword =
+        !isEditMode && "tempPassword" in result ? result.tempPassword : "";
+
       setCompletion({
         title: isEditMode ? "Staff member updated" : "Staff member created",
         subtitle: isEditMode
@@ -344,7 +354,7 @@ export default function OnboardingRunnerPage() {
                 ? [{ label: "Tenant", value: targetTenantName }]
                 : []),
               { label: "Username", value: result.username },
-              { label: "Temp password", value: result.tempPassword },
+              { label: "Temp password", value: createdTempPassword },
             ],
       });
     }

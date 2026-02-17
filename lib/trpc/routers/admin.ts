@@ -136,8 +136,18 @@ export const adminRouter = router({
         roles: [...visibleRoles],
       });
 
-      const grouped = new Map(
-        targetTenantIds.map((tenant) => [tenant.id, { ...tenant, managers: [], staff: [] }])
+      type TenantRosterEntry = {
+        id: string;
+        name: string;
+        managers: typeof rows;
+        staff: typeof rows;
+      };
+
+      const grouped = new Map<string, TenantRosterEntry>(
+        targetTenantIds.map((tenant) => [
+          tenant.id,
+          { ...tenant, managers: [], staff: [] },
+        ])
       );
 
       for (const user of rows) {

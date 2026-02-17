@@ -117,7 +117,7 @@ export const usersRouter = router({
       throw new TRPCError({ code: "FORBIDDEN" });
     }
     const tenantId = getTenantId(ctx.session);
-    const visibleRoles =
+    const visibleRoles: UserRole[] =
       role === "admin"
         ? ["manager", "staff"]
         : role === "manager"
@@ -149,7 +149,14 @@ export const usersRouter = router({
         roles: ["manager", "staff"],
       });
 
-      const grouped = new Map(
+      type TenantRosterEntry = {
+        id: string;
+        name: string;
+        managers: typeof rows;
+        staff: typeof rows;
+      };
+
+      const grouped = new Map<string, TenantRosterEntry>(
         targetTenants.map((tenant) => [
           tenant.id,
           { ...tenant, managers: [], staff: [] },

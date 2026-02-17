@@ -16,6 +16,20 @@ import {
 import { Pencil, Plus } from "lucide-react";
 
 export default function OnboardingsPage() {
+  type RosterUser = {
+    id: string;
+    username: string;
+    role: "manager" | "staff";
+    permissions?: string[];
+  };
+  type SystemRoster = {
+    tenants: Array<{
+      id: string;
+      name: string;
+      managers: RosterUser[];
+      staff: RosterUser[];
+    }>;
+  };
   const { isAdmin, role, tenantName, isLoading } = useAdminStatus();
   const effectiveRole = role ?? (isAdmin ? "admin" : "staff");
   const workflows = getAvailableWorkflows(effectiveRole);
@@ -28,22 +42,28 @@ export default function OnboardingsPage() {
     enabled: !isLoading && isSystemAdmin,
   });
 
-  const rosterQuery = useQuery({
-    ...(isSystemAdmin
-      ? trpc.users.listSystemRoster.queryOptions(
-          selectedTenantId === "all"
-            ? undefined
-            : { tenantId: selectedTenantId },
-        )
-      : trpc.users.listRoster.queryOptions()),
-    enabled: !isLoading,
+  const systemRosterQuery = useQuery({
+    ...trpc.users.listSystemRoster.queryOptions(
+      selectedTenantId === "all" ? undefined : { tenantId: selectedTenantId },
+    ),
+    enabled: !isLoading && isSystemAdmin,
+  });
+
+  const tenantRosterQuery = useQuery({
+    ...trpc.users.listRoster.queryOptions(),
+    enabled: !isLoading && !isSystemAdmin,
   });
 
   const meQuery = useQuery(trpc.users.me.queryOptions());
-  const rosterData = rosterQuery.data;
-  const systemRoster =
-    rosterData && !Array.isArray(rosterData) ? rosterData : { tenants: [] };
-  const tenantRoster = Array.isArray(rosterData) ? rosterData : [];
+  const rosterData = isSystemAdmin
+    ? systemRosterQuery.data
+    : tenantRosterQuery.data;
+  const systemRoster = (rosterData && !Array.isArray(rosterData)
+    ? rosterData
+    : { tenants: [] }) as SystemRoster;
+  const tenantRoster = Array.isArray(rosterData)
+    ? (rosterData as RosterUser[])
+    : [];
   const currentUserId = meQuery.data?.id ?? null;
   const managers = !isSystemAdmin
     ? tenantRoster.filter((user) => user.role === "manager")
@@ -198,11 +218,24 @@ export default function OnboardingsPage() {
           <p className="text-sm text-slate-500">Read-only overview.</p>
         </div>
 
-        {rosterQuery.isLoading ? (
+        {(isSystemAdmin ? (
+          systemRosterQuery.isLoading
+        ) : (
+          tenantRosterQuery.isLoading
+        )) ? (
           <div className="mt-4 text-sm text-slate-500">Loading roster...</div>
-        ) : rosterQuery.error ? (
+        ) : (isSystemAdmin ? (
+            systemRosterQuery.error
+          ) : (
+            tenantRosterQuery.error
+          )) ? (
           <div className="mt-4 text-sm text-red-600">
-            {rosterQuery.error.message}
+            {
+              (isSystemAdmin
+                ? systemRosterQuery.error
+                : tenantRosterQuery.error
+              )?.message
+            }
           </div>
         ) : isSystemAdmin && systemRoster.tenants.length === 0 ? (
           <div className="mt-4 text-sm text-slate-500">No teams found.</div>
