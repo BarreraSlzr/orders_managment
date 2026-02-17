@@ -12,6 +12,7 @@ import {
   CheckCircle,
   Download,
   FileText,
+  LogOut,
   RefreshCw,
   Settings,
   Trash2,
@@ -370,6 +371,19 @@ function ExportTab() {
 // ── Quick Links Tab ───────────────────────────────────────────────────────
 
 function QuickLinksTab() {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -381,6 +395,19 @@ function QuickLinksTab() {
         </Button>
         <Button asChild size="sm" variant="outline">
           <Link href="/items">Go to Inventory</Link>
+        </Button>
+      </div>
+
+      <div className="pt-4 border-t">
+        <p className="text-sm text-muted-foreground mb-2">Session management</p>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="h-3.5 w-3.5 mr-1" />
+          {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </div>
     </div>
