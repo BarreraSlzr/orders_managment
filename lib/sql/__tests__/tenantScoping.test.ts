@@ -5,53 +5,59 @@ const mockSelect = vi.fn();
 const mockUpdate = vi.fn();
 let updateWhereCalls: any[][] = [];
 
-vi.mock("@/lib/sql/database", () => ({
-  db: {
-    selectFrom: vi.fn(() => {
-      const where = vi.fn(function where() {
+vi.mock("@/lib/sql/database", async (importOriginal) => {
+  // Preserve real exports (including `sql` re-exported from kysely if any)
+  const actual = await importOriginal<typeof import("@/lib/sql/database")>();
+
+  return {
+    ...actual,
+    db: {
+      selectFrom: vi.fn(() => {
+        const where = vi.fn(function where() {
+          return {
+            where,
+            selectAll: vi.fn(() => ({
+              where,
+              orderBy: vi.fn(() => ({ execute: mockSelect })),
+              execute: mockSelect,
+            })),
+            orderBy: vi.fn(() => ({ execute: mockSelect })),
+            execute: mockSelect,
+          };
+        });
+
         return {
+          select: vi.fn(() => ({
+            where,
+            orderBy: vi.fn(() => ({ execute: mockSelect })),
+            execute: mockSelect,
+          })),
           where,
           selectAll: vi.fn(() => ({
             where,
             orderBy: vi.fn(() => ({ execute: mockSelect })),
             execute: mockSelect,
           })),
-          orderBy: vi.fn(() => ({ execute: mockSelect })),
-          execute: mockSelect,
         };
-      });
+      }),
+      updateTable: vi.fn(() => {
+        const where = vi.fn(function where(...args: any[]) {
+          updateWhereCalls.push(args);
+          return {
+            where,
+            returning: vi.fn(() => ({ executeTakeFirstOrThrow: mockUpdate })),
+          };
+        });
 
-      return {
-        select: vi.fn(() => ({
-          where,
-          orderBy: vi.fn(() => ({ execute: mockSelect })),
-          execute: mockSelect,
-        })),
-        where,
-        selectAll: vi.fn(() => ({
-          where,
-          orderBy: vi.fn(() => ({ execute: mockSelect })),
-          execute: mockSelect,
-        })),
-      };
-    }),
-    updateTable: vi.fn(() => {
-      const where = vi.fn(function where(...args: any[]) {
-        updateWhereCalls.push(args);
         return {
-          where,
-          returning: vi.fn(() => ({ executeTakeFirstOrThrow: mockUpdate })),
+          set: vi.fn(() => ({
+            where,
+          })),
         };
-      });
-
-      return {
-        set: vi.fn(() => ({
-          where,
-        })),
-      };
-    }),
-  },
-}));
+      }),
+    },
+  };
+});
 
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { getOrders } from "@/lib/sql/functions/getOrders";
