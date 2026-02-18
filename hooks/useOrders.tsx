@@ -1,6 +1,6 @@
 "use client";
 
-import { OrderItemsView } from "@/lib/sql/types";
+import { OrderItem, OrderItemsView } from "@/lib/sql/types";
 import { useTRPC } from "@/lib/trpc/react";
 import {
   Order,
@@ -9,9 +9,50 @@ import {
   OrdersQuery,
 } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { parseAsString } from "nuqs";
-import { useQueryState } from "nuqs";
+import { parseAsString, useQueryState } from "nuqs";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+// ─── Optimistic update helpers ───────────────────────────────────────────────
+
+/** Apply a client-side optimistic patch to an OrderItemsView snapshot. */
+function applyOptimisticUpdate(
+  actionType: "remove" | "toggleTakeAway" | "updatePayment",
+  prev: OrderItemsView,
+  itemIds: Set<number>,
+): OrderItemsView {
+  switch (actionType) {
+    case "remove": {
+      const products: OrderItem[] = prev.products
+        .map((p) => ({
+          ...p,
+          items: p.items.filter((i) => !itemIds.has(i.id)),
+        }))
+        .filter((p) => p.items.length > 0);
+      return { ...prev, products };
+    }
+    case "toggleTakeAway": {
+      const products: OrderItem[] = prev.products.map((p) => ({
+        ...p,
+        items: p.items.map((i) =>
+          itemIds.has(i.id) ? { ...i, is_takeaway: !i.is_takeaway } : i,
+        ),
+      }));
+      return { ...prev, products };
+    }
+    case "updatePayment": {
+      const products: OrderItem[] = prev.products.map((p) => ({
+        ...p,
+        items: p.items.map((i) =>
+          itemIds.has(i.id)
+            // Toggle: 0 = no payment, 1 = paid (real value corrected on server re-fetch)
+            ? { ...i, payment_option_id: i.payment_option_id ? 0 : 1 }
+            : i,
+        ),
+      }));
+      return { ...prev, products };
+    }
+  }
+}
 
 export interface InitOrdersProps {
   orders?: Order[];
@@ -128,6 +169,23 @@ export function useOrders({
     async handleUpdateItemDetails(actionType, formData) {
       const orderId = formData.get("orderId") as string;
       const itemIdsRaw = formData.getAll("itemIds").map((v) => Number(v));
+      const itemIdSet = new Set(itemIdsRaw);
+
+      // ── Optimistic update ─────────────────────────────────────────────────
+      // Patch the cache immediately so the UI reflects the change before the
+      // network round-trip completes. On error we roll back to the snapshot.
+      const liveId = currentOrderIdRef.current;
+      const detailKey = trpc.orders.getDetails.queryOptions(
+        { id: liveId },
+        { enabled: true },
+      ).queryKey;
+      const snapshot = queryClient.getQueryData<OrderItemsView>(detailKey);
+      if (snapshot) {
+        queryClient.setQueryData(
+          detailKey,
+          applyOptimisticUpdate(actionType, snapshot, itemIdSet),
+        );
+      }
 
       let success = false;
       try {
@@ -151,10 +209,13 @@ export function useOrders({
             throw new Error(`Unknown action type: ${actionType}`);
         }
       } catch {
+        // Roll back optimistic patch on failure
+        if (snapshot) queryClient.setQueryData(detailKey, snapshot);
         success = false;
       }
 
       if (success) {
+        // Re-fetch authoritative data from server (replaces the optimistic patch)
         await invalidateDetail();
         await invalidateOrders();
       }

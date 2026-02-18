@@ -9,6 +9,10 @@ import { defineConfig, devices } from "@playwright/test";
  * Run with: bunx playwright test
  * Run a specific file: bunx playwright test tests/e2e/orderSheet.spec.ts
  * Show report: bunx playwright show-report
+ *
+ * Tenant setup:
+ *   bun run seed:test-agent          -- create once (idempotent)
+ *   bun run seed:test-agent -- --reset -- wipe and rebuild
  */
 export default defineConfig({
   testDir: "./tests/e2e",
