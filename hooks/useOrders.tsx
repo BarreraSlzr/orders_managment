@@ -9,7 +9,9 @@ import {
   OrdersQuery,
 } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { parseAsString } from "nuqs";
+import { useQueryState } from "nuqs";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export interface InitOrdersProps {
   orders?: Order[];
@@ -22,8 +24,17 @@ export function useOrders({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState<OrdersQuery>(initialQuery);
-  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  const [currentOrder, setCurrentOrder] = useState<OrderItemsView | null>(null);
+  // currentOrderId is stored in the URL as ?orderId=... for deep-linking and testability
+  const [currentOrderId, setCurrentOrderId] = useQueryState(
+    "orderId",
+    parseAsString.withDefault(""),
+  );
+
+  // Ref always holds the latest value — avoids stale nuqs closure in callbacks
+  const currentOrderIdRef = useRef(currentOrderId);
+  useEffect(() => {
+    currentOrderIdRef.current = currentOrderId;
+  }, [currentOrderId]);
 
   // Fetch orders list via tRPC
   const listOpts = trpc.orders.list.queryOptions({
@@ -33,12 +44,18 @@ export function useOrders({
   });
   const ordersResult = useQuery(listOpts);
 
-  // Fetch current order details via tRPC
+  // Fetch current order details via tRPC (currentOrderId is "" when nothing selected)
   const detailOpts = trpc.orders.getDetails.queryOptions(
-    { id: currentOrderId! },
+    { id: currentOrderId },
     { enabled: !!currentOrderId },
   );
   const detailQuery = useQuery(detailOpts);
+
+  // Derived — no useEffect sync needed, eliminates one render cycle of latency
+  const currentOrder = useMemo<OrderItemsView | null>(() => {
+    if (!currentOrderId) return null;
+    return (detailQuery.data as OrderItemsView) ?? null;
+  }, [currentOrderId, detailQuery.data]);
 
   // Mutations
   const splitMutation = useMutation(trpc.orders.split.mutationOptions());
@@ -59,26 +76,22 @@ export function useOrders({
     [queryClient, listOpts.queryKey],
   );
   const invalidateDetail = useCallback(() => {
-    if (currentOrderId) {
-      queryClient.invalidateQueries({ queryKey: detailOpts.queryKey });
+    // Read from ref so we always use the live value, not a stale closure snapshot
+    const id = currentOrderIdRef.current;
+    if (id) {
+      queryClient.invalidateQueries({
+        queryKey: trpc.orders.getDetails.queryOptions({ id }, { enabled: true })
+          .queryKey,
+      });
     }
-  }, [queryClient, detailOpts.queryKey, currentOrderId]);
-
-  // Sync currentOrder state with fetched detail
-  useEffect(() => {
-    if (!currentOrderId) {
-      setCurrentOrder(null);
-    } else if (detailQuery.data) {
-      setCurrentOrder(detailQuery.data);
-    }
-  }, [currentOrderId, detailQuery.data]);
+  }, [queryClient, trpc.orders.getDetails]);
 
   useEffect(() => {
-    const closeHandler = () => setCurrentOrder(null);
+    const closeHandler = () => void setCurrentOrderId("");
     window.addEventListener("close-order-details", closeHandler);
     return () =>
       window.removeEventListener("close-order-details", closeHandler);
-  }, []);
+  }, [setCurrentOrderId]);
 
   const orders = useMemo(
     () =>
@@ -100,7 +113,7 @@ export function useOrders({
       }
       setCurrentOrderId(updatedOrder.id);
     } else {
-      setCurrentOrderId(null);
+      setCurrentOrderId("");
     }
     invalidateDetail();
   };
@@ -167,8 +180,7 @@ export function useOrders({
       const orderId = formData.get("orderId") as string;
       try {
         await closeMutation.mutateAsync({ orderId });
-        setCurrentOrder(null);
-        setCurrentOrderId(null);
+        void setCurrentOrderId("");
         await invalidateOrders();
         return true;
       } catch {
@@ -178,10 +190,10 @@ export function useOrders({
 
     async setCurrentOrderDetails(order: Order | null) {
       if (!order) {
-        setCurrentOrderId(null);
+        void setCurrentOrderId("");
         return;
       }
-      setCurrentOrderId(order.id);
+      void setCurrentOrderId(order.id);
       invalidateDetail();
     },
   };
