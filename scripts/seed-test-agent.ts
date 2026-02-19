@@ -21,8 +21,8 @@
  */
 
 import { randomUUID } from "crypto";
-import { db } from "../lib/sql/database";
 import { hashPassword } from "../lib/auth/passwords";
+import { db } from "../lib/sql/database";
 import { createUser } from "../lib/sql/functions/users";
 import { getIsoTimestamp } from "../utils/stamp";
 
@@ -87,6 +87,7 @@ if (existingTarget) {
   await db.deleteFrom("products").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("payment_options").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("users").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("domain_events").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("tenants").where("id", "=", tid).execute();
   log("Reset complete.");
 }
@@ -258,7 +259,7 @@ for (const user of srcUsers) {
     await createUser({
       tenantId: newTenantId,
       username: E2E_USERNAME,
-      role: "admin",
+      role: "manager",
       passwordHash: e2eHash,
       passwordSalt: e2eSalt,
       permissions: ["orders.create", "orders.manage", "products.manage"],
