@@ -1,5 +1,6 @@
-import { Roboto as Font } from "next/font/google";
 import { GeistMono } from "geist/font/mono";
+import { Roboto as Font } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import Providers from "./providers";
 
@@ -26,6 +27,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${global.variable} ${GeistMono.variable}`}>
         <Providers>{children}</Providers>
+        <Toaster position="top-center" richColors closeButton />
       </body>
     </html>
   );
