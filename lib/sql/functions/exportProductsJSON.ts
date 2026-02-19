@@ -1,5 +1,5 @@
-import { CompiledQuery, JSONColumnType, JSONReferenceNode } from "kysely"
-import { db } from "../database"
+import { CompiledQuery } from "kysely";
+import { db } from "../database";
 
 const sql =`SELECT json_agg(
     json_build_object(
@@ -10,7 +10,8 @@ const sql =`SELECT json_agg(
 ORDER BY tags ASC
 ) AS json_result
 FROM products
-WHERE tenant_id = $1;
+WHERE tenant_id = $1
+  AND deleted IS NULL;
 `;
 
 export async function exportProductsJSON(params: { tenantId: string }) {

@@ -1,7 +1,7 @@
 "use server"
 
-import { db } from "../database"
-import { Product } from "@/lib/types"
+import { Product } from "@/lib/types";
+import { db } from "../database";
 
 // Function to get products based on search and tags
 export async function getProducts(params: {
@@ -12,6 +12,7 @@ export async function getProducts(params: {
     let query = db
       .selectFrom('products')
       .where('tenant_id', '=', params.tenantId)
+      .where('deleted', 'is', null)  // Only include non-deleted products
 
     if (params.search) {
         query = query.where('name', 'ilike', `%${params.search}%`)
@@ -26,5 +27,8 @@ export async function getProducts(params: {
         ))
     }
 
-    return await query.selectAll().execute()
+    return await query
+      .selectAll()
+      .orderBy('created', 'desc')
+      .execute()
 }

@@ -7,7 +7,7 @@ import {
   type ProductRow,
 } from "@/lib/utils/parseProductsCSV";
 import { z } from "zod";
-import { managerProcedure, tenantProcedure, router } from "../init";
+import { managerProcedure, router, tenantProcedure } from "../init";
 
 export const productsRouter = router({
   list: tenantProcedure
@@ -52,8 +52,11 @@ export const productsRouter = router({
   delete: managerProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      // Soft delete: set deleted timestamp instead of removing record
+      // This preserves historical data for analytics and order references
       await db
-        .deleteFrom("products")
+        .updateTable("products")
+        .set({ deleted: new Date() })
         .where("id", "=", input.id)
         .where("tenant_id", "=", ctx.tenantId)
         .execute();

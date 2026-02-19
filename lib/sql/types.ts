@@ -8,7 +8,7 @@ interface BaseTable {
   // a `Date`, can optionally be provided as a `string` in inserts and
   // can never be updated:
   created: ColumnType<Date, string | undefined, never>
-  deleted: ColumnType<Date, string | undefined, never>
+  deleted: ColumnType<Date | null, string | null | undefined, Date | null>
   updated: ColumnType<Date, string | undefined, never>
 }
 
