@@ -85,7 +85,7 @@ export type OrderContextType = OrderContextState & Omit<OrderContextActions
 export interface ProductContextType {
   products: Map<Product['id'], Product>;
   currentProduct?: Updateable<Product> | Product;
-  handleEditProduct: (product?: Product) => void;
+  handleEditProduct: (product?: Updateable<Product> | Product | null) => void;
   handleUpsertProduct: (formData: FormData) => Promise<void>;
   handleDeleteProduct: (formData: FormData) => Promise<void>;
 }

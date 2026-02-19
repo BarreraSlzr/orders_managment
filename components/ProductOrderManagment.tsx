@@ -83,7 +83,7 @@ const Actions = () => {
   const { currentProduct } = useProducts();
   if (currentProduct)
     return (
-      <div className="fixed bottom-0 left-0 h-screen w-screen backdrop-blur-sm bg-slate-400/30 p-4 flex items-center">
+      <div className="fixed inset-0 z-[70] backdrop-blur-sm bg-slate-400/30 p-4 flex items-center">
         <ProductForm product={currentProduct as Product} />
       </div>
     );

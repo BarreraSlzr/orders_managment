@@ -43,13 +43,15 @@ export function useProducts(): ProductContextType {
     [queryClient, listOpts.queryKey],
   );
 
-  const handleEditProduct = (product?: Product | null) => {
+  const handleEditProduct = (
+    product?: Updateable<Product> | Product | null,
+  ) => {
     if (typeof product === "undefined") {
       setCurrentProduct(() => undefined);
     } else if (product === null) {
       setCurrentProduct({ ...defaultProduct });
     } else {
-      setCurrentProduct({ ...product });
+      setCurrentProduct({ ...defaultProduct, ...product });
     }
   };
 
@@ -59,12 +61,16 @@ export function useProducts(): ProductContextType {
     const tags = (formData.get("tags") as string) ?? "";
     const id = (formData.get("id") as string) || undefined;
 
-    const result = await upsertMutation.mutateAsync({ id, name, price, tags });
-    await invalidateProducts();
-
-    const updatedProduct = result as Product | undefined;
-    if (updatedProduct && currentProduct?.id === updatedProduct.id) {
-      setCurrentProduct({ ...updatedProduct });
+    try {
+      await upsertMutation.mutateAsync({
+        id,
+        name,
+        price,
+        tags,
+      });
+      await invalidateProducts();
+    } catch (error) {
+      throw error;
     }
   };
 
@@ -74,7 +80,7 @@ export function useProducts(): ProductContextType {
     await invalidateProducts();
 
     if (currentProduct?.id === id) {
-      setCurrentProduct({ ...defaultProduct });
+      setCurrentProduct(undefined);
     }
   };
 
