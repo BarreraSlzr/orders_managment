@@ -1,4 +1,5 @@
 import { Roboto as Font } from "next/font/google";
+import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 import Providers from "./providers";
 
@@ -23,7 +24,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={global.variable}>
+      <body className={`${global.variable} ${GeistMono.variable}`}>
         <Providers>{children}</Providers>
       </body>
     </html>

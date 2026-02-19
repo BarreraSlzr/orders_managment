@@ -14,13 +14,13 @@ import { TagsSheet } from "./sheets/Tags";
 import TagList from "./Tag/List";
 
 export default function ProductOrderManagment() {
-  const { visibleProducts, selectedTags, visibleTags } = useProductsFilter();
+  const { visibleProducts, visibleTags } = useProductsFilter();
   const { isAdmin, role } = useAdminStatus();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const canOpenSettings = isAdmin || role === "manager";
 
   return (
-    <main className="min-h-screen bg-slate-100 flex flex-col justify-between p-4 gap-8">
+    <main className="min-h-screen bg-slate-100 flex flex-col justify-between py-3 gap-3">
       {canOpenSettings && (
         <button
           type="button"
@@ -47,14 +47,14 @@ export default function ProductOrderManagment() {
       {settingsOpen && (
         <AdminSettingsPanel onClose={() => setSettingsOpen(false)} />
       )}
-      {selectedTags.size > 0 && <TagList tags={visibleTags} />}
-      {visibleProducts.length === 0 && (
-        <div className="p-4">
-          <EmptyState />
-        </div>
-      )}
-      <ListProducts products={visibleProducts} />
-      <Actions />
+      <div className="sticky top-0 z-10 bg-slate-100/76 p-3 backdrop-blur-sm">
+        <TagList tags={visibleTags} />
+      </div>
+      <div className="p-3">
+        {visibleProducts.length === 0 && <EmptyState />}
+        <ListProducts products={visibleProducts} />
+        <Actions />
+      </div>
     </main>
   );
 }
