@@ -52,6 +52,11 @@ const { mockTrpc } = vi.hoisted(() => {
       setPaymentOption: { mutationOptions: vi.fn(makeMutOpts) },
       toggleTakeaway: { mutationOptions: vi.fn(makeMutOpts) },
     },
+    mercadopago: {
+      payment: {
+        start: { mutationOptions: vi.fn(makeMutOpts) },
+      },
+    },
   };
 
   return { mockTrpc };
