@@ -6,9 +6,9 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
-import { useOrders } from "@/context/useOrders";
+import { ReceiptEditProvider, useReceiptEdit } from "@/context/useReceiptEdit";
 import { OrderItemsView } from "@/lib/sql/types";
-import { PropsWithChildren, useState } from "react";
+import { PropsWithChildren } from "react";
 import { Button } from "../ui/button";
 import { ReceiptActions } from "./ReceiptActions";
 import { ReceiptFooter } from "./ReceiptFooter";
@@ -24,20 +24,21 @@ interface ReceiptProps {
   };
 }
 
-export default function Receipt({
-  data,
+// ─── Inner shell — consumes ReceiptEditContext ────────────────────────────────
+
+function ReceiptForm({
   serverInfo,
-  editMode: defaultEditMode = false,
   children,
-}: PropsWithChildren<ReceiptProps>) {
-  const { products: items, ...order } = data;
-  const [editMode, setEditMode] = useState(defaultEditMode);
-  const [totalPrice, setTotalPrice] = useState<number>(0);
+}: PropsWithChildren<Pick<ReceiptProps, "serverInfo">>) {
   const {
-    handleSplitOrder,
-    handleUpdateItemDetails,
-    handleCloseOrder,
-  } = useOrders();
+    order,
+    items,
+    editMode,
+    totalPrice,
+    toggleEditMode,
+    handleActionSubmit,
+    handleStartMercadoPagoSync,
+  } = useReceiptEdit();
 
   const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
@@ -45,50 +46,17 @@ export default function Receipt({
     const submitter = (ev.nativeEvent as SubmitEvent)
       .submitter as HTMLButtonElement;
     formData.append("orderId", `${order.id}`);
-
-    switch (submitter.id) {
-      case "split":
-        await handleSplitOrder(formData);
-        setEditMode(false);
-        break;
-      case "updatePayment":
-      case "toggleTakeAway":
-      case "remove":
-        await handleUpdateItemDetails(submitter.id, formData);
-        setEditMode(false);
-        break;
-      case "close":
-        await handleCloseOrder(formData);
-        break;
-      default:
-        console.error("Unknown submit action:", submitter.id);
+    const actionType = submitter.id as Parameters<typeof handleActionSubmit>[0];
+    if (!actionType) {
+      console.error("Unknown submit action:", submitter.id);
+      return;
     }
-  };
-
-  function handleReset(): void {
-    setEditMode(!editMode);
-  }
-
-  const handleChange = async (ev: React.FormEvent<HTMLFormElement>) => {
-    const formData = new FormData(ev.currentTarget);
-    const itemsChecked = new Set(formData.getAll("item_id").map((v) => `${v}`));
-    // Calculate the new total price including extras
-    const newTotalPrice = items.reduce((total, orderItem) => {
-      return (
-        total +
-        orderItem.items.reduce((itemTotal, item) => {
-          if (!itemsChecked.has(`${item.id}`)) return itemTotal;
-          const extrasPrice = item.extras.reduce((sum, e) => sum + e.price, 0);
-          return itemTotal + orderItem.price + extrasPrice;
-        }, 0)
-      );
-    }, 0);
-    setTotalPrice(newTotalPrice);
+    await handleActionSubmit(actionType, formData);
   };
 
   return (
     <Card className="w-full bg-white font-mono text-sm">
-      <CardHeader className="text-center space-y-0 pb-3">
+      <CardHeader className="text-center space-y-0 p-3">
         <h1 className="font-bold text-lg tracking-wide">DETALLE DE ORDEN</h1>
         <ReceiptHeader
           order={order}
@@ -99,29 +67,58 @@ export default function Receipt({
       <CardContent>
         <form
           onSubmit={handleSubmit}
-          onReset={handleReset}
-          onChange={handleChange}
+          onReset={toggleEditMode}
           className="flex flex-col gap-3"
         >
+          <ReceiptFooter orderTotal={order.total} />
           <ReceiptItems items={items} listProducts={editMode} />
-          <CardFooter className="flex flex-wrap gap-2 justify-between px-0 sticky bottom-0 bg-white">
+          <CardFooter className="flex flex-wrap gap-2 justify-between p-0 sticky bottom-0 bg-white">
             {editMode && !!totalPrice && (
               <ReceiptFooter label="SUBTOTAL:" orderTotal={totalPrice} />
             )}
-            <ReceiptFooter orderTotal={order.total} />
             {!editMode ? (
               <>
-                <Button variant="secondary" size="sm" type="reset">
-                  Modificar productos
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  type="submit"
-                  id="close"
-                >
-                  Cerrar orden
-                </Button>
+                {order.closed ? (
+                  <>
+                    <span className="text-xs text-muted-foreground">
+                      Orden cerrada
+                    </span>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      type="button"
+                      className="bg-blue-600 hover:bg-blue-700"
+                      onClick={() =>
+                        handleStartMercadoPagoSync({ orderId: order.id })
+                      }
+                    >
+                      Cobrar con Mercado Pago
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      type="submit"
+                      id="open"
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      Abrir orden
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button variant="secondary" size="sm" type="reset">
+                      Modificar productos
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      type="submit"
+                      id="close"
+                    >
+                      Cerrar orden
+                    </Button>
+                  </>
+                )}
               </>
             ) : (
               children || <ReceiptActions />
@@ -130,5 +127,20 @@ export default function Receipt({
         </form>
       </CardContent>
     </Card>
+  );
+}
+
+// ─── Public export — provides the context then renders the shell ──────────────
+
+export default function Receipt({
+  data,
+  editMode,
+  serverInfo,
+  children,
+}: PropsWithChildren<ReceiptProps>) {
+  return (
+    <ReceiptEditProvider data={data} defaultEditMode={editMode}>
+      <ReceiptForm serverInfo={serverInfo}>{children}</ReceiptForm>
+    </ReceiptEditProvider>
   );
 }
