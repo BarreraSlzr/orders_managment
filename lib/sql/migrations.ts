@@ -731,6 +731,157 @@ END $$;
   },
 };
 
+// ── v7: Mercado Pago integration ───────────────────────────────────────────
+
+const migration007: Migration = {
+  version: 7,
+  description: "Add mercadopago_credentials and payment_sync_attempts tables for MP integration",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  -- Mercado Pago credentials (one per tenant)
+  CREATE TABLE IF NOT EXISTS mercadopago_credentials (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL,
+    access_token varchar NOT NULL,
+    app_id varchar NOT NULL,
+    user_id varchar NOT NULL,
+    status varchar NOT NULL DEFAULT 'active',
+    error_message text,
+    created timestamptz DEFAULT now(),
+    updated timestamptz DEFAULT now(),
+    deleted timestamptz
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'mercadopago_credentials_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE mercadopago_credentials
+      ADD CONSTRAINT mercadopago_credentials_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  CREATE INDEX IF NOT EXISTS mercadopago_credentials_tenant_id_idx ON mercadopago_credentials(tenant_id);
+  CREATE INDEX IF NOT EXISTS mercadopago_credentials_status_idx ON mercadopago_credentials(status);
+
+  -- Payment sync attempts (record of each MP sync attempt per order)
+  CREATE TABLE IF NOT EXISTS payment_sync_attempts (
+    id serial PRIMARY KEY,
+    tenant_id uuid NOT NULL,
+    order_id uuid NOT NULL,
+    status varchar NOT NULL DEFAULT 'pending',
+    terminal_id varchar,
+    qr_code text,
+    mp_transaction_id varchar,
+    amount_cents integer NOT NULL,
+    response_data jsonb,
+    error_data jsonb,
+    created timestamptz DEFAULT now(),
+    updated timestamptz DEFAULT now()
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'payment_sync_attempts_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE payment_sync_attempts
+      ADD CONSTRAINT payment_sync_attempts_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'payment_sync_attempts_order_id_fkey'
+  ) THEN
+    ALTER TABLE payment_sync_attempts
+      ADD CONSTRAINT payment_sync_attempts_order_id_fkey
+      FOREIGN KEY (order_id) REFERENCES orders(id);
+  END IF;
+
+  CREATE INDEX IF NOT EXISTS payment_sync_attempts_tenant_id_idx ON payment_sync_attempts(tenant_id);
+  CREATE INDEX IF NOT EXISTS payment_sync_attempts_order_id_idx ON payment_sync_attempts(order_id);
+  CREATE INDEX IF NOT EXISTS payment_sync_attempts_status_idx ON payment_sync_attempts(status);
+  CREATE INDEX IF NOT EXISTS payment_sync_attempts_created_idx ON payment_sync_attempts(created);
+END $$;
+`
+      )
+    );
+
+    console.info("[v7] mercadopago_credentials and payment_sync_attempts tables created.");
+  },
+};
+
+// ── v8: Mercado Pago contact email ─────────────────────────────────────────
+
+const migration008: Migration = {
+  version: 8,
+  description: "Add contact_email to mercadopago_credentials for client onboarding",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'mercadopago_credentials'
+      AND column_name = 'contact_email'
+  ) THEN
+    ALTER TABLE mercadopago_credentials
+      ADD COLUMN contact_email varchar;
+  END IF;
+END $$;
+`
+      )
+    );
+
+    console.info("[v8] mercadopago_credentials contact_email added.");
+  },
+};
+
+// ── v9: Mercado Pago access requests ───────────────────────────────────────
+
+const migration009: Migration = {
+  version: 9,
+  description: "Add mercadopago_access_requests to track OAuth access requests",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  CREATE TABLE IF NOT EXISTS mercadopago_access_requests (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid NOT NULL,
+    contact_email varchar NOT NULL,
+    status varchar NOT NULL DEFAULT 'pending',
+    requested_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    completed_at timestamptz
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'mp_access_requests_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE mercadopago_access_requests
+      ADD CONSTRAINT mp_access_requests_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id);
+  END IF;
+
+  CREATE INDEX IF NOT EXISTS mp_access_requests_tenant_id_idx ON mercadopago_access_requests(tenant_id);
+  CREATE INDEX IF NOT EXISTS mp_access_requests_status_idx ON mercadopago_access_requests(status);
+  CREATE INDEX IF NOT EXISTS mp_access_requests_requested_at_idx ON mercadopago_access_requests(requested_at);
+END $$;
+`
+      )
+    );
+
+    console.info("[v9] mercadopago_access_requests table created.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -740,4 +891,7 @@ export const allMigrations: Migration[] = [
   migration004,
   migration005,
   migration006,
+  migration007,
+  migration008,
+  migration009,
 ];

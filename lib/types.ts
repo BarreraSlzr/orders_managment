@@ -5,6 +5,18 @@ export type Order = Selectable<Database["orders"]>;
 export type Product = Selectable<Database["products"]>;
 export type OrderItemTable = Selectable<Database['order_items']>
 
+/** Result of a Mercado Pago payment sync attempt dispatched from the server. */
+export interface MpSyncResult {
+  attemptId: number;
+  status: "pending" | "processing" | "approved" | "rejected" | "canceled" | "error";
+  /** QR code data string — present when flow === "qr" */
+  qrCode?: string;
+  /** Terminal device_id — present when flow === "pdv" */
+  terminalId?: string;
+  /** MP transaction / order id */
+  mpTransactionId?: string;
+}
+
 
 export interface OrdersQuery {
   timeZone?: string;
@@ -31,7 +43,7 @@ export interface OrderContextActions {
   handleSplitOrder: (formData: FormData) => Promise<boolean>
   handleCloseOrder: (formData: FormData) => Promise<boolean>;
   handleOpenOrder: (formData: FormData) => Promise<boolean>;
-  handleStartMercadoPagoSync: (params: { orderId: string }) => Promise<void>;
+  handleStartMercadoPagoSync: (params: { orderId: string; flow?: "qr" | "pdv" }) => Promise<MpSyncResult>;
   /** Toggle an order ID in/out of the multi-select set */
   toggleOrderSelection: (orderId: string) => void;
   /** Set exactly one order as selected (detail view), or clear if re-tapping the same */

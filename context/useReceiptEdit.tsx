@@ -73,7 +73,10 @@ export interface ReceiptEditActions {
   /** Add ONE item per unique product in selection (increment qty) */
   handleIncrementSelected: () => Promise<void>;
   /** Trigger Mercado Pago sync for a closed order */
-  handleStartMercadoPagoSync: (params: { orderId: string }) => Promise<void>;
+  handleStartMercadoPagoSync: (params: {
+    orderId: string;
+    flow?: "qr" | "pdv";
+  }) => Promise<import("@/lib/types").MpSyncResult>;
 }
 
 export type ReceiptEditContextValue = ReceiptEditState & ReceiptEditActions;

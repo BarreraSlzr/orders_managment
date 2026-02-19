@@ -178,6 +178,41 @@ interface AdminAuditLogsTable {
   created: ColumnType<Date, string | undefined, never>;
 }
 
+export interface MercadopagoCredentialsTable extends BaseTable {
+  tenant_id: string;
+  access_token: string; // encrypted in production
+  app_id: string;
+  user_id: string; // MP user ID from onboarding
+  contact_email: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  status: 'active' | 'inactive' | 'error';
+  error_message: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+}
+
+export interface MercadopagoAccessRequestsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  contact_email: string;
+  status: 'pending' | 'completed' | 'canceled';
+  requested_at: ColumnType<Date, string | undefined, string | undefined>;
+  updated_at: ColumnType<Date, string | undefined, string | undefined>;
+  completed_at: ColumnType<Date | null, string | null | undefined, string | null | undefined>;
+}
+
+export interface PaymentSyncAttemptsTable {
+  id: Generated<number>;
+  tenant_id: string;
+  order_id: string;
+  status: 'pending' | 'processing' | 'approved' | 'rejected' | 'canceled' | 'error';
+  terminal_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  qr_code: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  mp_transaction_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  amount_cents: number;
+  response_data: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  error_data: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  created: ColumnType<Date, string | undefined, never>;
+  updated: ColumnType<Date, string | undefined, never>;
+}
+
 // Keys of this interface are table names.
 export interface Database {
   tenants: TenantTable;
@@ -194,6 +229,9 @@ export interface Database {
   category_inventory_item: CategoryInventoryItemTable;
   domain_events: DomainEventsTable;
   admin_audit_logs: AdminAuditLogsTable;
+  mercadopago_credentials: MercadopagoCredentialsTable;
+  mercadopago_access_requests: MercadopagoAccessRequestsTable;
+  payment_sync_attempts: PaymentSyncAttemptsTable;
   // product_consumptions: ProductConsumptionsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;

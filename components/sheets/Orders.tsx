@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { useOrders } from "@/context/useOrders";
 import { TEST_IDS } from "@/lib/testIds";
+import { cn } from "@/lib/utils";
 import { ChevronLeft, Layers, ShoppingBag, X } from "lucide-react";
 import { parseAsBoolean, useQueryState } from "nuqs";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -16,7 +17,6 @@ import OrderStatus from "../Orders/OrderControls";
 import OrderDetails from "../Orders/OrderDetails";
 import OrdersList from "../Orders/OrderList";
 import { OrderSummary } from "../OrderSummary";
-import { cn } from "@/lib/utils";
 import { Card } from "../ui/card";
 import { Spinner } from "../ui/spinner";
 
@@ -127,9 +127,7 @@ export function OpenOrderSheet() {
 
   const isMultiSelect = selectedOrderIds.length > 1;
   const multiSelectLabel =
-    selectedOrderIds.length > 0
-      ? `${selectedOrderIds.length} seleccionadas`
-      : null;
+    selectedOrderIds.length > 0 ? `(${selectedOrderIds.length}) ORDENES` : null;
 
   return (
     <Sheet
@@ -158,7 +156,7 @@ export function OpenOrderSheet() {
           className="relative h-16 w-16 rounded-full ms-auto"
           onClick={() => void setSheetOpen(true)}
         >
-          <ShoppingBag className="h-6 w-6" />
+          <ShoppingBag className="!h-6 !w-6 text-primary-foreground" />
           <span
             className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-primary text-primary-foreground"
             data-testid={TEST_IDS.ORDER_SHEET.COUNT_BADGE}

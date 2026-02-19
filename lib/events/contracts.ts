@@ -25,7 +25,9 @@ export type DomainEventType =
   | "extra.upserted"
   | "extra.deleted"
   | "order.item.extra.toggled"
-  | "admin.audit.logged";
+  | "admin.audit.logged"
+  | "order.payment.mercadopago.start"
+  | "mercadopago.credentials.upserted";
 
 export interface DomainEventPayloadMap {
   "order.created": {
@@ -149,6 +151,19 @@ export interface DomainEventPayloadMap {
     targetTenantId?: string;
     metadata?: Record<string, unknown> | null;
   };
+  "order.payment.mercadopago.start": {
+    tenantId: string;
+    orderId: string;
+    /** Total amount in cents derived from order.total at dispatch time */
+    amountCents: number;
+    /** QR or PDV (Point terminal) flow */
+    flow: "qr" | "pdv";
+  };
+  "mercadopago.credentials.upserted": {
+    tenantId: string;
+    appId: string;
+    userId: string;
+  };
 }
 
 export interface DomainEventResultMap {
@@ -196,6 +211,19 @@ export interface DomainEventResultMap {
   };
   "admin.audit.logged": {
     id: number;
+  };
+  "order.payment.mercadopago.start": {
+    attemptId: number;
+    status: "pending" | "processing" | "approved" | "rejected" | "canceled" | "error";
+    /** QR code data string (only present for qr flow) */
+    qrCode?: string;
+    /** Terminal id the intent was sent to (only present for pdv flow) */
+    terminalId?: string;
+    /** MP transaction id, present when the intent was accepted */
+    mpTransactionId?: string;
+  };
+  "mercadopago.credentials.upserted": {
+    credentialsId: string;
   };
 }
 

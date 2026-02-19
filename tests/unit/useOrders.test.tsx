@@ -12,12 +12,12 @@
  *
  * Run: bun vitest run tests/unit/useOrders.test.tsx
  */
-import { act, renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { NuqsTestingAdapter } from "nuqs/adapters/testing";
-import React, { type PropsWithChildren } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useOrders } from "@/hooks/useOrders";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { NuqsTestingAdapter } from "nuqs/adapters/testing";
+import { type PropsWithChildren } from "react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ─── Stable mock objects (hoisted so vi.mock can reference them) ──────────────
 // vi.hoisted runs before imports so the mock factory below can close over these.
@@ -45,11 +45,17 @@ const { mockTrpc } = vi.hoisted(() => {
       },
       split: { mutationOptions: vi.fn(makeMutOpts) },
       close: { mutationOptions: vi.fn(makeMutOpts) },
+      open: { mutationOptions: vi.fn(makeMutOpts) },
       combine: { mutationOptions: vi.fn(makeMutOpts) },
       removeProducts: { mutationOptions: vi.fn(makeMutOpts) },
       togglePayment: { mutationOptions: vi.fn(makeMutOpts) },
       setPaymentOption: { mutationOptions: vi.fn(makeMutOpts) },
       toggleTakeaway: { mutationOptions: vi.fn(makeMutOpts) },
+    },
+    mercadopago: {
+      payment: {
+        start: { mutationOptions: vi.fn(makeMutOpts) },
+      },
     },
   };
 
