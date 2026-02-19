@@ -14,8 +14,8 @@ Tenants connect their MercadoPago account exclusively through the **OAuth 2.0 au
 2. Create a new application or select an existing one
 3. Configure the OAuth settings:
    - **Redirect URI**: Set to your application's callback URL
-     - Local: `http://localhost:3000/api/mercadopago/oauth/callback`
-     - Production: `https://yourdomain.com/api/mercadopago/oauth/callback`
+   - Local: `http://localhost:3000/api/mercadopago/webhook`
+   - Production: `https://yourdomain.com/api/mercadopago/webhook`
 4. Note your **Client ID** and **Client Secret**
 
 ### 2. Configure Environment Variables
@@ -26,7 +26,7 @@ Add the following to your `.env.local` file:
 # MercadoPago OAuth
 MP_CLIENT_ID=your_client_id_here
 MP_CLIENT_SECRET=your_client_secret_here
-MP_REDIRECT_OAUTH_URI=/api/mercadopago/oauth/callback
+MP_REDIRECT_OAUTH_URI=/api/mercadopago/webhook
 
 # MercadoPago Webhooks (register these URLs in the MP dashboard)
 MP_REDIRECT_PAYMENTS_EVENTS_URI=/api/mercadopago/webhook
@@ -34,8 +34,8 @@ MP_REDIRECT_PAYMENTS_EVENTS_TEST_URI=/api/mercadopago/webhook/test
 MP_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
-> The `MP_REDIRECT_OAUTH_URI` is a relative path.  At runtime the app
-> resolves it to a full URL using the request origin (or `VERCEL_URL`).
+> Recommended: use the same path (`/api/mercadopago/webhook`) for both
+> OAuth callback and production webhook URL in the MercadoPago app.
 
 ### 3. Restart Your Development Server
 
@@ -80,9 +80,13 @@ bun run dev
 3. Stores state and tenant_id in cookies
 4. Redirects to MercadoPago authorization URL
 
+### `GET /api/mercadopago/webhook`
+
+**Purpose**: Handles OAuth callback (unified URL) — exchanges code for token and stores credentials.
+
 ### `GET /api/mercadopago/oauth/callback`
 
-**Purpose**: Handles OAuth callback — exchanges code for token and stores credentials.
+**Purpose**: Legacy alias for backward compatibility. Delegates to the same OAuth callback handler.
 
 ### `POST /api/mercadopago/webhook`
 
@@ -153,8 +157,8 @@ Manually saves credentials (fallback method).
    ngrok http 3000
    ```
 3. Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`)
-4. Update MercadoPago app redirect URI to: `https://abc123.ngrok.io/api/mercadopago/oauth/callback`
-5. The `MP_REDIRECT_OAUTH_URI=/api/mercadopago/oauth/callback` path
+4. Update MercadoPago app redirect URI to: `https://abc123.ngrok.io/api/mercadopago/webhook`
+5. The `MP_REDIRECT_OAUTH_URI=/api/mercadopago/webhook` path
    resolves automatically against the ngrok origin at runtime.
 6. Restart dev server and test OAuth flow
 

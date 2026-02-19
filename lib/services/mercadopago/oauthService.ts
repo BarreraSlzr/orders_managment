@@ -9,8 +9,14 @@
  * Reference: https://www.mercadopago.com.mx/developers/en/docs/security/oauth
  */
 
-const MP_OAUTH_BASE_URL = "https://auth.mercadopago.com";
-const MP_API_BASE_URL = "https://api.mercadopago.com";
+/**
+ * Country-specific auth domain for MercadoPago OAuth.
+ * Override via MP_AUTH_BASE_URL env var for other countries
+ * (e.g. auth.mercadopago.com.ar, auth.mercadopago.com.br).
+ */
+const MP_AUTH_BASE_URL =
+  process.env.MP_AUTH_BASE_URL || "https://auth.mercadopago.com.mx";
+const MP_API_BASE_URL = process.env.MP_API_BASE_URL || "https://api.mercadopago.com.mx";
 
 export interface OAuthConfig {
   clientId: string;
@@ -58,7 +64,8 @@ function resolveBaseUrl(origin?: string): string {
 export function getOAuthConfig(params?: { origin?: string }): OAuthConfig {
   const clientId = process.env.MP_CLIENT_ID;
   const clientSecret = process.env.MP_CLIENT_SECRET;
-  const redirectPath = process.env.MP_REDIRECT_OAUTH_URI;
+  const redirectPath = 
+    process.env.MP_REDIRECT_PAYMENTS_EVENTS_URI;
 
   if (!clientId) {
     throw new Error("MP_CLIENT_ID environment variable is required");
@@ -67,7 +74,9 @@ export function getOAuthConfig(params?: { origin?: string }): OAuthConfig {
     throw new Error("MP_CLIENT_SECRET environment variable is required");
   }
   if (!redirectPath) {
-    throw new Error("MP_REDIRECT_OAUTH_URI environment variable is required");
+    throw new Error(
+      "MP_REDIRECT_PAYMENTS_EVENTS_URI environment variable is required",
+    );
   }
 
   // Resolve relative path to absolute URL for MercadoPago
@@ -88,9 +97,10 @@ export function getAuthorizeUrl(params: {
 }): string {
   const { config, state } = params;
 
-  const url = new URL(`${MP_OAUTH_BASE_URL}/authorization`);
+  const url = new URL(`${MP_AUTH_BASE_URL}/authorization`);
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("response_type", "code");
+  url.searchParams.set("platform_id", "mp");
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", state);
 
@@ -114,7 +124,7 @@ export async function exchangeCodeForToken(params: {
     redirect_uri: config.redirectUri,
   });
 
-  const response = await fetch(`${MP_OAUTH_BASE_URL}/oauth/token`, {
+  const response = await fetch(`${MP_API_BASE_URL}/oauth/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",

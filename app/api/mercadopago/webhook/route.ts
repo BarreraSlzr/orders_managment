@@ -19,7 +19,12 @@ import {
   validateWebhookSignature,
   type MpWebhookNotification,
 } from "@/lib/services/mercadopago/webhookService";
+import { handleOAuthCallback } from "@/lib/services/mercadopago/oauthCallbackHandler";
 import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(request: NextRequest) {
+  return handleOAuthCallback(request);
+}
 
 export async function POST(request: NextRequest) {
   try {
