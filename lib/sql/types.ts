@@ -178,16 +178,27 @@ interface AdminAuditLogsTable {
   created: ColumnType<Date, string | undefined, never>;
 }
 
-interface MercadopagoCredentialsTable extends BaseTable {
+export interface MercadopagoCredentialsTable extends BaseTable {
   tenant_id: string;
   access_token: string; // encrypted in production
   app_id: string;
   user_id: string; // MP user ID from onboarding
+  contact_email: ColumnType<string | null, string | null | undefined, string | null | undefined>;
   status: 'active' | 'inactive' | 'error';
   error_message: ColumnType<string | null, string | null | undefined, string | null | undefined>;
 }
 
-interface PaymentSyncAttemptsTable {
+export interface MercadopagoAccessRequestsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  contact_email: string;
+  status: 'pending' | 'completed' | 'canceled';
+  requested_at: ColumnType<Date, string | undefined, string | undefined>;
+  updated_at: ColumnType<Date, string | undefined, string | undefined>;
+  completed_at: ColumnType<Date | null, string | null | undefined, string | null | undefined>;
+}
+
+export interface PaymentSyncAttemptsTable {
   id: Generated<number>;
   tenant_id: string;
   order_id: string;
@@ -219,6 +230,7 @@ export interface Database {
   domain_events: DomainEventsTable;
   admin_audit_logs: AdminAuditLogsTable;
   mercadopago_credentials: MercadopagoCredentialsTable;
+  mercadopago_access_requests: MercadopagoAccessRequestsTable;
   payment_sync_attempts: PaymentSyncAttemptsTable;
   // product_consumptions: ProductConsumptionsTable;
   // suppliers: SuppliersTable;
