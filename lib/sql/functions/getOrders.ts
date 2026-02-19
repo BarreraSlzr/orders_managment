@@ -30,7 +30,18 @@ export async function getOrders(params: {
 
   let query = db
     .selectFrom("orders")
-    .where("tenant_id", "=", params.tenantId);
+    .where("tenant_id", "=", params.tenantId)
+    .where("deleted", "is", null)
+    .where((eb) =>
+      eb.exists(
+        eb
+          .selectFrom("order_items")
+          .select("order_items.id")
+          .whereRef("order_items.order_id", "=", "orders.id")
+          .where("order_items.tenant_id", "=", params.tenantId)
+          .limit(1),
+      ),
+    );
 
   if (status !== '' || !!date) {
     query = query

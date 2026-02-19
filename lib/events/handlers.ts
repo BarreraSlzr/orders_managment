@@ -4,6 +4,8 @@ import {
     upsertCategory,
 } from "@/lib/sql/functions/categories";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
+import { openOrder } from "@/lib/sql/functions/openOrder";
+import { combineOrders } from "@/lib/sql/functions/combineOrders";
 import {
     deleteExtra,
     toggleOrderItemExtra,
@@ -24,6 +26,7 @@ import {
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import {
     removeProducts,
+    setPaymentOption,
     togglePaymentOption,
     toggleTakeAway,
 } from "@/lib/sql/functions/updateTakeAway";
@@ -54,6 +57,9 @@ export const domainEventHandlers: {
       orderId: payload.orderId,
       productId: payload.productId,
       type: payload.type,
+      // Apply admin defaults from client (lazily synced)
+      defaultPaymentOptionId: payload.defaultPaymentOptionId,
+      defaultIsTakeaway: payload.defaultIsTakeaway,
     });
   },
   "order.split": async ({ payload }) => {
@@ -63,13 +69,30 @@ export const domainEventHandlers: {
       itemIds: payload.itemIds,
     });
   },
+  "order.combined": async ({ payload }) => {
+    return combineOrders({
+      tenantId: payload.tenantId,
+      targetOrderId: payload.targetOrderId,
+      sourceOrderIds: payload.sourceOrderIds,
+    });
+  },
   "order.closed": async ({ payload }) => {
     return closeOrder({ tenantId: payload.tenantId, orderId: payload.orderId });
+  },
+  "order.opened": async ({ payload }) => {
+    return openOrder({ tenantId: payload.tenantId, orderId: payload.orderId });
   },
   "order.payment.toggled": async ({ payload }) => {
     return togglePaymentOption({
       tenantId: payload.tenantId,
       itemIds: payload.itemIds,
+    });
+  },
+  "order.payment.set": async ({ payload }) => {
+    return setPaymentOption({
+      tenantId: payload.tenantId,
+      itemIds: payload.itemIds,
+      paymentOptionId: payload.paymentOptionId,
     });
   },
   "order.takeaway.toggled": async ({ payload }) => {

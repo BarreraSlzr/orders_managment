@@ -11,7 +11,9 @@
 		"start": "next start",
 		"lint": "eslint app/ components/ lib/",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"seed:test-agent": "bun run scripts/seed-test-agent.ts",
+		"seed:test-agent:reset": "bun run scripts/seed-test-agent.ts --reset"
 	},
 	"dependencies": {
 		"@radix-ui/react-checkbox": "^1.1.2",
@@ -38,6 +40,7 @@
 		"class-variance-authority": "^0.7.0",
 		"clsx": "^2.1.1",
 		"date-fns": "^4.1.0",
+		"geist": "^1.7.0",
 		"kysely": "^0.27.4",
 		"lucide-react": "^0.460.0",
 		"motion": "^12.34.0",
@@ -57,8 +60,10 @@
 	},
 	"devDependencies": {
 		"@eslint/eslintrc": "^3.3.3",
+		"@playwright/test": "^1.58.2",
 		"@testing-library/jest-dom": "^6.9.1",
 		"@testing-library/react": "^16.3.2",
+		"@testing-library/user-event": "^14.6.1",
 		"@vitejs/plugin-react": "^5.1.4",
 		"eslint": "^10.0.0",
 		"eslint-config-next": "^16.1.6",

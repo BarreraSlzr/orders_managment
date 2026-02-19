@@ -8,6 +8,9 @@ export async function updateOrderItem(params: {
   orderId: string;
   productId: string;
   type: 'INSERT' | 'DELETE';
+  // Admin defaults (applied lazily from client context)
+  defaultPaymentOptionId?: number;
+  defaultIsTakeaway?: boolean;
 }): Promise<OrderItemTable | null> {
   if (params.type === 'DELETE') {
     // Perform DELETE operation
@@ -25,14 +28,16 @@ export async function updateOrderItem(params: {
       .execute();
     return null;
   } else if (params.type === 'INSERT') {
-    // Perform INSERT operation
+    // Perform INSERT operation with admin defaults
     const result = await db
       .insertInto('order_items')
       .values({
         tenant_id: params.tenantId,
         order_id: params.orderId,
         product_id: params.productId,
-        payment_option_id: 1
+        // Apply admin defaults, fallback to hardcoded defaults if not provided
+        payment_option_id: params.defaultPaymentOptionId ?? 3,
+        is_takeaway: params.defaultIsTakeaway ?? false,
       })
       .returningAll()
       .executeTakeFirstOrThrow();

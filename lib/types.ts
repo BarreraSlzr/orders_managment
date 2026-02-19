@@ -18,15 +18,30 @@ export interface OrderContextState {
   isPending: boolean;
   currentOrder: OrderItemsView | null;
   orders: Map<Order['id'], Order>;
+  /** IDs currently selected for bulk multi-order operations */
+  selectedOrderIds: string[];
 }
 
 export interface OrderContextActions {
   updateCurrentOrder: (value: OrderContextState['currentOrder']) => void;
   fetchOrders: (query: OrdersQuery ) => Promise<void>;
   handleUpdateItemDetails: (actionType: 'updatePayment' | 'toggleTakeAway' | 'remove', formData: FormData) => Promise<boolean>
+  handleSetPaymentOption: (params: { orderId: string; itemIds: number[]; paymentOptionId: number }) => Promise<boolean>;
   setCurrentOrderDetails: (order: Order | null) => Promise<void>;
   handleSplitOrder: (formData: FormData) => Promise<boolean>
   handleCloseOrder: (formData: FormData) => Promise<boolean>;
+  handleOpenOrder: (formData: FormData) => Promise<boolean>;
+  handleStartMercadoPagoSync: (params: { orderId: string }) => Promise<void>;
+  /** Toggle an order ID in/out of the multi-select set */
+  toggleOrderSelection: (orderId: string) => void;
+  /** Set exactly one order as selected (detail view), or clear if re-tapping the same */
+  selectSingleOrder: (orderId: string) => void;
+  /** Clear all multi-selection */
+  clearOrderSelection: () => void;
+  /** Merge all selected orders into the first selected one */
+  handleCombineOrders: () => Promise<boolean>;
+  /** Close every selected order */
+  handleCloseMultiple: () => Promise<boolean>;
 }
 
 export interface ProductFilterContextState {

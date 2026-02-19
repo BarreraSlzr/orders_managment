@@ -65,8 +65,10 @@ export function useProductsFilter(): ProductFilterContextState & ProductFilterCo
   const visibleTags = useMemo(() => {
     // Filtering tags logic
     if (selectedTags.size === 0) {
-      return tagsSorted;
+      // Show first ~9 tags (approximately 2 rows) when no tags selected
+      return tagsSorted.slice(0, 9);
     } else {
+      // When tags are selected, show only related tags
       const combinedTagsRelated = new Set(
         Array
           .from(combinedTags)

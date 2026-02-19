@@ -2,6 +2,7 @@
 
 import AdminQueryListener from "@/components/Admin/AdminQueryListener";
 import SSEInvalidationListener from "@/components/SSE/SSEInvalidationListener";
+import { AdminDefaultsProvider } from "@/context/useAdminDefaults";
 import { TRPCProvider } from "@/lib/trpc/react";
 import type { AppRouter } from "@/lib/trpc/router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -32,13 +33,15 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-        <NuqsAdapter>
-          <Suspense>
-            <AdminQueryListener />
-            <SSEInvalidationListener />
-            {children}
-          </Suspense>
-        </NuqsAdapter>
+        <AdminDefaultsProvider>
+          <NuqsAdapter>
+            <Suspense>
+              <AdminQueryListener />
+              <SSEInvalidationListener />
+              {children}
+            </Suspense>
+          </NuqsAdapter>
+        </AdminDefaultsProvider>
       </TRPCProvider>
     </QueryClientProvider>
   );
