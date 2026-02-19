@@ -8,8 +8,11 @@ import {
 } from "@/components/ui/card";
 import { ReceiptEditProvider, useReceiptEdit } from "@/context/useReceiptEdit";
 import { OrderItemsView } from "@/lib/sql/types";
-import { PropsWithChildren } from "react";
+import { MpSyncResult } from "@/lib/types";
+import { PropsWithChildren, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "../ui/button";
+import { MercadoPagoPaymentModal } from "./MercadoPagoPaymentModal";
 import { ReceiptActions } from "./ReceiptActions";
 import { ReceiptFooter } from "./ReceiptFooter";
 import { ReceiptHeader } from "./ReceiptHeader";
@@ -39,6 +42,47 @@ function ReceiptForm({
     handleActionSubmit,
     handleStartMercadoPagoSync,
   } = useReceiptEdit();
+
+  const [mpResult, setMpResult] = useState<MpSyncResult | null>(null);
+  const [mpLoading, setMpLoading] = useState(false);
+
+  const handleMercadoPagoClick = async () => {
+    setMpLoading(true);
+    try {
+      const result = await handleStartMercadoPagoSync({
+        orderId: order.id,
+        flow: "pdv",
+      });
+      setMpResult(result);
+    } catch (error) {
+      // Show toast for MP configuration errors
+      const errorMessage =
+        error instanceof Error ? error.message : "Error al procesar pago";
+      if (errorMessage.includes("not configured")) {
+        toast.error("Mercado Pago no configurado", {
+          description: "Configura tus credenciales para empezar a cobrar.",
+          action: {
+            label: "Configurar",
+            onClick: () => {
+              window.dispatchEvent(
+                new CustomEvent("openAdminSettings", {
+                  detail: { tab: "mercadopago" },
+                }),
+              );
+            },
+          },
+          duration: 6000,
+        });
+      } else {
+        toast.error("Error al procesar pago", {
+          description: errorMessage,
+          duration: 4000,
+        });
+      }
+    } finally {
+      setMpLoading(false);
+    }
+  };
 
   const handleSubmit = async (ev: React.FormEvent<HTMLFormElement>) => {
     ev.preventDefault();
@@ -88,11 +132,10 @@ function ReceiptForm({
                       size="sm"
                       type="button"
                       className="bg-blue-600 hover:bg-blue-700"
-                      onClick={() =>
-                        handleStartMercadoPagoSync({ orderId: order.id })
-                      }
+                      disabled={mpLoading}
+                      onClick={handleMercadoPagoClick}
                     >
-                      Cobrar con Mercado Pago
+                      {mpLoading ? "Procesando…" : "Cobrar con Mercado Pago"}
                     </Button>
                     <Button
                       variant="default"
@@ -126,6 +169,19 @@ function ReceiptForm({
           </CardFooter>
         </form>
       </CardContent>
+
+      {/* Mercado Pago payment status modal */}
+      {mpResult && (
+        <MercadoPagoPaymentModal
+          result={mpResult}
+          orderId={order.id.toString()}
+          onClose={() => setMpResult(null)}
+          onRetry={() => {
+            setMpResult(null);
+            void handleMercadoPagoClick();
+          }}
+        />
+      )}
     </Card>
   );
 }

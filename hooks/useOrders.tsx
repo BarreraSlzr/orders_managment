@@ -3,6 +3,7 @@
 import { OrderItem, OrderItemsView } from "@/lib/sql/types";
 import { useTRPC } from "@/lib/trpc/react";
 import {
+  MpSyncResult,
   Order,
   OrderContextActions,
   OrderContextState,
@@ -147,6 +148,9 @@ export function useOrders({
   );
   const toggleTakeawayMutation = useMutation(
     trpc.orders.toggleTakeaway.mutationOptions(),
+  );
+  const startMpSyncMutation = useMutation(
+    trpc.mercadopago.payment.start.mutationOptions(),
   );
 
   // Invalidation helpers
@@ -354,8 +358,12 @@ export function useOrders({
       }
     },
 
-    async handleStartMercadoPagoSync({ orderId }) {
-      console.info("Mercado Pago sync requested", { orderId });
+    async handleStartMercadoPagoSync({ orderId, flow = "pdv" }) {
+      const result = await startMpSyncMutation.mutateAsync({
+        orderId,
+        flow,
+      });
+      return (result as unknown) as MpSyncResult;
     },
 
     async setCurrentOrderDetails(order: Order | null) {

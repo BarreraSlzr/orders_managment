@@ -20,18 +20,26 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { CSVPreviewTable } from "./CSVPreviewTable";
 
-type Tab = "csv" | "export" | "links";
+type Tab = "csv" | "export" | "links" | "mercadopago";
 
-export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<Tab>("csv");
+export function AdminSettingsPanel({
+  onClose,
+  initialTab,
+}: {
+  onClose: () => void;
+  initialTab?: string;
+}) {
+  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) ?? "csv");
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "csv", label: "CSV Import" },
     { key: "export", label: "Export" },
     { key: "links", label: "Links" },
+    { key: "mercadopago", label: "Mercado Pago" },
   ];
 
   return (
@@ -69,6 +77,7 @@ export function AdminSettingsPanel({ onClose }: { onClose: () => void }) {
           {activeTab === "csv" && <CSVImportTab />}
           {activeTab === "export" && <ExportTab />}
           {activeTab === "links" && <QuickLinksTab />}
+          {activeTab === "mercadopago" && <MercadoPagoTab />}
         </CardContent>
       </Card>
     </div>
@@ -410,6 +419,178 @@ function QuickLinksTab() {
           {isLoggingOut ? "Logging out..." : "Logout"}
         </Button>
       </div>
+    </div>
+  );
+}
+// ── Mercado Pago Onboarding Tab ───────────────────────────────────────────────
+
+function MercadoPagoTab() {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [contactEmail, setContactEmail] = useState("");
+
+  const credentialsQuery = useQuery(
+    trpc.mercadopago.credentials.get.queryOptions(),
+  );
+
+  const oauthCheckQuery = useQuery(
+    trpc.mercadopago.credentials.checkOAuth.queryOptions(),
+  );
+
+  const creds = credentialsQuery.data;
+  const oauthAvailable = oauthCheckQuery.data?.available ?? false;
+  const normalizedContactEmail = contactEmail.trim().toLowerCase();
+  const isContactEmailValid = /^\S+@\S+\.\S+$/.test(normalizedContactEmail);
+
+  // Pre-fill email from existing credentials
+  useEffect(() => {
+    if (creds?.contactEmail && !contactEmail) {
+      setContactEmail(creds.contactEmail);
+    }
+  }, [contactEmail, creds?.contactEmail]);
+
+  // Handle OAuth callback notifications
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthStatus = params.get("mp_oauth");
+    const message = params.get("message");
+
+    if (oauthStatus === "success") {
+      toast.success("Mercado Pago conectado", {
+        description: "Credenciales guardadas exitosamente.",
+        duration: 4000,
+      });
+      window.history.replaceState({}, "", window.location.pathname);
+      void queryClient.invalidateQueries({
+        queryKey: trpc.mercadopago.credentials.get.queryOptions().queryKey,
+      });
+    } else if (oauthStatus === "error") {
+      toast.error("Error al conectar Mercado Pago", {
+        description: message ?? "Intenta nuevamente.",
+        duration: 6000,
+      });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [queryClient, trpc]);
+
+  const handleOAuthConnect = () => {
+    if (!isContactEmailValid) {
+      toast.error("Correo inválido", {
+        description: "Ingresa un correo válido para conectar Mercado Pago.",
+        duration: 4000,
+      });
+      return;
+    }
+
+    const oauthUrl = new URL(
+      "/api/mercadopago/oauth/authorize",
+      window.location.origin,
+    );
+    oauthUrl.searchParams.set("email", normalizedContactEmail);
+    window.location.href = oauthUrl.toString();
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* ── Connected status ── */}
+      {creds?.status === "active" && (
+        <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-green-50 text-green-700 border border-green-200">
+          <CheckCircle className="h-4 w-4 shrink-0" />
+          <span>
+            Conectado — Cuenta {creds.userId}
+            {creds.contactEmail ? ` (${creds.contactEmail})` : ""}
+          </span>
+        </div>
+      )}
+
+      {creds?.status === "error" && (
+        <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-red-50 text-red-700 border border-red-200">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{creds.errorMessage ?? "Error de conexión"}</span>
+        </div>
+      )}
+
+      {/* ── Connect flow ── */}
+      {creds?.status !== "active" && (
+        <>
+          <div className="space-y-1">
+            <Label htmlFor="mp-contact-email" className="text-xs">
+              Correo del negocio <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="mp-contact-email"
+              type="email"
+              placeholder="cliente@empresa.com"
+              value={contactEmail}
+              onChange={(event) => setContactEmail(event.target.value)}
+              className="mt-1 text-xs"
+            />
+            <p className="text-xs text-muted-foreground">
+              Correo asociado a la cuenta de Mercado Pago del negocio.
+            </p>
+          </div>
+
+          {oauthAvailable ? (
+            <Button
+              onClick={handleOAuthConnect}
+              className="w-full bg-[#009EE3] hover:bg-[#0082c1] text-white font-semibold"
+              size="lg"
+              disabled={!isContactEmailValid}
+            >
+              <svg
+                className="h-5 w-5 mr-2"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2a7.2 7.2 0 01-6-3.22c.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08a7.2 7.2 0 01-6 3.22z"
+                  fill="currentColor"
+                />
+              </svg>
+              Conectar con Mercado Pago
+            </Button>
+          ) : (
+            !credentialsQuery.isLoading && (
+              <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-600 border">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>
+                  Mercado Pago OAuth no configurado. Configura las variables de
+                  entorno para habilitar la conexión.
+                </span>
+              </div>
+            )
+          )}
+        </>
+      )}
+
+      {/* Re-connect option when already connected */}
+      {creds?.status === "active" && (
+        <div className="space-y-2 pt-2 border-t">
+          <p className="text-xs text-muted-foreground">
+            ¿Necesitas reconectar con otra cuenta?
+          </p>
+          <div className="space-y-1">
+            <Input
+              type="email"
+              placeholder="nuevo-correo@empresa.com"
+              value={contactEmail}
+              onChange={(event) => setContactEmail(event.target.value)}
+              className="text-xs"
+            />
+          </div>
+          {oauthAvailable && (
+            <Button
+              onClick={handleOAuthConnect}
+              variant="outline"
+              size="sm"
+              disabled={!isContactEmailValid}
+            >
+              Reconectar
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
