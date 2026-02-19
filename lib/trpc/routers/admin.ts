@@ -449,4 +449,50 @@ export const adminRouter = router({
         tempPassword,
       };
     }),
+
+  /** Get admin defaults (payment option, takeaway) for order creation */
+  getDefaults: publicProcedure.query(async ({ ctx }) => {
+    if (!ctx.session?.tenant_id) {
+      // Not authenticated, return fallback defaults
+      return {
+        defaultPaymentOptionId: 3, // Credit Card
+        defaultIsTakeaway: false,
+      };
+    }
+
+    // In a real app, you'd fetch these from a settings table
+    // For now, return hardcoded defaults per tenant
+    // TODO: Create admin_settings table with defaults
+    return {
+      defaultPaymentOptionId: 3, // Credit Card
+      defaultIsTakeaway: false,
+    };
+  }),
+
+  /** Update admin defaults (lazy sync from client) */
+  updateDefaults: publicProcedure
+    .input(
+      z.object({
+        defaultPaymentOptionId: z.number().optional(),
+        defaultIsTakeaway: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (!ctx.session?.tenant_id) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+
+      // TODO: Save to admin_settings table
+      // For now, just log the update
+      console.log("Admin defaults updated:", {
+        tenantId: ctx.session.tenant_id,
+        ...input,
+      });
+
+      return { success: true };
+    }),
 });
+

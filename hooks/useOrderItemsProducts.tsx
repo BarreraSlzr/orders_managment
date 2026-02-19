@@ -1,5 +1,6 @@
 "use client";
 import { useOrders } from "@/context/useOrders";
+import { useAdminDefaults } from "@/context/useAdminDefaults";
 import { OrderItemsView } from "@/lib/sql/types";
 import { useTRPC } from "@/lib/trpc/react";
 import { OrderItemsContextActions } from "@/lib/types";
@@ -8,6 +9,7 @@ import { useMutation } from "@tanstack/react-query";
 export function useOrderItemsProducts(): OrderItemsContextActions {
   const trpc = useTRPC();
   const { currentOrder, updateCurrentOrder } = useOrders();
+  const { defaults } = useAdminDefaults();
 
   const createMutation = useMutation(trpc.orders.create.mutationOptions());
   const updateItemMutation = useMutation(
@@ -22,6 +24,9 @@ export function useOrderItemsProducts(): OrderItemsContextActions {
       const orderUpdated = await createMutation.mutateAsync({
         timeZone: "America/Mexico_City",
         productId,
+        // Apply admin defaults for new orders
+        defaultPaymentOptionId: defaults?.defaultPaymentOptionId ?? 1,
+        defaultIsTakeaway: defaults?.defaultIsTakeaway ?? false,
       });
       if (orderUpdated) updateCurrentOrder(orderUpdated as OrderItemsView);
     },
