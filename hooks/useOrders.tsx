@@ -325,7 +325,7 @@ export function useOrders({
       if (snapshot) {
         queryClient.setQueryData<OrderItemsView>(detailKey, {
           ...snapshot,
-          closed: getIsoTimestamp() as OrderItemsView["closed"],
+          closed: (getIsoTimestamp() as unknown) as OrderItemsView["closed"],
         });
       }
       try {
