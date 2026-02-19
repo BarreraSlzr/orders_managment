@@ -5,11 +5,25 @@ import { ToggleGroup, ToggleGroupItem } from "../ui/toggle-group";
 
 export interface IOrderStatusProps {
   defaultStatus?: string;
+  /** If provided, makes this a controlled component */
+  value?: string;
+  /** Callback when the status changes */
+  onValueChange?: (value: string) => void;
 }
 
-export default function OrderStatus({ defaultStatus = "" }: IOrderStatusProps) {
-  const [filterStatus, setFilterStatus] = React.useState(defaultStatus);
+export default function OrderStatus({
+  defaultStatus = "",
+  value: controlledValue,
+  onValueChange: controlledOnValueChange,
+}: IOrderStatusProps) {
+  const [internalStatus, setInternalStatus] = React.useState(defaultStatus);
   const { fetchOrders } = useOrders();
+
+  // Use controlled value if provided, otherwise use internal state
+  const filterStatus =
+    controlledValue !== undefined ? controlledValue : internalStatus;
+  const setFilterStatus = controlledOnValueChange || setInternalStatus;
+
   React.useEffect(() => {
     fetchOrders({ status: filterStatus || defaultStatus });
     // eslint-disable-next-line react-hooks/exhaustive-deps

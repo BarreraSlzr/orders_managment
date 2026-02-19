@@ -29,8 +29,14 @@ export const TEST_IDS = {
     /** Individual order row — append `:${order.id}` for specific rows */
     ROW: "order-list-row",
     /** Empty state message */
-    EMPTY: "order-list-empty",
-  },
+    EMPTY: "order-list-empty",    /** Bottom panel shown when >1 orders are selected */
+    MULTI_ACTIONS_PANEL: "order-list-multi-actions",
+    /** Combine selected orders into first button */
+    MULTI_COMBINE_BTN: "order-list-multi-combine",
+    /** Close all selected orders button */
+    MULTI_CLOSE_BTN: "order-list-multi-close",
+    /** Deselect all button */
+    MULTI_CLEAR_BTN: "order-list-multi-clear",  },
 
   // ─── Order Details (receipt panel inside sheet) ───────────────────────────
   ORDER_DETAILS: {
