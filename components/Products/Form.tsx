@@ -57,6 +57,7 @@ export const ProductForm = ({
     centsToMxDisplay(product.price ?? 0),
   );
   const [priceError, setPriceError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const mxnFormatter = useMemo(
     () =>
       new Intl.NumberFormat("es-MX", {
@@ -71,6 +72,7 @@ export const ProductForm = ({
   useEffect(() => {
     setPriceInput(centsToMxDisplay(product.price ?? 0));
     setPriceError(null);
+    setActionError(null);
   }, [product.id, product.price]);
 
   const parsedCents = parseCurrencyToCents(priceInput);
@@ -95,6 +97,7 @@ export const ProductForm = ({
 
     formData.set("id", product.id ?? "");
     setIsSubmitting(true);
+    setActionError(null);
     try {
       if (submitType === "save") {
         await handleUpsertProduct(formData);
@@ -103,6 +106,9 @@ export const ProductForm = ({
         await handleDeleteProduct(formData);
         handleEditProduct();
       }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Operación fallida. Por favor intente de nuevo.";
+      setActionError(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -215,6 +221,11 @@ export const ProductForm = ({
               defaultValue={product.tags ?? ""}
             />
           </div>
+          {actionError && (
+            <div className="rounded-md bg-red-50 p-3 border border-red-200">
+              <p className="text-sm text-red-800">{actionError}</p>
+            </div>
+          )}
           <div className="flex justify-between pt-4">
             <Button
               type="submit"

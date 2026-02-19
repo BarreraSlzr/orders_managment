@@ -76,11 +76,15 @@ export function useProducts(): ProductContextType {
 
   const handleDeleteProduct = async (formData: FormData) => {
     const id = formData.get("id") as string;
-    await deleteMutation.mutateAsync({ id });
-    await invalidateProducts();
+    try {
+      await deleteMutation.mutateAsync({ id });
+      await invalidateProducts();
 
-    if (currentProduct?.id === id) {
-      setCurrentProduct(undefined);
+      if (currentProduct?.id === id) {
+        setCurrentProduct(undefined);
+      }
+    } catch (error) {
+      throw error;
     }
   };
 
