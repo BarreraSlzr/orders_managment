@@ -21,7 +21,22 @@ export function togglePaymentOption(params: {
 }) {
   return db
     .updateTable("order_items")
-    .set({ payment_option_id: sql`CASE WHEN payment_option_id = 1 THEN 2 ELSE 1 END` })
+    .set({ payment_option_id: sql`CASE WHEN payment_option_id = 1 THEN 3 ELSE 1 END` })
+    .where("id", "in", params.itemIds)
+    .where("tenant_id", "=", params.tenantId)
+    .returning(['id', 'product_id', 'payment_option_id', 'is_takeaway'])
+    .execute();
+}
+
+
+export function setPaymentOption(params: {
+  tenantId: string;
+  itemIds: OrderItemTable['id'][];
+  paymentOptionId: number;
+}) {
+  return db
+    .updateTable("order_items")
+    .set({ payment_option_id: params.paymentOptionId })
     .where("id", "in", params.itemIds)
     .where("tenant_id", "=", params.tenantId)
     .returning(['id', 'product_id', 'payment_option_id', 'is_takeaway'])

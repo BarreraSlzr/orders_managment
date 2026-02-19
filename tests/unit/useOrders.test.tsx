@@ -45,8 +45,10 @@ const { mockTrpc } = vi.hoisted(() => {
       },
       split: { mutationOptions: vi.fn(makeMutOpts) },
       close: { mutationOptions: vi.fn(makeMutOpts) },
+      combine: { mutationOptions: vi.fn(makeMutOpts) },
       removeProducts: { mutationOptions: vi.fn(makeMutOpts) },
       togglePayment: { mutationOptions: vi.fn(makeMutOpts) },
+      setPaymentOption: { mutationOptions: vi.fn(makeMutOpts) },
       toggleTakeaway: { mutationOptions: vi.fn(makeMutOpts) },
     },
   };
@@ -193,7 +195,7 @@ describe("useOrders — stale-data regression contract", () => {
 
     const formData = new FormData();
     formData.append("orderId", "order-1");
-    formData.append("itemIds", "42");
+    formData.append("item_id", "42");
 
     let success: boolean | undefined;
     await act(async () => {
@@ -209,3 +211,54 @@ describe("useOrders — stale-data regression contract", () => {
   });
 });
 
+// ─── selectSingleOrder ────────────────────────────────────────────────────────
+describe("selectSingleOrder", () => {
+  it("sets selectedOrderIds to [orderId] when nothing is selected", async () => {
+    const { result } = renderHook(() => useOrders({}), {
+      wrapper: makeWrapper(),
+    });
+
+    act(() => result.current.selectSingleOrder("order-a"));
+
+    await waitFor(() =>
+      expect(result.current.selectedOrderIds).toEqual(["order-a"]),
+    );
+  });
+
+  it("replaces a previous selection with the new orderId", async () => {
+    const { result } = renderHook(() => useOrders({}), {
+      wrapper: makeWrapper("selected=order-x"),
+    });
+
+    act(() => result.current.selectSingleOrder("order-b"));
+
+    await waitFor(() =>
+      expect(result.current.selectedOrderIds).toEqual(["order-b"]),
+    );
+  });
+
+  it("clears selection when tapping the already-selected order", async () => {
+    const { result } = renderHook(() => useOrders({}), {
+      wrapper: makeWrapper("selected=order-a"),
+    });
+
+    act(() => result.current.selectSingleOrder("order-a"));
+
+    await waitFor(() =>
+      expect(result.current.selectedOrderIds).toEqual([]),
+    );
+  });
+
+  it("does NOT clear multi-select when tapping one of several selected orders", async () => {
+    // Long-press built that multi-select; a tap should still replace with single
+    const { result } = renderHook(() => useOrders({}), {
+      wrapper: makeWrapper("selected=order-a,order-b"),
+    });
+
+    act(() => result.current.selectSingleOrder("order-b"));
+
+    await waitFor(() =>
+      expect(result.current.selectedOrderIds).toEqual(["order-b"]),
+    );
+  });
+});

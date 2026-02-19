@@ -60,6 +60,14 @@ export default {
         default: ['var(--font-global)']
       },
       keyframes: {
+        "chevron-flow": {
+          "0%, 100%": { opacity: "0.15" },
+          "40%, 60%": { opacity: "1" },
+        },
+        "slide-up": {
+          from: { transform: "translateY(100%)", opacity: "0" },
+          to:   { transform: "translateY(0)",    opacity: "1" },
+        },
         "accordion-down": {
           from: { height: "0" },
           to: { height: "var(--radix-accordion-content-height)" },
@@ -70,6 +78,14 @@ export default {
         },
       },
       animation: {
+        // 6-phase wave, 200ms apart — brightness travels right→left across the chevron flood
+        "chevron-1": "chevron-flow 1.8s ease-in-out 0s infinite",
+        "chevron-2": "chevron-flow 1.8s ease-in-out 0.2s infinite",
+        "chevron-3": "chevron-flow 1.8s ease-in-out 0.4s infinite",
+        "chevron-4": "chevron-flow 1.8s ease-in-out 0.6s infinite",
+        "chevron-5": "chevron-flow 1.8s ease-in-out 0.8s infinite",
+        "chevron-6": "chevron-flow 1.8s ease-in-out 1.0s infinite",
+        "slide-up": "slide-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both",
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
       },

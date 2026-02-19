@@ -3,6 +3,7 @@ import { TEST_IDS } from "@/lib/testIds";
 import { Minus, Plus } from "lucide-react";
 import { useOrderItemsProducts } from "@/context/useOrderItemsProducts";
 import { useOrders } from "@/context/useOrders";
+import { useAdminDefaults } from "@/context/useAdminDefaults";
 import { Product } from "@/lib/types";
 
 interface Props {
