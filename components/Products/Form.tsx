@@ -79,19 +79,21 @@ export const ProductForm = ({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
-    const cents = parseCurrencyToCents(priceInput);
-
-    if (cents === null) {
-      setPriceError("Precio inválido");
-      return;
-    }
-
-    formData.set("id", product.id ?? "");
-    formData.set("price", `${cents}`);
     const submitter = (event.nativeEvent as SubmitEvent)
       .submitter as HTMLButtonElement | null;
     const submitType = submitter?.dataset.intent ?? "save";
 
+    // Only validate price for save operations
+    if (submitType === "save") {
+      const cents = parseCurrencyToCents(priceInput);
+      if (cents === null) {
+        setPriceError("Precio inválido");
+        return;
+      }
+      formData.set("price", `${cents}`);
+    }
+
+    formData.set("id", product.id ?? "");
     setIsSubmitting(true);
     try {
       if (submitType === "save") {
@@ -117,8 +119,16 @@ export const ProductForm = ({
 
   const closeForm = () => handleEditProduct();
 
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Prevent clicks inside the card from propagating to backdrop
+    e.stopPropagation();
+  };
+
   return (
-    <Card className="w-full max-w-md mx-auto cursor-pointer touch-auto hover:shadow-md transition-shadow">
+    <Card 
+      className="w-full max-w-md mx-auto cursor-pointer touch-auto hover:shadow-md transition-shadow"
+      onClick={handleCardClick}
+    >
       <CardHeader className="relative">
         <CardTitle className="text-2xl font-bold">
           {product.id ? "Editar" : "Crear"} Producto
