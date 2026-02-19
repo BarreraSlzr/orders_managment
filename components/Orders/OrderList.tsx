@@ -15,7 +15,7 @@ export default function OrdersList() {
     selectSingleOrder,
     toggleOrderSelection,
   } = useOrders();
-  const { startPress, endPress, didFire } = useOnLongPress();
+  const { startPress, endPress, movePress, didFire } = useOnLongPress();
 
   const isMultiSelect = selectedOrderIds.length > 0;
 
@@ -48,15 +48,17 @@ export default function OrdersList() {
               isSelected
                 ? "border-blue-500 bg-blue-50 shadow-sm"
                 : isCurrent
-                  ? "border-transparent bg-blue-100"
-                  : "border-transparent hover:bg-gray-50 hover:shadow-md",
+                ? "border-transparent bg-blue-100"
+                : "border-transparent hover:bg-gray-50 hover:shadow-md",
             ].join(" ")}
             onClick={() => handleRowClick(order)}
             onMouseDown={startPress(() => toggleOrderSelection(order.id))}
             onMouseUp={endPress}
             onMouseLeave={endPress}
+            onMouseMove={movePress}
             onTouchStart={startPress(() => toggleOrderSelection(order.id))}
             onTouchEnd={endPress}
+            onTouchMove={movePress}
           >
             <OrderSummary order={order} />
           </div>
@@ -68,4 +70,3 @@ export default function OrdersList() {
     </div>
   );
 }
-
