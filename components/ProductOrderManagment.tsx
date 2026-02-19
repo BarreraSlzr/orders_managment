@@ -80,10 +80,41 @@ export default function ProductOrderManagment() {
 }
 
 const Actions = () => {
-  const { currentProduct } = useProducts();
+  const { currentProduct, handleEditProduct } = useProducts();
+
+  // Disable scroll on body when modal is open
+  useEffect(() => {
+    if (currentProduct) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
+    }
+  }, [currentProduct]);
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking the backdrop itself, not the form card
+    if (e.target === e.currentTarget) {
+      handleEditProduct(undefined);
+    }
+  };
+
+  const handleEscapeKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      handleEditProduct(undefined);
+    }
+  };
+
   if (currentProduct)
     return (
-      <div className="fixed bottom-0 left-0 h-screen w-screen backdrop-blur-sm bg-slate-400/30 p-4 flex items-center">
+      <div
+        className="fixed inset-0 z-[70] backdrop-blur-sm bg-slate-400/30 p-4 flex items-center"
+        onClick={handleBackdropClick}
+        onKeyDown={handleEscapeKey}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+      >
         <ProductForm product={currentProduct as Product} />
       </div>
     );
