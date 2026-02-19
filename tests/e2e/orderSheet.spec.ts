@@ -106,8 +106,8 @@ test("selecting an order row sets orderId in URL and shows details", async ({
 
   await firstRow.click();
 
-  // URL must contain orderId
-  await expect(page).toHaveURL(new RegExp(`[?&]orderId=${orderId}`));
+  // URL must contain selected (single-select uses ?selected=id, not ?orderId=)
+  await expect(page).toHaveURL(new RegExp(`[?&]selected=${orderId}`));
 
   // Order details panel should render
   await expect(page.locator(sel.orderDetailsRoot)).toBeVisible();
@@ -123,8 +123,8 @@ test("closing order details clears orderId from URL", async ({ page }) => {
   // Click the X inside OrderDetails
   await page.locator(sel.orderDetailsClose).click();
 
-  // Waits for orderId to disappear from URL
-  await expect(page).not.toHaveURL(/[?&]orderId=/);
+  // Waits for selected to disappear from URL
+  await expect(page).not.toHaveURL(/[?&]selected=/);
   // Details panel should be gone
   await expect(page.locator(sel.orderDetailsRoot)).not.toBeVisible();
   // Empty selection placeholder appears
@@ -133,18 +133,18 @@ test("closing order details clears orderId from URL", async ({ page }) => {
 
 // ─── Deep-link ───────────────────────────────────────────────────────────────
 
-test("navigating directly to /?sheet=true&orderId=<id> opens sheet with details", async ({
+test("navigating directly to /?sheet=true&selected=<id> opens sheet with details", async ({
   page,
 }) => {
-  // First open the sheet normally to discover a real orderId
+  // First open the sheet normally to discover a real order ID
   await page.goto("/?sheet=true");
   const firstRow = page.locator(`[data-testid^="${TEST_IDS.ORDER_LIST.ROW}"]`).first();
   await firstRow.click();
-  const orderId = new URL(page.url()).searchParams.get("orderId");
-  expect(orderId).toBeTruthy();
+  const selectedId = new URL(page.url()).searchParams.get("selected");
+  expect(selectedId).toBeTruthy();
 
-  // Now navigate fresh using the deep-link URL
-  await page.goto(`/?sheet=true&orderId=${orderId}`);
+  // Now navigate fresh using the deep-link URL with selected param
+  await page.goto(`/?sheet=true&selected=${selectedId}`);
 
   await expect(page.locator(sel.sheetRoot)).toBeVisible();
   await expect(page.locator(sel.orderDetailsRoot)).toBeVisible();
