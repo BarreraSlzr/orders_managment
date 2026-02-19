@@ -1,10 +1,23 @@
 import {
+    getCredentials,
+    markCredentialsError,
+} from "@/lib/services/mercadopago/credentialsService";
+import {
+    createPDVPaymentIntent,
+    createQRPayment,
+    listTerminals,
+} from "@/lib/services/mercadopago/paymentService";
+import {
+    createAttempt,
+    updateAttempt,
+} from "@/lib/services/mercadopago/statusService";
+import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
+import {
     deleteCategory,
     toggleCategoryItem,
     upsertCategory,
 } from "@/lib/sql/functions/categories";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
-import { openOrder } from "@/lib/sql/functions/openOrder";
 import { combineOrders } from "@/lib/sql/functions/combineOrders";
 import {
     deleteExtra,
@@ -12,12 +25,12 @@ import {
     upsertExtra,
 } from "@/lib/sql/functions/extras";
 import { insertOrder } from "@/lib/sql/functions/insertOrder";
-import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
 import {
     addItem,
     deleteItem,
     toggleItem,
 } from "@/lib/sql/functions/inventory";
+import { openOrder } from "@/lib/sql/functions/openOrder";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import {
     addTransaction,
@@ -202,5 +215,99 @@ export const domainEventHandlers: {
       targetTenantId: payload.targetTenantId,
       metadata: payload.metadata ?? null,
     });
+  },
+
+  "order.payment.mercadopago.start": async ({ payload }) => {
+    const { tenantId, orderId, amountCents, flow } = payload;
+
+    // Fetch stored credentials
+    const creds = await getCredentials({ tenantId });
+    if (!creds) {
+      throw new Error(
+        "Mercado Pago credentials not configured for this tenant.",
+      );
+    }
+
+    // Create the attempt record first (idempotency guard inside)
+    const attempt = await createAttempt({ tenantId, orderId, amountCents });
+
+    // Mark as processing
+    await updateAttempt({ id: attempt.id, status: "processing" });
+
+    try {
+      if (flow === "qr") {
+        // QR flow
+        const qrResult = await createQRPayment({
+          accessToken: creds.access_token,
+          mpUserId: creds.user_id,
+          externalReference: orderId,
+          amountCents,
+        });
+
+        await updateAttempt({
+          id: attempt.id,
+          status: "pending",
+          qrCode: qrResult.qr_data,
+          mpTransactionId: qrResult.in_store_order_id,
+          responseData: qrResult as unknown as Record<string, unknown>,
+        });
+
+        return {
+          attemptId: attempt.id,
+          status: "pending" as const,
+          qrCode: qrResult.qr_data,
+          mpTransactionId: qrResult.in_store_order_id,
+        };
+      } else {
+        // PDV flow — use the first terminal
+        const terminals = await listTerminals({
+          accessToken: creds.access_token,
+        });
+        const terminal = terminals[0];
+        if (!terminal) {
+          throw new Error("No Point terminals registered for this account.");
+        }
+
+        const pdvResult = await createPDVPaymentIntent({
+          accessToken: creds.access_token,
+          deviceId: terminal.id,
+          amountCents,
+          externalReference: orderId,
+        });
+
+        await updateAttempt({
+          id: attempt.id,
+          status: "processing",
+          terminalId: terminal.id,
+          mpTransactionId: pdvResult.id,
+          responseData: pdvResult as unknown as Record<string, unknown>,
+        });
+
+        return {
+          attemptId: attempt.id,
+          status: "processing" as const,
+          terminalId: terminal.id,
+          mpTransactionId: pdvResult.id,
+        };
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown MP error";
+
+      await updateAttempt({
+        id: attempt.id,
+        status: "error",
+        errorData: { message: errorMessage },
+      });
+      await markCredentialsError({ tenantId, errorMessage });
+
+      throw error;
+    }
+  },
+
+  "mercadopago.credentials.upserted": async ({ payload }) => {
+    // Audit-only event: the actual upsert is performed by the tRPC caller
+    // before dispatching. We just return the identifier for the audit trail.
+    return { credentialsId: `${payload.tenantId}:${payload.appId}` };
   },
 };
