@@ -26,11 +26,10 @@ Add the following to your `.env.local` file:
 # MercadoPago OAuth
 MP_CLIENT_ID=your_client_id_here
 MP_CLIENT_SECRET=your_client_secret_here
-MP_REDIRECT_OAUTH_URI=/api/mercadopago/webhook
+MP_REDIRECT_URI=/api/mercadopago/webhook
+MP_REDIRECT_TEST_URI=/api/mercadopago/webhook/test
 
 # MercadoPago Webhooks (register these URLs in the MP dashboard)
-MP_REDIRECT_PAYMENTS_EVENTS_URI=/api/mercadopago/webhook
-MP_REDIRECT_PAYMENTS_EVENTS_TEST_URI=/api/mercadopago/webhook/test
 MP_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
@@ -158,7 +157,7 @@ Manually saves credentials (fallback method).
    ```
 3. Copy the HTTPS URL (e.g., `https://abc123.ngrok.io`)
 4. Update MercadoPago app redirect URI to: `https://abc123.ngrok.io/api/mercadopago/webhook`
-5. The `MP_REDIRECT_OAUTH_URI=/api/mercadopago/webhook` path
+5. The `MP_REDIRECT_URI=/api/mercadopago/webhook` path
    resolves automatically against the ngrok origin at runtime.
 6. Restart dev server and test OAuth flow
 
@@ -166,13 +165,13 @@ Manually saves credentials (fallback method).
 
 ### "OAuth not configured"
 
-- Verify `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, and `MP_REDIRECT_OAUTH_URI` are set in `.env.local`
+- Verify `MP_CLIENT_ID`, `MP_CLIENT_SECRET`, and `MP_REDIRECT_URI` are set in `.env.local`
 - Restart dev server after adding env vars
 - Check browser console for errors
 
 ### Redirect URI Mismatch Error
 
-- Ensure redirect URI in MercadoPago dashboard matches the resolved `MP_REDIRECT_OAUTH_URI` exactly
+- Ensure redirect URI in MercadoPago dashboard matches the resolved `MP_REDIRECT_URI` exactly
 - Include protocol (`http://` or `https://`)
 - No trailing slashes
 

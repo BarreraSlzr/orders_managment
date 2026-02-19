@@ -56,7 +56,7 @@ function resolveBaseUrl(origin?: string): string {
  * Returns OAuth config from environment variables.
  * Throws if any required var is missing.
  *
- * `origin` is used to resolve `MP_REDIRECT_OAUTH_URI` when it's a relative
+ * `origin` is used to resolve `MP_REDIRECT_URI` when it's a relative
  * path (e.g. `/api/mercadopago/oauth/callback`).  Route handlers should pass
  * `new URL(request.url).origin` so the redirect_uri sent to MercadoPago is
  * always an absolute URL.
@@ -64,8 +64,7 @@ function resolveBaseUrl(origin?: string): string {
 export function getOAuthConfig(params?: { origin?: string }): OAuthConfig {
   const clientId = process.env.MP_CLIENT_ID;
   const clientSecret = process.env.MP_CLIENT_SECRET;
-  const redirectPath = 
-    process.env.MP_REDIRECT_PAYMENTS_EVENTS_URI;
+  const redirectPath = process.env.MP_REDIRECT_URI;
 
   if (!clientId) {
     throw new Error("MP_CLIENT_ID environment variable is required");
@@ -74,9 +73,7 @@ export function getOAuthConfig(params?: { origin?: string }): OAuthConfig {
     throw new Error("MP_CLIENT_SECRET environment variable is required");
   }
   if (!redirectPath) {
-    throw new Error(
-      "MP_REDIRECT_PAYMENTS_EVENTS_URI environment variable is required",
-    );
+    throw new Error("MP_REDIRECT_URI environment variable is required");
   }
 
   // Resolve relative path to absolute URL for MercadoPago

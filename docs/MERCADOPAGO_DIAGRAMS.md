@@ -51,7 +51,8 @@ flowchart LR
 | `MP_CLIENT_ID` | MP dashboard → Your App | Identifies your app during OAuth |
 | `MP_CLIENT_SECRET` | MP dashboard → Your App | Proves app ownership during code→token exchange |
 | `MP_WEBHOOK_SECRET` | MP dashboard → Webhooks config | Validates `x-signature` HMAC on incoming webhooks |
-| `MP_REDIRECT_OAUTH_URI` | You define it | Path for OAuth callback (`/api/mercadopago/oauth/callback`) |
+| `MP_REDIRECT_URI` | You define it | Shared path for OAuth callback + webhook (`/api/mercadopago/webhook`) |
+| `MP_REDIRECT_TEST_URI` | You define it | Sandbox/test webhook path (`/api/mercadopago/webhook/test`) |
 | Public Key | MP dashboard | ❌ Only for client-side JS SDK — **not needed** |
 | App Access Token | MP dashboard | ❌ Per-tenant tokens come from OAuth — **not needed** |
 

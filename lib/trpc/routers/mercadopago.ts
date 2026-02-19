@@ -95,7 +95,7 @@ const credentialsRouter = router({
     const available = !!(
       process.env.MP_CLIENT_ID &&
       process.env.MP_CLIENT_SECRET &&
-      process.env.MP_REDIRECT_OAUTH_URI
+      process.env.MP_REDIRECT_URI
     );
     return { available };
   }),
