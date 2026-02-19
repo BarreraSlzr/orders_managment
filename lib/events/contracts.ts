@@ -6,8 +6,11 @@ export type DomainEventType =
   | "order.created"
   | "order.item.updated"
   | "order.split"
+  | "order.combined"
   | "order.closed"
+  | "order.opened"
   | "order.payment.toggled"
+  | "order.payment.set"
   | "order.takeaway.toggled"
   | "order.products.removed"
   | "product.upserted"
@@ -34,19 +37,38 @@ export interface DomainEventPayloadMap {
     orderId: string;
     productId: string;
     type: "INSERT" | "DELETE";
+    // Admin defaults applied to new items (optional, lazy sync from client)
+    defaultPaymentOptionId?: number;
+    defaultIsTakeaway?: boolean;
   };
   "order.split": {
     tenantId: string;
     oldOrderId: string;
     itemIds: OrderItemTable["id"][];
   };
+  "order.combined": {
+    tenantId: string;
+    /** The order that will absorb all items */
+    targetOrderId: string;
+    /** Orders whose items are moved into targetOrderId; then soft-deleted */
+    sourceOrderIds: string[];
+  };
   "order.closed": {
+    tenantId: string;
+    orderId: string;
+  };
+  "order.opened": {
     tenantId: string;
     orderId: string;
   };
   "order.payment.toggled": {
     tenantId: string;
     itemIds: OrderItemTable["id"][];
+  };
+  "order.payment.set": {
+    tenantId: string;
+    itemIds: OrderItemTable["id"][];
+    paymentOptionId: number;
   };
   "order.takeaway.toggled": {
     tenantId: string;
@@ -136,8 +158,13 @@ export interface DomainEventResultMap {
     newOrder: OrderItemsView;
     oldOrder: Order;
   };
+  "order.combined": Order;
   "order.closed": Order;
+  "order.opened": Order;
   "order.payment.toggled": Array<
+    Pick<OrderItemTable, "id" | "product_id" | "payment_option_id" | "is_takeaway">
+  >;
+  "order.payment.set": Array<
     Pick<OrderItemTable, "id" | "product_id" | "payment_option_id" | "is_takeaway">
   >;
   "order.takeaway.toggled": Array<

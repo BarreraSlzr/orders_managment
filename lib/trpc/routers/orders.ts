@@ -34,6 +34,8 @@ export const ordersRouter = router({
       z.object({
         timeZone: z.string().default("America/Mexico_City"),
         productId: z.string().optional(),
+        defaultPaymentOptionId: z.number().optional(),
+        defaultIsTakeaway: z.boolean().optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -51,6 +53,9 @@ export const ordersRouter = router({
             orderId: order.id,
             productId: input.productId,
             type: "INSERT",
+            // Pass defaults to item creation for application
+            defaultPaymentOptionId: input.defaultPaymentOptionId,
+            defaultIsTakeaway: input.defaultIsTakeaway,
           },
         });
       }
@@ -104,12 +109,51 @@ export const ordersRouter = router({
       });
     }),
 
+  open: tenantProcedure
+    .input(z.object({ orderId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
+      return dispatchDomainEvent({
+        type: "order.opened",
+        payload: { tenantId: ctx.tenantId, ...input },
+      });
+    }),
+
+  combine: tenantProcedure
+    .input(
+      z.object({
+        targetOrderId: z.string(),
+        sourceOrderIds: z.array(z.string()).min(1),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
+      return dispatchDomainEvent({
+        type: "order.combined",
+        payload: {
+          tenantId: ctx.tenantId,
+          targetOrderId: input.targetOrderId,
+          sourceOrderIds: input.sourceOrderIds,
+        },
+      });
+    }),
+
   togglePayment: tenantProcedure
     .input(z.object({ itemIds: z.array(z.number()) }))
     .mutation(async ({ ctx, input }) => {
       requireRole(ctx.session, ["staff", "manager", "admin"]);
       return dispatchDomainEvent({
         type: "order.payment.toggled",
+        payload: { tenantId: ctx.tenantId, ...input },
+      });
+    }),
+
+  setPaymentOption: tenantProcedure
+    .input(z.object({ itemIds: z.array(z.number()), paymentOptionId: z.number().min(1).max(6) }))
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["staff", "manager", "admin"]);
+      return dispatchDomainEvent({
+        type: "order.payment.set",
         payload: { tenantId: ctx.tenantId, ...input },
       });
     }),
