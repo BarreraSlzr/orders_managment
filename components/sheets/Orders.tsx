@@ -118,7 +118,9 @@ export function OpenOrderSheet() {
     parseAsBoolean.withDefault(false),
   );
   const [filterStatus, setFilterStatus] = useState("opened");
-  const [selectedDate, setSelectedDate] = useState<string | undefined>(undefined);
+  const [selectedDate, setSelectedDate] = useState<string | undefined>(
+    undefined,
+  );
   const trpc = useTRPC();
   const openOrdersQuery = useQuery(
     trpc.orders.list.queryOptions({
@@ -326,8 +328,13 @@ export function OpenOrderSheet() {
           <Card className="border-slate-300 bg-white font-mono">
             <div className="px-3 py-2 text-[11px] uppercase tracking-widest text-slate-500 border-b border-dashed border-slate-300 flex items-center justify-between">
               <span>
-                Resumen del día{" "}
-                ({filterStatus === "all" ? "Todas" : filterStatus === "opened" ? "Abiertas" : "Cerradas"})
+                Resumen del día (
+                {filterStatus === "all"
+                  ? "Todas"
+                  : filterStatus === "opened"
+                  ? "Abiertas"
+                  : "Cerradas"}
+                )
               </span>
               <span>
                 {summaryOrders.length} orden
