@@ -270,7 +270,7 @@ export function OpenOrderSheet() {
         className="flex w-full h-full flex-col sm:max-w-lg p-0 pt-4"
         data-testid={TEST_IDS.ORDER_SHEET.ROOT}
       >
-        <SheetHeader className="flex flex-row justify-between items-center p-0">
+        <SheetHeader className="flex flex-row gap-2 justify-between items-center p-0">
           <SheetTitle
             className="text-center text-xl font-bold px-3 cursor-pointer"
             onClick={handleClose}
