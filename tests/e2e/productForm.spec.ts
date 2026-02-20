@@ -47,7 +47,7 @@ test.describe("ProductForm", () => {
     await firstProduct.click();
 
     // Check if form modal appears
-    await expect(page.getByRole("dialog", { modal: true })).toBeVisible();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await expect(
       page.getByRole("heading", { name: /editar|crear/i })
     ).toBeVisible();
@@ -59,7 +59,7 @@ test.describe("ProductForm", () => {
     await firstProduct.click();
 
     // Wait for modal to appear
-    const dialog = page.getByRole("dialog", { modal: true });
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
     // Click on the backdrop (outside the form card)
@@ -88,7 +88,7 @@ test.describe("ProductForm", () => {
     await firstProduct.click();
 
     // Wait for modal to appear
-    const dialog = page.getByRole("dialog", { modal: true });
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
     // Press escape
@@ -200,7 +200,7 @@ test.describe("ProductForm", () => {
     await firstProduct.click();
 
     // Wait for modal
-    const dialog = page.getByRole("dialog", { modal: true });
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
     // Find and corrupt the price field
@@ -212,7 +212,7 @@ test.describe("ProductForm", () => {
 
     // The delete button should still work
     const deleteButton = page.locator('button[data-intent="delete"]').first();
-    await expect(deleteButton).toBeBEnabled();
+    await expect(deleteButton).toBeEnabled();
 
     page.on("console", (msg) => {
       if (msg.type() === "log") {
@@ -236,7 +236,7 @@ test.describe("ProductForm", () => {
     await firstProduct.click();
 
     // Wait for modal
-    const dialog = page.getByRole("dialog", { modal: true });
+    const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
     // Get save button

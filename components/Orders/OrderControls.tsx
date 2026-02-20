@@ -9,12 +9,21 @@ export interface IOrderStatusProps {
   value?: string;
   /** Callback when the status changes */
   onValueChange?: (value: string) => void;
+  openCount?: number;
+  closedCount?: number;
+  totalCount?: number;
+  /** Optional date for filtering (YYYY-MM-DD). Undefined = today. */
+  date?: string;
 }
 
 export default function OrderStatus({
   defaultStatus = "",
   value: controlledValue,
   onValueChange: controlledOnValueChange,
+  openCount = 0,
+  closedCount = 0,
+  totalCount = 0,
+  date,
 }: IOrderStatusProps) {
   const [internalStatus, setInternalStatus] = React.useState(defaultStatus);
   const { fetchOrders } = useOrders();
@@ -25,9 +34,11 @@ export default function OrderStatus({
   const setFilterStatus = controlledOnValueChange || setInternalStatus;
 
   React.useEffect(() => {
-    fetchOrders({ status: filterStatus || defaultStatus });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterStatus]);
+    // "all" → fetch with empty status (no open/closed filter, but date-scoped)
+    const status =
+      filterStatus === "all" ? "" : filterStatus || defaultStatus;
+    fetchOrders({ status, date });
+  }, [filterStatus, date]);
   return (
     <ToggleGroup
       type="single"
@@ -40,7 +51,9 @@ export default function OrderStatus({
         aria-label="Show open orders"
         data-testid={TEST_IDS.ORDER_CONTROLS.FILTER_OPENED}
       >
-        <div className="w-4 h-4 rounded-full bg-green-500" />
+        <div className="h-4 min-w-[1rem] rounded-full bg-amber-400 text-black text-[10px] font-bold flex items-center justify-center px-1">
+          {openCount}
+        </div>
         <span hidden={filterStatus !== "opened"} className="ml-2">
           Abiertas
         </span>
@@ -50,9 +63,23 @@ export default function OrderStatus({
         aria-label="Show closed orders"
         data-testid={TEST_IDS.ORDER_CONTROLS.FILTER_CLOSED}
       >
-        <div className="w-4 h-4 rounded-full bg-red-500" />
+        <div className="h-4 min-w-[1rem] rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center px-1">
+          {closedCount}
+        </div>
         <span hidden={filterStatus !== "closed"} className="ml-2">
           Cerradas
+        </span>
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="all"
+        aria-label="Show all orders"
+        data-testid={TEST_IDS.ORDER_CONTROLS.FILTER_ALL}
+      >
+        <div className="h-4 min-w-[1rem] rounded-full bg-slate-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+          {totalCount}
+        </div>
+        <span hidden={filterStatus !== "all"} className="ml-2">
+          Todas
         </span>
       </ToggleGroupItem>
     </ToggleGroup>

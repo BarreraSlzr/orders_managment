@@ -8,11 +8,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { useOrders } from "@/context/useOrders";
+import { OrderItemsView } from "@/lib/sql/types";
 import { TEST_IDS } from "@/lib/testIds";
+import { useTRPC } from "@/lib/trpc/react";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, Layers, ShoppingBag, X } from "lucide-react";
+import { formatPrice } from "@/lib/utils/formatPrice";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { Calendar, ChevronLeft, Layers, ShoppingBag, X } from "lucide-react";
 import { parseAsBoolean, useQueryState } from "nuqs";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import OrderStatus from "../Orders/OrderControls";
 import OrderDetails from "../Orders/OrderDetails";
 import OrdersList from "../Orders/OrderList";
@@ -112,6 +116,88 @@ export function OpenOrderSheet() {
     parseAsBoolean.withDefault(false),
   );
   const [filterStatus, setFilterStatus] = useState("opened");
+  const today = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState<string>(today);
+  const trpc = useTRPC();
+  const openOrdersQuery = useQuery(
+    trpc.orders.list.queryOptions({
+      status: "opened",
+      timeZone: "America/Mexico_City",
+      date: selectedDate,
+    }),
+  );
+  const closedOrdersQuery = useQuery(
+    trpc.orders.list.queryOptions({
+      status: "closed",
+      timeZone: "America/Mexico_City",
+      date: selectedDate,
+    }),
+  );
+  const openCount = openOrdersQuery.data?.length ?? 0;
+  const closedCount = closedOrdersQuery.data?.length ?? 0;
+  const totalCount = openCount + closedCount;
+  const selectedOrderIdSet = useMemo(() => new Set(selectedOrderIds), [
+    selectedOrderIds,
+  ]);
+  const summaryOrders = useMemo(() => {
+    const all = Array.from(orders.values());
+    if (selectedOrderIds.length > 1) {
+      return all.filter((order) => selectedOrderIdSet.has(order.id));
+    }
+    return all;
+  }, [orders, selectedOrderIdSet, selectedOrderIds.length]);
+  const dayTotal = summaryOrders.reduce((sum, order) => sum + order.total, 0);
+  const ordersArray = summaryOrders;
+  const detailsQueries = useQueries({
+    queries: ordersArray.map((order) =>
+      trpc.orders.getDetails.queryOptions({ id: order.id }),
+    ),
+  });
+  const detailsData = detailsQueries
+    .map((query) => query.data)
+    .filter(Boolean) as OrderItemsView[];
+  const isPaymentSummaryLoading = detailsQueries.some(
+    (query) => query.isLoading,
+  );
+
+  const paymentSummary = useMemo(() => {
+    const totals = new Map<number, { total: number; count: number }>();
+
+    for (const order of detailsData) {
+      for (const product of order.products) {
+        for (const item of product.items) {
+          if (!item.payment_option_id) continue;
+          const extrasTotal = item.extras.reduce(
+            (sum, extra) => sum + extra.price,
+            0,
+          );
+          const amount = product.price + extrasTotal;
+          const current = totals.get(item.payment_option_id) ?? {
+            total: 0,
+            count: 0,
+          };
+          totals.set(item.payment_option_id, {
+            total: current.total + amount,
+            count: current.count + 1,
+          });
+        }
+      }
+    }
+
+    return [
+      { id: 1, label: "Efectivo", icon: "💵" },
+      { id: 2, label: "Transferencia", icon: "💳💸" },
+      { id: 3, label: "Credito", icon: "💳" },
+      { id: 4, label: "Debito", icon: "💳" },
+      { id: 5, label: "Movil", icon: "💳📱" },
+      { id: 6, label: "Crypto", icon: "💳🟠" },
+    ]
+      .map((option) => ({
+        ...option,
+        totals: totals.get(option.id) ?? { total: 0, count: 0 },
+      }))
+      .filter((option) => option.totals.count > 0);
+  }, [detailsData]);
 
   // Auto-switch to "closed" tab when viewing a closed order
   useEffect(() => {
@@ -119,6 +205,17 @@ export function OpenOrderSheet() {
       setFilterStatus("closed");
     }
   }, [currentOrder?.closed]);
+
+  useEffect(() => {
+    if (sheetOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [sheetOpen]);
 
   function handleClose() {
     void setSheetOpen(false);
@@ -158,35 +255,124 @@ export function OpenOrderSheet() {
         >
           <ShoppingBag className="!h-6 !w-6 text-primary-foreground" />
           <span
-            className="absolute -right-2 -top-2 h-6 w-6 rounded-full bg-primary text-primary-foreground"
+            className="absolute -right-2 -top-2 flex flex-col gap-1"
             data-testid={TEST_IDS.ORDER_SHEET.COUNT_BADGE}
           >
-            {orders.size}
+            {openCount > 0 && (
+              <span className="h-5 min-w-[1.25rem] rounded-full bg-amber-400 text-black text-[10px] font-bold flex items-center justify-center px-1">
+                {openCount}
+              </span>
+            )}
+            {closedCount > 0 && (
+              <span className="h-5 min-w-[1.25rem] rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center px-1">
+                {closedCount}
+              </span>
+            )}
           </span>
         </Button>
       </div>
       <SheetContent
-        className="flex w-full flex-col sm:max-w-lg p-0 pt-4"
+        className="flex w-full h-full flex-col sm:max-w-lg p-0 pt-4"
         data-testid={TEST_IDS.ORDER_SHEET.ROOT}
       >
         <SheetHeader className="flex flex-row gap-2 justify-between items-center p-0">
           <SheetTitle
-            className="text-center text-xl font-bold px-4 cursor-pointer"
+            className="text-center text-xl font-bold px-3 cursor-pointer"
             onClick={handleClose}
           >
             {multiSelectLabel ?? "ORDENES"}
           </SheetTitle>
-          <div className="px-4 pr-10">
+          <div className="px-3 pr-10">
             <OrderStatus
               defaultStatus="opened"
               value={filterStatus}
               onValueChange={setFilterStatus}
+              openCount={openCount}
+              closedCount={closedCount}
+              totalCount={totalCount}
+              date={selectedDate}
             />
           </div>
         </SheetHeader>
+        {/* Date picker row */}
+        <div className="px-3 pt-1 flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value || today)}
+              className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 pl-8 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+            />
+            <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+          </div>
+          {selectedDate !== today && (
+            <button
+              onClick={() => setSelectedDate(today)}
+              className="text-[10px] font-mono uppercase tracking-wide text-slate-500 hover:text-slate-800 transition-colors px-1.5 py-1 rounded border border-slate-200"
+            >
+              Hoy
+            </button>
+          )}
+        </div>
+        <div className="px-3 pt-2">
+          <Card className="border-slate-300 bg-white font-mono">
+            <div className="px-3 py-2 text-[11px] uppercase tracking-widest text-slate-500 border-b border-dashed border-slate-300 flex items-center justify-between">
+              <span>
+                Resumen del día (
+                {filterStatus === "all"
+                  ? "Todas"
+                  : filterStatus === "opened"
+                  ? "Abiertas"
+                  : "Cerradas"}
+                )
+              </span>
+              <span>
+                {summaryOrders.length} orden
+                {summaryOrders.length === 1 ? "" : "es"}
+              </span>
+            </div>
+            <div className="px-3 py-2 text-xs flex items-center justify-between">
+              <span className="uppercase tracking-wide text-slate-500">
+                Total
+              </span>
+              <span className="text-sm font-bold tabular-nums text-slate-900">
+                {formatPrice(dayTotal)}
+              </span>
+            </div>
+            <div className="px-3 pb-3 flex flex-col gap-1.5">
+              {isPaymentSummaryLoading ? (
+                <span className="text-xs text-slate-500 uppercase tracking-wide">
+                  Calculando pagos...
+                </span>
+              ) : paymentSummary.length === 0 ? (
+                <span className="text-xs text-slate-500 uppercase tracking-wide">
+                  Sin pagos registrados
+                </span>
+              ) : (
+                paymentSummary.map((option) => (
+                  <div
+                    key={option.id}
+                    className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px]"
+                  >
+                    <span>{option.icon}</span>
+                    <span className="uppercase tracking-wide text-slate-700">
+                      {option.label}
+                    </span>
+                    <span className="text-slate-500 tabular-nums">
+                      x{option.totals.count}
+                    </span>
+                    <span className="font-semibold tabular-nums text-slate-900">
+                      {formatPrice(option.totals.total)}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
         <div className="flex flex-col flex-1 min-h-0">
           {/* Orders List — scrollable region */}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto overscroll-contain touch-pan-y">
             <Suspense fallback={<Spinner className="mx-auto" />}>
               <OrdersList />
             </Suspense>

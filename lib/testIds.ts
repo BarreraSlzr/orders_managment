@@ -54,6 +54,8 @@ export const TEST_IDS = {
     FILTER_OPENED: "order-controls-filter-opened",
     /** "Closed" filter toggle */
     FILTER_CLOSED: "order-controls-filter-closed",
+    /** "All" filter toggle */
+    FILTER_ALL: "order-controls-filter-all",
   },
 
   // ─── Receipt Actions (action buttons on the receipt form) ─────────────────
