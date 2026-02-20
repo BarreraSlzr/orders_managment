@@ -9,12 +9,16 @@ export interface IOrderStatusProps {
   value?: string;
   /** Callback when the status changes */
   onValueChange?: (value: string) => void;
+  openCount?: number;
+  closedCount?: number;
 }
 
 export default function OrderStatus({
   defaultStatus = "",
   value: controlledValue,
   onValueChange: controlledOnValueChange,
+  openCount = 0,
+  closedCount = 0,
 }: IOrderStatusProps) {
   const [internalStatus, setInternalStatus] = React.useState(defaultStatus);
   const { fetchOrders } = useOrders();
@@ -26,7 +30,6 @@ export default function OrderStatus({
 
   React.useEffect(() => {
     fetchOrders({ status: filterStatus || defaultStatus });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterStatus]);
   return (
     <ToggleGroup
@@ -40,7 +43,9 @@ export default function OrderStatus({
         aria-label="Show open orders"
         data-testid={TEST_IDS.ORDER_CONTROLS.FILTER_OPENED}
       >
-        <div className="w-4 h-4 rounded-full bg-green-500" />
+        <div className="h-4 min-w-[1rem] rounded-full bg-amber-400 text-black text-[10px] font-bold flex items-center justify-center px-1">
+          {openCount}
+        </div>
         <span hidden={filterStatus !== "opened"} className="ml-2">
           Abiertas
         </span>
@@ -50,7 +55,9 @@ export default function OrderStatus({
         aria-label="Show closed orders"
         data-testid={TEST_IDS.ORDER_CONTROLS.FILTER_CLOSED}
       >
-        <div className="w-4 h-4 rounded-full bg-red-500" />
+        <div className="h-4 min-w-[1rem] rounded-full bg-black text-white text-[10px] font-bold flex items-center justify-center px-1">
+          {closedCount}
+        </div>
         <span hidden={filterStatus !== "closed"} className="ml-2">
           Cerradas
         </span>
