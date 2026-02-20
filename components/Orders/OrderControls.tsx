@@ -35,12 +35,9 @@ export default function OrderStatus({
 
   React.useEffect(() => {
     // "all" → fetch with empty status (no open/closed filter, but date-scoped)
-    const status = filterStatus === "all" ? "" : (filterStatus || defaultStatus);
-    // When "all" is selected and no explicit date, pass today's date to keep it day-scoped
-    const effectiveDate = (filterStatus === "all" && !date)
-      ? new Date().toISOString().slice(0, 10)
-      : date;
-    fetchOrders({ status, date: effectiveDate });
+    const status =
+      filterStatus === "all" ? "" : filterStatus || defaultStatus;
+    fetchOrders({ status, date });
   }, [filterStatus, date]);
   return (
     <ToggleGroup

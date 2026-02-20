@@ -14,8 +14,6 @@ import { useTRPC } from "@/lib/trpc/react";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/utils/formatPrice";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
 import { Calendar, ChevronLeft, Layers, ShoppingBag, X } from "lucide-react";
 import { parseAsBoolean, useQueryState } from "nuqs";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
@@ -118,9 +116,8 @@ export function OpenOrderSheet() {
     parseAsBoolean.withDefault(false),
   );
   const [filterStatus, setFilterStatus] = useState("opened");
-  const [selectedDate, setSelectedDate] = useState<string | undefined>(
-    undefined,
-  );
+  const today = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState<string>(today);
   const trpc = useTRPC();
   const openOrdersQuery = useQuery(
     trpc.orders.list.queryOptions({
@@ -302,27 +299,20 @@ export function OpenOrderSheet() {
           <div className="relative flex-1">
             <input
               type="date"
-              value={selectedDate ?? ""}
-              onChange={(e) => setSelectedDate(e.target.value || undefined)}
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value || today)}
               className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 pl-8 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
             />
             <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
           </div>
-          {selectedDate && (
+          {selectedDate !== today && (
             <button
-              onClick={() => setSelectedDate(undefined)}
+              onClick={() => setSelectedDate(today)}
               className="text-[10px] font-mono uppercase tracking-wide text-slate-500 hover:text-slate-800 transition-colors px-1.5 py-1 rounded border border-slate-200"
             >
               Hoy
             </button>
           )}
-          <span className="text-[11px] font-mono text-slate-500">
-            {format(
-              selectedDate ? new Date(selectedDate + "T12:00:00") : new Date(),
-              "EEE dd MMM",
-              { locale: es },
-            )}
-          </span>
         </div>
         <div className="px-3 pt-2">
           <Card className="border-slate-300 bg-white font-mono">
