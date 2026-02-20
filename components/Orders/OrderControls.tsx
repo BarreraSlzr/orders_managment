@@ -11,6 +11,9 @@ export interface IOrderStatusProps {
   onValueChange?: (value: string) => void;
   openCount?: number;
   closedCount?: number;
+  totalCount?: number;
+  /** Optional date for filtering (YYYY-MM-DD). Undefined = today. */
+  date?: string;
 }
 
 export default function OrderStatus({
@@ -19,6 +22,8 @@ export default function OrderStatus({
   onValueChange: controlledOnValueChange,
   openCount = 0,
   closedCount = 0,
+  totalCount = 0,
+  date,
 }: IOrderStatusProps) {
   const [internalStatus, setInternalStatus] = React.useState(defaultStatus);
   const { fetchOrders } = useOrders();
@@ -29,8 +34,14 @@ export default function OrderStatus({
   const setFilterStatus = controlledOnValueChange || setInternalStatus;
 
   React.useEffect(() => {
-    fetchOrders({ status: filterStatus || defaultStatus });
-  }, [filterStatus]);
+    // "all" → fetch with empty status (no open/closed filter, but date-scoped)
+    const status = filterStatus === "all" ? "" : (filterStatus || defaultStatus);
+    // When "all" is selected and no explicit date, pass today's date to keep it day-scoped
+    const effectiveDate = (filterStatus === "all" && !date)
+      ? new Date().toISOString().slice(0, 10)
+      : date;
+    fetchOrders({ status, date: effectiveDate });
+  }, [filterStatus, date]);
   return (
     <ToggleGroup
       type="single"
@@ -60,6 +71,18 @@ export default function OrderStatus({
         </div>
         <span hidden={filterStatus !== "closed"} className="ml-2">
           Cerradas
+        </span>
+      </ToggleGroupItem>
+      <ToggleGroupItem
+        value="all"
+        aria-label="Show all orders"
+        data-testid={TEST_IDS.ORDER_CONTROLS.FILTER_ALL}
+      >
+        <div className="h-4 min-w-[1rem] rounded-full bg-slate-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+          {totalCount}
+        </div>
+        <span hidden={filterStatus !== "all"} className="ml-2">
+          Todas
         </span>
       </ToggleGroupItem>
     </ToggleGroup>
