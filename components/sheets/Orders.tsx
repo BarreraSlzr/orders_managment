@@ -14,7 +14,16 @@ import { useTRPC } from "@/lib/trpc/react";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/utils/formatPrice";
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { Calendar, ChevronLeft, Layers, ShoppingBag, X } from "lucide-react";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Calendar,
+  ChevronDown,
+  ChevronLeft,
+  Layers,
+  ShoppingBag,
+  X,
+} from "lucide-react";
 import { parseAsBoolean, useQueryState } from "nuqs";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import OrderStatus from "../Orders/OrderControls";
@@ -118,6 +127,10 @@ export function OpenOrderSheet() {
   const [filterStatus, setFilterStatus] = useState("opened");
   const today = new Date().toISOString().slice(0, 10);
   const [selectedDate, setSelectedDate] = useState<string>(today);
+  const [summaryExpanded, setSummaryExpanded] = useState(true);
+  const dateInputRef = useRef<HTMLInputElement>(null);
+  const longPressRef = useRef<NodeJS.Timeout | null>(null);
+  const wasLongPressRef = useRef<boolean>(false);
   const trpc = useTRPC();
   const openOrdersQuery = useQuery(
     trpc.orders.list.queryOptions({
@@ -294,80 +307,116 @@ export function OpenOrderSheet() {
             />
           </div>
         </SheetHeader>
-        {/* Date picker row */}
-        <div className="px-3 pt-1 flex items-center gap-2">
-          <div className="relative flex-1">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value || today)}
-              className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 pl-8 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-            <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-          </div>
-          {selectedDate !== today && (
-            <button
-              onClick={() => setSelectedDate(today)}
-              className="text-[10px] font-mono uppercase tracking-wide text-slate-500 hover:text-slate-800 transition-colors px-1.5 py-1 rounded border border-slate-200"
-            >
-              Hoy
-            </button>
-          )}
-        </div>
         <div className="px-3 pt-2">
           <Card className="border-slate-300 bg-white font-mono">
-            <div className="px-3 py-2 text-[11px] uppercase tracking-widest text-slate-500 border-b border-dashed border-slate-300 flex items-center justify-between">
-              <span>
-                Resumen del día (
-                {filterStatus === "all"
-                  ? "Todas"
-                  : filterStatus === "opened"
-                  ? "Abiertas"
-                  : "Cerradas"}
-                )
-              </span>
-              <span>
-                {summaryOrders.length} orden
-                {summaryOrders.length === 1 ? "" : "es"}
-              </span>
-            </div>
-            <div className="px-3 py-2 text-xs flex items-center justify-between">
-              <span className="uppercase tracking-wide text-slate-500">
-                Total
-              </span>
-              <span className="text-sm font-bold tabular-nums text-slate-900">
-                {formatPrice(dayTotal)}
-              </span>
-            </div>
-            <div className="px-3 pb-3 flex flex-col gap-1.5">
-              {isPaymentSummaryLoading ? (
-                <span className="text-xs text-slate-500 uppercase tracking-wide">
-                  Calculando pagos...
+            {/* Summary Header — Calendar | Date | Count+Total | Chevron */}
+            <button
+              onClick={() => {
+                // If a long-press just happened, clear flag and exit
+                if (wasLongPressRef.current) {
+                  wasLongPressRef.current = false;
+                  return;
+                }
+                // Otherwise toggle summary details
+                setSummaryExpanded(!summaryExpanded);
+              }}
+              onTouchStart={() => {
+                wasLongPressRef.current = false;
+                longPressRef.current = setTimeout(() => {
+                  const input = dateInputRef.current;
+                  if (input) {
+                    input.focus();
+                    input.click();
+                    wasLongPressRef.current = true;
+                  }
+                }, 500);
+              }}
+              onTouchEnd={() => {
+                if (longPressRef.current) {
+                  clearTimeout(longPressRef.current);
+                  longPressRef.current = null;
+                }
+              }}
+              onTouchCancel={() => {
+                if (longPressRef.current) {
+                  clearTimeout(longPressRef.current);
+                  longPressRef.current = null;
+                }
+              }}
+              className="w-full px-3 py-2 text-[11px] uppercase tracking-widest text-slate-500 border-b border-dashed border-slate-300 flex items-center justify-between hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center gap-2 flex-1">
+                <Calendar className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+                <span className="tracking-wide text-slate-600">
+                  {selectedDate === today
+                    ? "Hoy"
+                    : format(new Date(selectedDate + "T12:00:00"), "dd MMM", {
+                        locale: es,
+                      })}
                 </span>
-              ) : paymentSummary.length === 0 ? (
-                <span className="text-xs text-slate-500 uppercase tracking-wide">
-                  Sin pagos registrados
+              </div>
+              <div className="flex-1 text-right">
+                <span className="text-slate-700">
+                  {summaryOrders.length} orden
+                  {summaryOrders.length === 1 ? "" : "es"}
                 </span>
-              ) : (
-                paymentSummary.map((option) => (
-                  <div
-                    key={option.id}
-                    className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px]"
-                  >
-                    <span>{option.icon}</span>
-                    <span className="uppercase tracking-wide text-slate-700">
-                      {option.label}
+              </div>
+              <div className="flex items-center gap-2 flex-1 justify-end">
+                <span className="text-sm font-bold tabular-nums text-slate-900">
+                  {formatPrice(dayTotal)}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-slate-400 transition-transform",
+                    summaryExpanded ? "rotate-0" : "-rotate-90",
+                  )}
+                />
+              </div>
+            </button>
+            {/* Collapsible Payment Summary Details */}
+            {summaryExpanded && (
+              <>
+                {/* Date Input — visible when expanded */}
+                <div className="px-3 pt-2 pb-2 border-b border-dashed border-slate-200">
+                  <input
+                    ref={dateInputRef}
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value || today)}
+                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  />
+                </div>
+                <div className="px-3 pb-3 flex flex-col gap-1.5">
+                  {isPaymentSummaryLoading ? (
+                    <span className="text-xs text-slate-500 uppercase tracking-wide">
+                      Calculando pagos...
                     </span>
-                    <span className="text-slate-500 tabular-nums">
-                      x{option.totals.count}
+                  ) : paymentSummary.length === 0 ? (
+                    <span className="text-xs text-slate-500 uppercase tracking-wide">
+                      Sin pagos registrados
                     </span>
-                    <span className="font-semibold tabular-nums text-slate-900">
-                      {formatPrice(option.totals.total)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
+                  ) : (
+                    paymentSummary.map((option) => (
+                      <div
+                        key={option.id}
+                        className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px]"
+                      >
+                        <span>{option.icon}</span>
+                        <span className="uppercase tracking-wide text-slate-700">
+                          {option.label}
+                        </span>
+                        <span className="text-slate-500 tabular-nums">
+                          x{option.totals.count}
+                        </span>
+                        <span className="font-semibold tabular-nums text-slate-900">
+                          {formatPrice(option.totals.total)}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </Card>
         </div>
         <div className="flex flex-col flex-1 min-h-0">
