@@ -24,10 +24,8 @@ export const ReceiptActions = () => {
     setPaymentPickerOpen,
     handleSetPaymentOption,
     handleTogglePayment,
-    handleActionSubmit,
     handleDecrementSelected,
     handleIncrementSelected,
-    order,
   } = useReceiptEdit();
   const { startPress, endPress, didFire } = useOnLongPress();
 
@@ -42,14 +40,17 @@ export const ReceiptActions = () => {
       ),
     );
   })();
-  const toggleIcon = allSelectedAreDefault ? "💵" : "💳";
+  const preferredOptionIcon =
+    PAYMENT_OPTIONS.find((it) => it.id === defaultPaymentOptionId)?.icon ??
+    "💳";
+  const toggleIcon = allSelectedAreDefault ? "💵" : preferredOptionIcon;
 
   // When long-press fires on the payment button → open picker instead of toggling
   const handlePaymentLongPress = startPress(() => {
     setPaymentPickerOpen(true);
   });
 
-  // Tap handler: smart toggle (cash ↔ preferred default)
+  // Tap handler: smart toggle (cash ↔ preferred non-cash)
   const handlePaymentTap = () => {
     if (didFire.current) {
       didFire.current = false;
@@ -80,6 +81,7 @@ export const ReceiptActions = () => {
             {/* Inline swap: toggle button ↔ select picker */}
             {paymentPickerOpen ? (
               <select
+                aria-label="Seleccionar método de pago"
                 className="rounded-md border px-2 py-1 text-sm font-medium bg-white"
                 defaultValue=""
                 autoFocus

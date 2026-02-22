@@ -15,6 +15,7 @@
 
 import { useAdminDefaults } from "@/context/useAdminDefaults";
 import { useOrders } from "@/context/useOrders";
+import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useOrderItemsProducts } from "@/hooks/useOrderItemsProducts";
 import { OrderItem, OrderItemsView } from "@/lib/sql/types";
 import {
@@ -119,6 +120,10 @@ export function ReceiptEditProvider({
   } = useOrders();
   const { handleUpdateOrderItems } = useOrderItemsProducts();
   const { defaults } = useAdminDefaults();
+  const { tenantName } = useAdminStatus();
+  const isCafeBaguettesTenant =
+    tenantName?.trim().toLowerCase() === "cafe&baguettes";
+  const preferredPaymentFallbackId = isCafeBaguettesTenant ? 3 : 2;
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const hasSelection = selectedItemIds.size > 0;
@@ -248,8 +253,8 @@ export function ReceiptEditProvider({
     [selectedItemIds, order.id, handleSetPaymentOptionBase],
   );
 
-  /** Smart toggle: if all selected items are cash → set to admin default (credit card),
-   *  otherwise → set to cash. Uses the explicit set endpoint, not the DB toggle. */
+  /** Smart toggle: cash ↔ preferred non-cash (admin default when configured,
+   *  otherwise transfer by default, or credit for cafe&baguettes). */
   const handleTogglePayment = useCallback(async () => {
     const itemIds = Array.from(selectedItemIds).map(Number);
     if (itemIds.length === 0) return;
@@ -260,7 +265,8 @@ export function ReceiptEditProvider({
         .filter((it) => selectedItemIds.has(`${it.id}`))
         .map((it) => it.payment_option_id),
     );
-    const preferredId = defaults?.defaultPaymentOptionId ?? 3;
+    const preferredId =
+      defaults?.defaultPaymentOptionId ?? preferredPaymentFallbackId;
     const allAreDefault = selectedPaymentIds.every((id) => id === preferredId);
     const targetPaymentId = allAreDefault
       ? 1 // all are the preferred default → switch to cash
@@ -274,7 +280,14 @@ export function ReceiptEditProvider({
     setSelectedItemIds(new Set());
     setTotalPrice(0);
     setPaymentPickerOpen(false);
-  }, [selectedItemIds, items, order.id, defaults, handleSetPaymentOptionBase]);
+  }, [
+    selectedItemIds,
+    items,
+    order.id,
+    defaults,
+    preferredPaymentFallbackId,
+    handleSetPaymentOptionBase,
+  ]);
 
   /** Derive unique productIds from the current selection. */
   const getSelectedProductIds = useCallback((): string[] => {
@@ -341,7 +354,8 @@ export function ReceiptEditProvider({
       hasSelection,
       selectionCount,
       paymentPickerOpen,
-      defaultPaymentOptionId: defaults?.defaultPaymentOptionId ?? 3,
+      defaultPaymentOptionId:
+        defaults?.defaultPaymentOptionId ?? preferredPaymentFallbackId,
       toggleEditMode,
       clearSelection,
       toggleItemSelection,
@@ -363,6 +377,7 @@ export function ReceiptEditProvider({
       selectionCount,
       paymentPickerOpen,
       defaults?.defaultPaymentOptionId,
+      preferredPaymentFallbackId,
       toggleEditMode,
       clearSelection,
       toggleItemSelection,
