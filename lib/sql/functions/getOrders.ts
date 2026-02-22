@@ -1,13 +1,13 @@
 "use server";
 
-import { db, sql } from "../database";
 import { Order } from "@/lib/types";
+import { db, sql } from "../database";
 
 // Utility to calculate the start and end of the given date in the specified timezone
 const calculateDateRange = (timeZone: string, date?: string) => {
   if (date) {
-    const start = sql`DATE_TRUNC('day', timezone(${timeZone}, ${date}::timestamptz)) + interval '2 day'`;
-    const end = sql`DATE_TRUNC('day', timezone(${timeZone}, ${date}::timestamptz)) + interval '3 day'`;
+    const start = sql`${date}::date`;
+    const end = sql`${date}::date + interval '1 day'`;
     return { start, end };
   }
 
@@ -46,7 +46,7 @@ export async function getOrders(params: {
   if (status !== '' || !!date) {
     query = query
       .where(sql`timezone(${timeZone}, "created")`, ">=", start)
-      .where(sql`timezone(${timeZone}, "created")`, "<=", end)
+      .where(sql`timezone(${timeZone}, "created")`, "<", end)
   }
 
   if (status === 'opened') {

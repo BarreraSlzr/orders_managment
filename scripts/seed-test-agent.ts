@@ -88,6 +88,7 @@ if (existingTarget) {
   await db.deleteFrom("payment_options").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("users").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("domain_events").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("mercadopago_access_requests").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("tenants").where("id", "=", tid).execute();
   log("Reset complete.");
 }
