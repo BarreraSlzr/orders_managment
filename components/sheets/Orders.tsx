@@ -137,7 +137,6 @@ export function OpenOrderSheet() {
     parseAsString.withDefault(today),
   );
   const [summaryExpanded, setSummaryExpanded] = useState(true);
-  const [isDateInputActive, setIsDateInputActive] = useState(false);
   const trpc = useTRPC();
   const openOrdersQuery = useQuery(
     trpc.orders.list.queryOptions({
@@ -322,21 +321,15 @@ export function OpenOrderSheet() {
               value={selectedDate}
               onChange={(e) => {
                 void setSelectedDate(e.target.value || today);
-                setIsDateInputActive(false);
               }}
               onPointerDown={(e) => {
                 e.stopPropagation();
-                setIsDateInputActive(true);
               }}
               onClick={(e) => e.stopPropagation()}
-              onFocus={() => setIsDateInputActive(true)}
-              onBlur={() => {
-                setTimeout(() => setIsDateInputActive(false), 150);
-              }}
               aria-label="Seleccionar fecha"
               className={cn(
                 "absolute left-0 top-0 z-10 cursor-pointer p-1 rounded-tl-xl transition-all duration-200 ease-out",
-                isDateInputActive ? "w-36" : "w-6",
+                "w-36",
               )}
             />
             <button
