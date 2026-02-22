@@ -179,7 +179,7 @@ export function ReceiptItems({ items, listProducts }: ReceiptItemsProps) {
 /** View-mode product row with long-press → enter edit mode + pre-select all items */
 function AggregatedRow({ item }: { item: OrderItem }) {
   const { enterEditWithProduct } = useReceiptEdit();
-  const { startPress, endPress } = useOnLongPress();
+  const { startPress, endPress, movePress } = useOnLongPress();
 
   const handleLongPress = startPress(() => {
     enterEditWithProduct(item.product_id);
@@ -188,15 +188,14 @@ function AggregatedRow({ item }: { item: OrderItem }) {
   return (
     <Fragment key={item.product_id}>
       <div
-        className="flex flex-row gap-4 justify-between select-none touch-none"
-        onTouchStart={(e) => {
-          e.preventDefault();
-          handleLongPress();
-        }}
+        className="flex flex-row gap-4 justify-between select-none touch-pan-y"
+        onTouchStart={handleLongPress}
         onMouseDown={handleLongPress}
         onTouchEnd={endPress}
+        onTouchMove={movePress}
         onMouseUp={endPress}
         onMouseLeave={endPress}
+        onMouseMove={movePress}
       >
         <div className="flex flex-grow gap-2 relative">
           <label className="flex-grow text-sm font-medium leading-none">

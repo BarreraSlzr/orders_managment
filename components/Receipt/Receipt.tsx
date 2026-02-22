@@ -116,7 +116,7 @@ function ReceiptForm({
         >
           <ReceiptFooter orderTotal={order.total} />
           <ReceiptItems items={items} listProducts={editMode} />
-          <CardFooter className="flex flex-wrap gap-2 justify-between p-0 sticky bottom-0 bg-white">
+          <CardFooter className="flex flex-wrap gap-2 justify-between p-2 sticky bottom-0 bg-white">
             {editMode && !!totalPrice && (
               <ReceiptFooter label="SUBTOTAL:" orderTotal={totalPrice} />
             )}
@@ -150,7 +150,7 @@ function ReceiptForm({
                 ) : (
                   <>
                     <Button variant="secondary" size="sm" type="reset">
-                      Modificar productos
+                      Modificar orden
                     </Button>
                     <Button
                       variant="destructive"
@@ -164,7 +164,29 @@ function ReceiptForm({
                 )}
               </>
             ) : (
-              children || <ReceiptActions />
+              <>
+                {children || <ReceiptActions />}
+                {order.closed ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    type="submit"
+                    id="open"
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    Abrir orden
+                  </Button>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    type="submit"
+                    id="close"
+                  >
+                    Cerrar orden
+                  </Button>
+                )}
+              </>
             )}
           </CardFooter>
         </form>
