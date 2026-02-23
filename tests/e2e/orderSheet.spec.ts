@@ -238,3 +238,151 @@ test("removeProducts updates item count in sheet immediately (no refresh needed)
   await page.waitForLoadState("networkidle");
   await expect(page.locator(sel.sheetRoot)).toBeVisible();
 });
+
+// ─── Agregar gasto ────────────────────────────────────────────────────────────
+//
+// Verifies the full "add expense" flow (Agregar gasto) that connects the Orders
+// sheet to the inventory transaction recorder:
+//  1. The idle strip trigger is visible when the sheet is open with an order.
+//  2. Tapping the trigger shows the ItemSelector search input.
+//  3. Typing a query surfaces matching inventory items.
+//  4. Selecting an item advances to the details step (quantity + price inputs).
+//  5. Cancelling returns the panel to the idle strip.
+//
+
+const gasto = {
+  trigger:      `[data-testid="${TEST_IDS.AGREGAR_GASTO.TRIGGER}"]`,
+  searchInput:  `[data-testid="${TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT}"]`,
+  createBtn:    `[data-testid="${TEST_IDS.AGREGAR_GASTO.CREATE_BTN}"]`,
+  quantityInput:`[data-testid="${TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT}"]`,
+  priceInput:   `[data-testid="${TEST_IDS.AGREGAR_GASTO.PRICE_INPUT}"]`,
+  confirmBtn:   `[data-testid="${TEST_IDS.AGREGAR_GASTO.CONFIRM_BTN}"]`,
+  cancelBtn:    `[data-testid="${TEST_IDS.AGREGAR_GASTO.CANCEL_BTN}"]`,
+  resultRow: (id: string) =>
+    `[data-testid="${tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, id)}"]`,
+};
+
+test("agregar-gasto: idle strip trigger is visible when an order is selected", async ({
+  page,
+}) => {
+  await page.goto("/?sheet=true");
+
+  // Select the first available order
+  const firstRow = page
+    .locator(`[data-testid^="${TEST_IDS.ORDER_LIST.ROW}"]`)
+    .first();
+  const rowCount = await firstRow.count();
+  if (rowCount === 0) {
+    test.info().annotations.push({
+      type: "skip-reason",
+      description: "No open orders — seed the DB first",
+    });
+    return;
+  }
+  await firstRow.click();
+
+  await expect(page.locator(gasto.trigger)).toBeVisible();
+});
+
+test("agregar-gasto: clicking trigger shows the search input", async ({
+  page,
+}) => {
+  await page.goto("/?sheet=true");
+
+  const firstRow = page
+    .locator(`[data-testid^="${TEST_IDS.ORDER_LIST.ROW}"]`)
+    .first();
+  if ((await firstRow.count()) === 0) return;
+  await firstRow.click();
+
+  await page.locator(gasto.trigger).click();
+
+  await expect(page.locator(gasto.searchInput)).toBeVisible();
+  // The trigger (idle strip) should no longer be the visible state
+  await expect(page.locator(gasto.trigger)).not.toBeVisible();
+});
+
+test("agregar-gasto: typing a search query shows matching inventory items", async ({
+  page,
+}) => {
+  await page.goto("/?sheet=true");
+
+  const firstRow = page
+    .locator(`[data-testid^="${TEST_IDS.ORDER_LIST.ROW}"]`)
+    .first();
+  if ((await firstRow.count()) === 0) return;
+  await firstRow.click();
+
+  await page.locator(gasto.trigger).click();
+  await expect(page.locator(gasto.searchInput)).toBeVisible();
+
+  // Type a generic query — at least some results should appear OR the create
+  // button should be shown (if inventory is empty or no match).
+  await page.locator(gasto.searchInput).fill("a");
+  await page.waitForTimeout(300); // debounce / re-render
+
+  const hasResults =
+    (await page.locator(`[data-testid^="${TEST_IDS.AGREGAR_GASTO.RESULT_ROW}"]`).count()) > 0;
+  const hasCreateBtn =
+    await page.locator(gasto.createBtn).isVisible().catch(() => false);
+
+  expect(hasResults || hasCreateBtn).toBe(true);
+});
+
+test("agregar-gasto: selecting a result shows quantity and price inputs", async ({
+  page,
+}) => {
+  await page.goto("/?sheet=true");
+
+  const firstRow = page
+    .locator(`[data-testid^="${TEST_IDS.ORDER_LIST.ROW}"]`)
+    .first();
+  if ((await firstRow.count()) === 0) return;
+  await firstRow.click();
+
+  await page.locator(gasto.trigger).click();
+  await expect(page.locator(gasto.searchInput)).toBeVisible();
+
+  await page.locator(gasto.searchInput).fill("a");
+  await page.waitForTimeout(300);
+
+  const firstResultRow = page
+    .locator(`[data-testid^="${TEST_IDS.AGREGAR_GASTO.RESULT_ROW}"]`)
+    .first();
+
+  if ((await firstResultRow.count()) === 0) {
+    test.info().annotations.push({
+      type: "skip-reason",
+      description: "No inventory items found — seed the inventory first",
+    });
+    return;
+  }
+
+  await firstResultRow.click();
+
+  await expect(page.locator(gasto.quantityInput)).toBeVisible();
+  await expect(page.locator(gasto.priceInput)).toBeVisible();
+  await expect(page.locator(gasto.confirmBtn)).toBeVisible();
+});
+
+test("agregar-gasto: cancel button returns panel to idle state", async ({
+  page,
+}) => {
+  await page.goto("/?sheet=true");
+
+  const firstRow = page
+    .locator(`[data-testid^="${TEST_IDS.ORDER_LIST.ROW}"]`)
+    .first();
+  if ((await firstRow.count()) === 0) return;
+  await firstRow.click();
+
+  await page.locator(gasto.trigger).click();
+  await expect(page.locator(gasto.searchInput)).toBeVisible();
+
+  // Cancel from the search step
+  await page.locator(gasto.cancelBtn).click();
+
+  // The idle strip trigger should come back
+  await expect(page.locator(gasto.trigger)).toBeVisible();
+  await expect(page.locator(gasto.searchInput)).not.toBeVisible();
+});
