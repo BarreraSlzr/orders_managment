@@ -1,7 +1,7 @@
 "use server"
 
-import { db } from "../database";
 import { sql } from "kysely";
+import { db } from "../database";
 
 export async function getItems(params: {
   tenantId: string;
@@ -11,6 +11,7 @@ export async function getItems(params: {
     .selectFrom('inventory_items')
     .select([
       'id',
+      'tenant_id',
       'name',
       'created',
       'deleted',
@@ -21,7 +22,14 @@ export async function getItems(params: {
         select 1 from category_inventory_item as ci
         where ci.item_id = inventory_items.id
           and ci.tenant_id = ${params.tenantId}
-      )`.as('hasCategory')
+      )`.as('hasCategory'),
+      // Net stock: sum of IN movements minus sum of OUT movements
+      sql<number>`coalesce((
+        select sum(case when type = 'IN' then quantity else -quantity end)
+        from transactions t
+        where t.item_id = inventory_items.id
+          and t.tenant_id = ${params.tenantId}
+      ), 0)`.as('stock'),
     ])
     .where('inventory_items.tenant_id', '=', params.tenantId)
     .$if(!!params.categoryId, (qb) =>
@@ -67,6 +75,39 @@ export async function toggleItem(params: { tenantId: string; id: string }) {
       .where('tenant_id', '=', params.tenantId)
       .execute();
   }
+}
+
+/**
+ * Returns items whose net stock (IN minus OUT) is below their min_stock threshold.
+ * Only items with min_stock set (not null) are included.
+ */
+export async function getLowStockAlerts(params: { tenantId: string }) {
+  return await db
+    .selectFrom('inventory_items')
+    .select([
+      'id',
+      'name',
+      'quantity_type_key',
+      'min_stock',
+      sql<number>`coalesce((
+        select sum(case when type = 'IN' then quantity else -quantity end)
+        from transactions t
+        where t.item_id = inventory_items.id
+          and t.tenant_id = ${params.tenantId}
+      ), 0)`.as('stock'),
+    ])
+    .where('tenant_id', '=', params.tenantId)
+    .where('deleted', 'is', null)
+    .where('min_stock', 'is not', null)
+    .where(
+      sql<boolean>`coalesce((
+        select sum(case when type = 'IN' then quantity else -quantity end)
+        from transactions t
+        where t.item_id = inventory_items.id
+          and t.tenant_id = ${params.tenantId}
+      ), 0) < inventory_items.min_stock`
+    )
+    .execute();
 }
 
 export async function deleteItem(params: { tenantId: string; id: string }) {
