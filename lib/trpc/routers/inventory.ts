@@ -60,7 +60,7 @@ export const inventoryRouter = router({
         return getTransactions({ tenantId: ctx.tenantId, itemId: input.itemId });
       }),
 
-    upsert: managerProcedure
+    upsert: tenantProcedure
       .input(
         z.object({
           itemId: z.string(),
@@ -78,7 +78,7 @@ export const inventoryRouter = router({
         });
       }),
 
-    delete: managerProcedure
+    delete: tenantProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
