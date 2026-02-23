@@ -62,7 +62,7 @@ export const ReceiptActions = () => {
   return (
     <>
       <div
-        className="flex flex-wrap gap-2 justify-between p-0 sticky bottom-0 bg-white"
+        className="flex flex-grow flex-wrap gap-2 justify-between p-0 sticky bottom-0 bg-white"
         data-testid={TEST_IDS.RECEIPT_ACTIONS.ROOT}
       >
         {hasSelection && (
@@ -175,6 +175,11 @@ export const ReceiptActions = () => {
         >
           {hasSelection ? <X /> : "Finalizar edición"}
         </Button>
+        {!hasSelection && (
+          <Button variant="destructive" size="sm" type="submit" id="close">
+            Cerrar orden
+          </Button>
+        )}
       </div>
     </>
   );

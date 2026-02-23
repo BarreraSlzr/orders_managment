@@ -13,19 +13,25 @@ import { TEST_IDS } from "@/lib/testIds";
 import { useTRPC } from "@/lib/trpc/react";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/utils/formatPrice";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Calendar,
   ChevronDown,
   ChevronLeft,
+  ChevronRight,
   Layers,
+  Pencil,
+  Plus,
   ShoppingBag,
+  Trash2,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { parseAsBoolean, parseAsString, useQueryState } from "nuqs";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { ItemSelectorContent } from "../Inventory/ItemSelector";
 import OrderStatus from "../Orders/OrderControls";
 import OrderDetails from "../Orders/OrderDetails";
 import OrdersList from "../Orders/OrderList";
@@ -94,19 +100,7 @@ function ChevronFloodButton({
   );
 }
 
-// ── StatusMessage ────────────────────────────────────────────────────────────
-// Single stable element for feedback text — avoids DOM churn between
-// "nothing selected" ↔ "loading" states. Same structure, different text.
-function StatusMessage({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      className="py-6 text-center text-xs font-bold font-mono uppercase tracking-widest text-white/60"
-      data-testid={TEST_IDS.ORDER_SHEET.EMPTY_SELECTION}
-    >
-      {children}
-    </p>
-  );
-}
+// ───────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -137,7 +131,37 @@ export function OpenOrderSheet() {
     parseAsString.withDefault(today),
   );
   const [summaryExpanded, setSummaryExpanded] = useState(true);
+  const [gastoOpen, setGastoOpen] = useState(false);
+  const [gastosListExpanded, setGastosListExpanded] = useState(false);
+  const [editingGastoId, setEditingGastoId] = useState<number | null>(null);
   const trpc = useTRPC();
+  const upsertTransactionMutation = useMutation(
+    trpc.inventory.transactions.upsert.mutationOptions(),
+  );
+  const dailyGastosQuery = useQuery(
+    trpc.inventory.transactions.dailyGastos.queryOptions({
+      date: selectedDate,
+    }),
+  );
+  const dailyGastosTotal = (dailyGastosQuery.data ?? []).reduce(
+    (sum, row) => sum + row.total_cost,
+    0,
+  );
+  const dailyGastosCount = (dailyGastosQuery.data ?? []).reduce(
+    (sum, row) => sum + row.count,
+    0,
+  );
+  const gastosByDateQuery = useQuery(
+    trpc.inventory.transactions.byDate.queryOptions({ date: selectedDate }),
+  );
+  const deleteGastoMutation = useMutation(
+    trpc.inventory.transactions.delete.mutationOptions(),
+  );
+  const batchCloseMutation = useMutation(
+    trpc.orders.batchClose.mutationOptions(),
+  );
+  const lowStockQuery = useQuery(trpc.inventory.items.lowStock.queryOptions());
+  const lowStockCount = lowStockQuery.data?.length ?? 0;
   const openOrdersQuery = useQuery(
     trpc.orders.list.queryOptions({
       status: "opened",
@@ -158,26 +182,41 @@ export function OpenOrderSheet() {
   const selectedOrderIdSet = useMemo(() => new Set(selectedOrderIds), [
     selectedOrderIds,
   ]);
+  // All orders for the selected date (open + closed) — used for the payment
+  // summary so it stays accurate when the date picker changes.
+  const allDayOrders = useMemo(
+    () => [...(openOrdersQuery.data ?? []), ...(closedOrdersQuery.data ?? [])],
+    [openOrdersQuery.data, closedOrdersQuery.data],
+  );
   const summaryOrders = useMemo(() => {
-    const all = Array.from(orders.values());
     if (selectedOrderIds.length > 1) {
-      return all.filter((order) => selectedOrderIdSet.has(order.id));
+      return allDayOrders.filter((order) => selectedOrderIdSet.has(order.id));
     }
-    return all;
-  }, [orders, selectedOrderIdSet, selectedOrderIds.length]);
+    return allDayOrders;
+  }, [allDayOrders, selectedOrderIdSet, selectedOrderIds.length]);
   const dayTotal = summaryOrders.reduce((sum, order) => sum + order.total, 0);
-  const ordersArray = summaryOrders;
   const detailsQueries = useQueries({
-    queries: ordersArray.map((order) =>
+    queries: summaryOrders.map((order) =>
       trpc.orders.getDetails.queryOptions({ id: order.id }),
     ),
   });
-  const detailsData = detailsQueries
-    .map((query) => query.data)
-    .filter(Boolean) as OrderItemsView[];
-  const isPaymentSummaryLoading = detailsQueries.some(
-    (query) => query.isLoading,
+  // Memoize so paymentSummary only recomputes when actual data changes.
+  const detailsData = useMemo(
+    () =>
+      detailsQueries
+        .map((query) => query.data)
+        .filter(Boolean) as OrderItemsView[],
+
+    [detailsQueries],
   );
+  const isPaymentSummaryLoading =
+    // isFetching (not isLoading) catches refetches too, e.g. date change
+    openOrdersQuery.isFetching ||
+    closedOrdersQuery.isFetching ||
+    // isPending catches new queries that are registered but haven't started
+    // fetching yet — the tick where isLoading would be false despite no data
+    (summaryOrders.length > 0 && detailsData.length < summaryOrders.length) ||
+    detailsQueries.some((query) => query.isPending);
 
   const paymentSummary = useMemo(() => {
     const totals = new Map<number, { total: number; count: number }>();
@@ -242,8 +281,6 @@ export function OpenOrderSheet() {
   }
 
   const isMultiSelect = selectedOrderIds.length > 1;
-  const multiSelectLabel =
-    selectedOrderIds.length > 0 ? `(${selectedOrderIds.length}) ORDENES` : null;
 
   return (
     <Sheet
@@ -299,7 +336,7 @@ export function OpenOrderSheet() {
             className="text-center text-xl font-bold px-3 cursor-pointer"
             onClick={handleClose}
           >
-            {multiSelectLabel ?? "ORDENES"}
+            ORDENES
           </SheetTitle>
           <div className="px-3 pr-10">
             <OrderStatus
@@ -314,6 +351,18 @@ export function OpenOrderSheet() {
           </div>
         </SheetHeader>
         <div className="px-3 pt-2">
+          {lowStockCount > 0 && (
+            <Link href="/items?lowStock=true">
+              <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-amber-800">
+                <span>⚠️</span>
+                <span>
+                  {lowStockCount} ingrediente
+                  {lowStockCount !== 1 ? "s" : ""} con stock bajo
+                </span>
+                <ChevronRight className="ml-auto h-3 w-3" />
+              </div>
+            </Link>
+          )}
           <Card className="relative border-slate-300 bg-white font-mono">
             {/* Summary Header — Calendar | Date | Count+Total | Chevron */}
             <input
@@ -366,7 +415,7 @@ export function OpenOrderSheet() {
             </button>
             {/* Collapsible Payment Summary Details */}
             {summaryExpanded && (
-              <div className="p-3 flex flex-col gap-1.5">
+              <div className="p-2 flex flex-col gap-1.5">
                 {isPaymentSummaryLoading ? (
                   <span className="text-xs text-slate-500 uppercase tracking-wide">
                     Calculando pagos...
@@ -394,22 +443,125 @@ export function OpenOrderSheet() {
                     </div>
                   ))
                 )}
+                {/* ── Gastos del día ── */}
+                {dailyGastosCount > 0 && (
+                  <div className="rounded border border-red-200 bg-red-50 overflow-hidden">
+                    <button
+                      onClick={() => setGastosListExpanded((v) => !v)}
+                      className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 w-full px-2 py-1.5 text-[11px] hover:bg-red-100 transition-colors"
+                    >
+                      <span>📦</span>
+                      <span className="uppercase tracking-wide text-red-700 text-left">
+                        Gastos
+                      </span>
+                      <span className="text-red-400 tabular-nums">
+                        x{dailyGastosCount}
+                      </span>
+                      <span className="font-semibold tabular-nums text-red-800 flex items-center gap-1">
+                        −{formatPrice(dailyGastosTotal)}
+                        <ChevronDown
+                          className={cn(
+                            "h-3 w-3 text-red-400 transition-transform",
+                            gastosListExpanded ? "rotate-180" : "rotate-0",
+                          )}
+                        />
+                      </span>
+                    </button>
+                    {gastosListExpanded && (
+                      <div className="border-t border-red-200 flex flex-col divide-y divide-red-100">
+                        {(gastosByDateQuery.data ?? []).map((row) => (
+                          <div
+                            key={row.id}
+                            className="flex items-center gap-1.5 px-2 py-1.5 text-[11px]"
+                          >
+                            <span className="flex-1 text-red-800 font-medium truncate min-w-0">
+                              {row.item_name}
+                            </span>
+                            <span className="text-red-500 tabular-nums shrink-0">
+                              {row.quantity} {row.quantity_type_value}
+                            </span>
+                            <span className="text-red-800 tabular-nums font-semibold shrink-0">
+                              {formatPrice(row.price)}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setEditingGastoId(row.id);
+                                setGastoOpen(true);
+                              }}
+                              className="text-red-300 hover:text-red-600 transition-colors shrink-0 px-0.5"
+                              aria-label="Editar"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await deleteGastoMutation.mutateAsync({
+                                  id: row.id,
+                                });
+                                void dailyGastosQuery.refetch();
+                                void gastosByDateQuery.refetch();
+                              }}
+                              disabled={deleteGastoMutation.isPending}
+                              className="text-red-300 hover:text-red-600 transition-colors shrink-0 px-0.5"
+                              aria-label="Eliminar"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setGastoOpen(true)}
+                          className="flex items-center gap-1.5 px-2 py-2 text-[11px] text-red-600 hover:bg-red-100 transition-colors font-mono uppercase tracking-wide w-full"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Agregar gasto
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* ── Cerrar día ── */}
+                {openCount > 0 && (
+                  <button
+                    onClick={async () => {
+                      await batchCloseMutation.mutateAsync({
+                        date: selectedDate,
+                      });
+                      void openOrdersQuery.refetch();
+                      void dailyGastosQuery.refetch();
+                      void lowStockQuery.refetch();
+                    }}
+                    disabled={batchCloseMutation.isPending}
+                    className="mt-1 w-full rounded border border-zinc-300 bg-zinc-50 px-2 py-1.5 text-[11px] font-mono uppercase tracking-widest text-zinc-700 hover:bg-zinc-100 transition-colors disabled:opacity-50"
+                  >
+                    {batchCloseMutation.isPending
+                      ? "Cerrando..."
+                      : `Cerrar ${openCount} orden${
+                          openCount !== 1 ? "es" : ""
+                        } del día`}
+                  </button>
+                )}
               </div>
             )}
           </Card>
         </div>
         <div className="flex flex-col flex-1 min-h-0">
-          {/* Orders List — scrollable region */}
+          {/* Orders List — shrinks when bottom panel expands */}
           <div className="flex-1 overflow-auto overscroll-contain touch-pan-y">
             <Suspense fallback={<Spinner className="mx-auto" />}>
               <OrdersList />
             </Suspense>
           </div>
 
-          {/* Selected Order Details — always pinned at bottom, outside scroll */}
-          <Card className="flex flex-col shrink-0 min-h-0 max-h-[calc(100dvh-14rem)] overflow-hidden bg-black border-zinc-800 text-white">
+          {/* ── Bottom panel — inside SheetContent, no portal, no z-conflict ── */}
+          <div
+            className={[
+              "shrink-0 bg-black rounded-t-xl border border-zinc-800 text-white flex flex-col transition-all duration-200",
+              currentOrder || gastoOpen ? "max-h-[85dvh] flex-1" : "",
+            ].join(" ")}
+          >
             {isMultiSelect ? (
-              /* ── Multi-select bulk actions ─────────────────── */
+              /* ── Multi-select bulk actions ───────────────── */
               <div
                 className="flex flex-col gap-2 p-4"
                 data-testid={TEST_IDS.ORDER_LIST.MULTI_ACTIONS_PANEL}
@@ -450,11 +602,11 @@ export function OpenOrderSheet() {
                 </div>
               </div>
             ) : currentOrder ? (
-              /* ── Single-order details ──────────────────────── */
+              /* ── Single-order detail ──────────────────── */
               <>
                 {!currentOrder.closed && (
                   <ChevronFloodButton
-                    onClick={handleClose}
+                    onClick={() => void setSheetOpen(false)}
                     testId={TEST_IDS.ORDER_SHEET.ADD_MORE_BTN}
                   />
                 )}
@@ -462,15 +614,60 @@ export function OpenOrderSheet() {
                   <OrderDetails order={currentOrder} />
                 </div>
               </>
+            ) : gastoOpen ? (
+              /* ── Agregar / Editar gasto ─────────────────────────────── */
+              <ItemSelectorContent
+                key={editingGastoId ?? "new"}
+                title={editingGastoId ? "Editar gasto" : "Agregar gasto"}
+                initialValues={(() => {
+                  if (!editingGastoId) return undefined;
+                  const row = (gastosByDateQuery.data ?? []).find(
+                    (r) => r.id === editingGastoId,
+                  );
+                  if (!row) return undefined;
+                  return {
+                    itemId: row.item_id,
+                    itemName: row.item_name,
+                    quantity: row.quantity,
+                    unit: row.quantity_type_value,
+                    price: row.price,
+                  };
+                })()}
+                onConfirm={async ({ itemId, quantity, unit, price }) => {
+                  await upsertTransactionMutation.mutateAsync({
+                    itemId,
+                    type: "IN",
+                    quantity,
+                    quantityTypeValue: unit,
+                    price,
+                    id: editingGastoId ?? undefined,
+                  });
+                  void dailyGastosQuery.refetch();
+                  void gastosByDateQuery.refetch();
+                  setGastoOpen(false);
+                  setEditingGastoId(null);
+                }}
+                onCancel={() => {
+                  setGastoOpen(false);
+                  setEditingGastoId(null);
+                }}
+              />
             ) : (
-              /* ── No detail yet: text driven by selectedOrderIds ── */
-              <StatusMessage>
-                {selectedOrderIds.length > 0
-                  ? "Cargando orden…"
-                  : "Selecciona una orden"}
-              </StatusMessage>
+              /* ── Idle strip ──────────────────────────────── */
+              <button
+                onClick={() => setGastoOpen(true)}
+                data-testid={TEST_IDS.AGREGAR_GASTO.TRIGGER}
+                className="group w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-900 transition-colors rounded-t-xl"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-zinc-700 group-hover:border-zinc-500 transition-colors">
+                  <Plus className="h-3.5 w-3.5 text-zinc-400 group-hover:text-white transition-colors" />
+                </span>
+                <span className="text-xs font-mono uppercase tracking-widest text-zinc-500 group-hover:text-zinc-300 transition-colors">
+                  Agregar gasto
+                </span>
+              </button>
             )}
-          </Card>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

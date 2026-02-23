@@ -108,6 +108,26 @@ export const TEST_IDS = {
     BUTTON: "tag-button",
   },
 
+  // ─── Agregar Gasto (inventory transaction from orders sheet) ─────────────
+  AGREGAR_GASTO: {
+    /** Idle strip button that opens the gasto form */
+    TRIGGER: "agregar-gasto-trigger",
+    /** Search input inside ItemSelectorContent */
+    SEARCH_INPUT: "agregar-gasto-search",
+    /** Individual search result row — append `:${item.id}` */
+    RESULT_ROW: "agregar-gasto-result-row",
+    /** "Crear y seleccionar" button */
+    CREATE_BTN: "agregar-gasto-create",
+    /** Quantity input in details step */
+    QUANTITY_INPUT: "agregar-gasto-quantity",
+    /** Price input in details step */
+    PRICE_INPUT: "agregar-gasto-price",
+    /** Confirm / submit button */
+    CONFIRM_BTN: "agregar-gasto-confirm",
+    /** Cancel button */
+    CANCEL_BTN: "agregar-gasto-cancel",
+  },
+
   // ─── Receipt ──────────────────────────────────────────────────────────────
   RECEIPT: {
     /** The `<form>` wrapping the receipt */

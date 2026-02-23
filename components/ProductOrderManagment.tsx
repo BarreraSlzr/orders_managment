@@ -108,7 +108,7 @@ const Actions = () => {
   if (currentProduct)
     return (
       <div
-        className="fixed inset-0 z-[70] backdrop-blur-sm bg-slate-400/30 p-4 flex items-center"
+        className="fixed inset-0 z-[70] backdrop-blur-sm bg-slate-400/30 p-4 flex flex-col items-center gap-3 overflow-auto"
         onClick={handleBackdropClick}
         onKeyDown={handleEscapeKey}
         role="dialog"
