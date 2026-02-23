@@ -12,6 +12,7 @@ import {
     updateAttempt,
 } from "@/lib/services/mercadopago/statusService";
 import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
+import { batchCloseOrders } from "@/lib/sql/functions/batchCloseOrders";
 import {
     deleteCategory,
     toggleCategoryItem,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/sql/functions/categories";
 import { closeOrder } from "@/lib/sql/functions/closeOrder";
 import { combineOrders } from "@/lib/sql/functions/combineOrders";
+import { deductDayConsumptions } from "@/lib/sql/functions/deductDayConsumptions";
 import {
     deleteExtra,
     toggleOrderItemExtra,
@@ -31,10 +33,14 @@ import {
     toggleItem,
 } from "@/lib/sql/functions/inventory";
 import { openOrder } from "@/lib/sql/functions/openOrder";
+import {
+    addProductConsumption,
+    removeProductConsumption,
+} from "@/lib/sql/functions/productConsumptions";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import {
-    addTransaction,
     deleteTransaction,
+    upsertTransaction,
 } from "@/lib/sql/functions/transactions";
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import {
@@ -112,11 +118,14 @@ export const domainEventHandlers: {
     return toggleTakeAway({ tenantId: payload.tenantId, itemIds: payload.itemIds });
   },
   "order.products.removed": async ({ payload }) => {
-    return removeProducts({
+    const rows = await removeProducts({
       tenantId: payload.tenantId,
       orderId: payload.orderId,
       itemIds: payload.itemIds,
     });
+    // Kysely returns numDeletedRows as a native BigInt; convert to number
+    // so the result is JSON-serializable over tRPC / Server Actions.
+    return rows.map((r) => ({ numDeletedRows: Number(r.numDeletedRows) }));
   },
   "product.upserted": async ({ payload }) => {
     return upsertProduct({
@@ -156,17 +165,16 @@ export const domainEventHandlers: {
   "inventory.item.deleted": async ({ payload }) => {
     return deleteItem({ tenantId: payload.tenantId, id: payload.id });
   },
-  "inventory.transaction.added": async ({ payload }) => {
-    return addTransaction(
-      {
-        tenantId: payload.tenantId,
-        itemId: payload.itemId,
-        type: payload.type,
-        price: payload.price,
-        quantity: payload.quantity,
-        quantityTypeValue: payload.quantityTypeValue,
-      }
-    );
+  "inventory.transaction.upserted": async ({ payload }) => {
+    return upsertTransaction({
+      tenantId: payload.tenantId,
+      itemId: payload.itemId,
+      type: payload.type,
+      price: payload.price,
+      quantity: payload.quantity,
+      quantityTypeValue: payload.quantityTypeValue,
+      id: payload.id,
+    });
   },
   "inventory.transaction.deleted": async ({ payload }) => {
     return deleteTransaction({ tenantId: payload.tenantId, id: payload.id });
@@ -309,5 +317,43 @@ export const domainEventHandlers: {
     // Audit-only event: the actual upsert is performed by the tRPC caller
     // before dispatching. We just return the identifier for the audit trail.
     return { credentialsId: `${payload.tenantId}:${payload.appId}` };
+  },
+
+  "product.consumption.added": async ({ payload }) => {
+    return addProductConsumption({
+      tenantId: payload.tenantId,
+      productId: payload.productId,
+      itemId: payload.itemId,
+      quantity: payload.quantity,
+      quantityTypeValue: payload.quantityTypeValue,
+      isTakeaway: payload.isTakeaway,
+    });
+  },
+
+  "product.consumption.removed": async ({ payload }) => {
+    return removeProductConsumption({
+      tenantId: payload.tenantId,
+      id: payload.id,
+    });
+  },
+
+  "order.batch.closed": async ({ payload }) => {
+    const { closedOrderIds } = await batchCloseOrders({
+      tenantId: payload.tenantId,
+      date: payload.date,
+    });
+    const deductedItems = await deductDayConsumptions({
+      tenantId: payload.tenantId,
+      date: payload.date,
+    });
+    return { closedOrderIds, deductedItems };
+  },
+
+  "inventory.eod.reconciled": async ({ payload }) => {
+    const deductedItems = await deductDayConsumptions({
+      tenantId: payload.tenantId,
+      date: payload.date,
+    });
+    return { deductedItems };
   },
 };

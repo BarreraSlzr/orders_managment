@@ -1,9 +1,9 @@
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { getCategories } from "@/lib/sql/functions/categories";
-import { getItems } from "@/lib/sql/functions/inventory";
-import { getTransactions } from "@/lib/sql/functions/transactions";
+import { getItems, getLowStockAlerts } from "@/lib/sql/functions/inventory";
+import { getDailyGastos, getGastosByDate, getTransactions } from "@/lib/sql/functions/transactions";
 import { z } from "zod";
-import { managerProcedure, tenantProcedure, router } from "../init";
+import { managerProcedure, router, tenantProcedure } from "../init";
 
 export const inventoryRouter = router({
   // ── Items ──────────────────────────────────────────────────────────
@@ -46,6 +46,10 @@ export const inventoryRouter = router({
           payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
+
+    lowStock: tenantProcedure.query(async ({ ctx }) => {
+      return getLowStockAlerts({ tenantId: ctx.tenantId });
+    }),
   }),
 
   // ── Transactions ───────────────────────────────────────────────────
@@ -56,7 +60,7 @@ export const inventoryRouter = router({
         return getTransactions({ tenantId: ctx.tenantId, itemId: input.itemId });
       }),
 
-    add: managerProcedure
+    upsert: managerProcedure
       .input(
         z.object({
           itemId: z.string(),
@@ -64,11 +68,12 @@ export const inventoryRouter = router({
           price: z.number(),
           quantity: z.number(),
           quantityTypeValue: z.string(),
+          id: z.number().optional(),
         })
       )
       .mutation(async ({ ctx, input }) => {
         return dispatchDomainEvent({
-          type: "inventory.transaction.added",
+          type: "inventory.transaction.upserted",
           payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
@@ -81,6 +86,19 @@ export const inventoryRouter = router({
           payload: { tenantId: ctx.tenantId, ...input },
         });
       }),
+
+    dailyGastos: tenantProcedure
+      .input(z.object({ date: z.string() })) // 'YYYY-MM-DD'
+      .query(async ({ ctx, input }) => {
+        return getDailyGastos({ tenantId: ctx.tenantId, date: input.date });
+      }),
+
+    byDate: tenantProcedure
+      .input(z.object({ date: z.string() }))
+      .query(async ({ ctx, input }) => {
+        return getGastosByDate({ tenantId: ctx.tenantId, date: input.date });
+      }),
+
   }),
 
   // ── Categories ─────────────────────────────────────────────────────

@@ -17,7 +17,7 @@ export type DomainEventType =
   | "inventory.item.added"
   | "inventory.item.toggled"
   | "inventory.item.deleted"
-  | "inventory.transaction.added"
+  | "inventory.transaction.upserted"
   | "inventory.transaction.deleted"
   | "inventory.category.upserted"
   | "inventory.category.deleted"
@@ -27,7 +27,11 @@ export type DomainEventType =
   | "order.item.extra.toggled"
   | "admin.audit.logged"
   | "order.payment.mercadopago.start"
-  | "mercadopago.credentials.upserted";
+  | "mercadopago.credentials.upserted"
+  | "product.consumption.added"
+  | "product.consumption.removed"
+  | "order.batch.closed"
+  | "inventory.eod.reconciled";
 
 export interface DomainEventPayloadMap {
   "order.created": {
@@ -102,13 +106,14 @@ export interface DomainEventPayloadMap {
     tenantId: string;
     id: string;
   };
-  "inventory.transaction.added": {
+  "inventory.transaction.upserted": {
     tenantId: string;
     itemId: string;
     type: "IN" | "OUT";
     price: number;
     quantity: number;
     quantityTypeValue: string;
+    id?: number;
   };
   "inventory.transaction.deleted": {
     tenantId: string;
@@ -164,6 +169,28 @@ export interface DomainEventPayloadMap {
     appId: string;
     userId: string;
   };
+  "product.consumption.added": {
+    tenantId: string;
+    productId: string;
+    itemId: string;
+    quantity: number;
+    quantityTypeValue: string;
+    isTakeaway?: boolean;
+  };
+  "product.consumption.removed": {
+    tenantId: string;
+    id: string;
+  };
+  "order.batch.closed": {
+    tenantId: string;
+    /** YYYY-MM-DD in America/Mexico_City — the day whose open orders get closed */
+    date: string;
+  };
+  "inventory.eod.reconciled": {
+    tenantId: string;
+    /** YYYY-MM-DD in America/Mexico_City — the day to reconcile */
+    date: string;
+  };
 }
 
 export interface DomainEventResultMap {
@@ -186,7 +213,7 @@ export interface DomainEventResultMap {
     Pick<OrderItemTable, "id" | "product_id" | "payment_option_id" | "is_takeaway">
   >;
   "order.products.removed": {
-    numDeletedRows: bigint;
+    numDeletedRows: number;
   }[];
   "product.upserted": Product;
   "inventory.item.added": {
@@ -195,7 +222,7 @@ export interface DomainEventResultMap {
   };
   "inventory.item.toggled": unknown;
   "inventory.item.deleted": unknown;
-  "inventory.transaction.added": unknown;
+  "inventory.transaction.upserted": unknown;
   "inventory.transaction.deleted": unknown;
   "inventory.category.upserted": Selectable<CategoriesTable>;
   "inventory.category.deleted": {
@@ -224,6 +251,15 @@ export interface DomainEventResultMap {
   };
   "mercadopago.credentials.upserted": {
     credentialsId: string;
+  };
+  "product.consumption.added": unknown;
+  "product.consumption.removed": unknown;
+  "order.batch.closed": {
+    closedOrderIds: string[];
+    deductedItems: { itemId: string; itemName: string; quantityTypeValue: string; totalDeducted: number }[];
+  };
+  "inventory.eod.reconciled": {
+    deductedItems: { itemId: string; itemName: string; quantityTypeValue: string; totalDeducted: number }[];
   };
 }
 

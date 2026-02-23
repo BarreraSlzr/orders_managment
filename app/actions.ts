@@ -1,8 +1,8 @@
 "use server"
 
-import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { getAuthConfig } from "@/lib/auth/config";
 import { verifySessionToken } from "@/lib/auth/session";
+import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { getProducts } from "@/lib/sql/functions/getProducts";
@@ -356,7 +356,7 @@ export async function addTransactionAction(formData: FormData) {
 
       if (itemId && type && !isNaN(price) && !isNaN(quantity) && quantityTypeValue) {
         await dispatchDomainEvent({
-          type: "inventory.transaction.added",
+          type: "inventory.transaction.upserted",
           payload: {
             tenantId,
             itemId,
