@@ -19,6 +19,8 @@ export function useAdminStatus() {
     isAdmin: data?.isAdmin ?? false,
     role: data?.role ?? null,
     tenantName: data?.tenantName ?? null,
+    username: data?.username ?? null,
+    session: data?.session ?? null,
     isLoading,
   };
 }
