@@ -65,7 +65,7 @@ function ReceiptForm({
             label: "Configurar",
             onClick: () => {
               window.dispatchEvent(
-                new CustomEvent("openAdminSettings", {
+                new CustomEvent("openSettings", {
                   detail: { tab: "mercadopago" },
                 }),
               );
