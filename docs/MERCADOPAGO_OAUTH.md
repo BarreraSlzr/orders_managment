@@ -2,6 +2,23 @@
 
 This document explains how to set up and use the MercadoPago OAuth integration for simplified credential management.
 
+See also:
+
+- [Mercado Pago Platform + Tenant Architecture](./MERCADOPAGO_PLATFORM_TENANT_ARCHITECTURE.md)
+- [MercadoPago Integration — Visual Diagrams](./MERCADOPAGO_DIAGRAMS.md)
+
+## Mercado Pago Docs Retrieval Convention
+
+When consuming Mercado Pago external documentation for AI/automation or copy-paste workflows, use the same docs URL with `.md` appended to the path.
+
+- Default: `https://www.mercadopago.com.br/developers/pt/docs/<topic>.md`
+- Fallback: use the HTML page only if a specific `.md` URL is unavailable.
+
+Examples:
+
+- `https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/overview.md`
+- `https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/notifications.md`
+
 ## Overview
 
 Tenants connect their MercadoPago account exclusively through the **OAuth 2.0 authorization flow**.  No manual credential entry is needed — the system obtains and stores `access_token`, `user_id`, and `app_id` automatically during the OAuth callback.
@@ -31,6 +48,11 @@ MP_REDIRECT_TEST_URI=/api/mercadopago/webhook/test
 
 # MercadoPago Webhooks (register these URLs in the MP dashboard)
 MP_WEBHOOK_SECRET=your_webhook_secret_here
+
+# Token encryption at rest (AES-256-GCM)
+# Generate with: openssl rand -hex 32
+# Falls back to AUTH_SECRET when not set.
+MP_TOKENS_ENCRYPTION_KEY=your_32_byte_hex_key_here
 ```
 
 > Recommended: use the same path (`/api/mercadopago/webhook`) for both
@@ -46,7 +68,7 @@ bun run dev
 
 ### With OAuth (Simplified)
 
-1. User opens Workspace Settings → Mercado Pago tab
+1. User opens Settings → Mercado Pago section
 2. Clicks "Conectar con Mercado Pago" button (MP-branded)
 3. Redirects to MercadoPago authorization page
 4. User authorizes the application
@@ -59,9 +81,29 @@ bun run dev
 
 - **CSRF Protection**: State parameter validates OAuth callback authenticity
 - **Session Validation**: Only authenticated users can initiate OAuth
-- **Secure Cookies**: OAuth state and tenant context stored in httpOnly cookies
-- **Token Encryption**: Access tokens should be encrypted at rest (TODO in production)
+- **Secure Cookies**: OAuth state and tenant context stored in httpOnly cookies (10-minute TTL)
+- **Token Encryption at Rest**: `access_token` and `refresh_token` are encrypted with AES-256-GCM using `MP_TOKENS_ENCRYPTION_KEY` (or `AUTH_SECRET` as fallback). Format: `enc:v1:<iv>.<tag>.<ciphertext>` (base64url). Plaintext rows are opportunistically re-encrypted on first read. See `lib/services/mercadopago/tokenCrypto.ts`.
 - **Tenant Isolation**: Credentials are scoped per tenant
+
+## Token Lifecycle
+
+MP `access_token` expires after **180 days** (`expires_in: 15552000`).
+
+| Field | Stored in DB | Purpose |
+|-------|--------------|---------|
+| `access_token` | ✅ encrypted | Used for all MP API calls |
+| `refresh_token` | ✅ encrypted | Exchanged for a new token pair |
+| `token_expires_at` | ✅ timestamp | Enables proactive refresh detection |
+| `refreshed_at` | ✅ timestamp | Audit trail of last refresh |
+
+**Auto-refresh behavior** (`credentialsService.ts` → `refreshCredentialsIfNeeded()`):
+
+1. On every `getCredentials()` call the row's `token_expires_at` is compared to `now()`.
+2. If remaining time ≤ **60 seconds** (configurable via `REFRESH_SKEW_MS`), a refresh grant is triggered automatically.
+3. The response `access_token`, `refresh_token`, `token_expires_at`, and `refreshed_at` are written back to the DB atomically.
+4. If the refresh fails, the credential row is set to `status: "error"` with the error message and the **old token is still returned** so the in-flight request can complete.
+
+See [MERCADOPAGO_TOKEN_LIFECYCLE_RUNBOOK.md](./MERCADOPAGO_TOKEN_LIFECYCLE_RUNBOOK.md) for operator recovery procedures.
 
 ## API Routes
 
@@ -209,11 +251,15 @@ Manually saves credentials (fallback method).
 └──────────────┘                    └─────────────┘
 ```
 
-## Future Enhancements
+## Completed Enhancements
 
-- [ ] Refresh token support for long-lived sessions
-- [ ] Token encryption at rest
+- [x] Webhook endpoints for payment/point/mp-connect events
+- [x] Refresh token support for long-lived sessions (auto-refresh 60 s before expiry)
+- [x] Token encryption at rest (AES-256-GCM via `tokenCrypto.ts`)
+
+## Planned Enhancements
+
 - [ ] Multi-account MercadoPago support per tenant
 - [ ] OAuth scope management for permission control
-- [x] Webhook endpoints for payment/point/mp-connect events
 - [ ] Webhook setup automation during OAuth
+- [ ] Entitlement soft-gate guard on `/authorize` route (see `MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md`)

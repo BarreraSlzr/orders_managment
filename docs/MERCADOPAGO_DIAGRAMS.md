@@ -2,6 +2,23 @@
 
 > **Tip:** GitHub renders Mermaid natively. In VS Code install the "Markdown Preview Mermaid Support" extension.
 
+See also:
+
+- [Mercado Pago Platform + Tenant Architecture](./MERCADOPAGO_PLATFORM_TENANT_ARCHITECTURE.md)
+- [MercadoPago OAuth Integration](./MERCADOPAGO_OAUTH.md)
+
+## Mercado Pago Docs Retrieval Convention
+
+For external Mercado Pago documentation references used by this project, prefer markdown-compatible URLs by appending `.md` to the docs path.
+
+- Default format: `https://www.mercadopago.com.br/developers/pt/docs/<topic>.md`
+- Fallback format: original HTML docs URL when `.md` is not available.
+
+Examples:
+
+- `https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/create-application.md`
+- `https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-integration.md`
+
 ---
 
 ## 1. Environment Variables — What Each Secret Does
