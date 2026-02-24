@@ -1,15 +1,15 @@
 import { generateTempPassword, hashPassword } from "@/lib/auth/passwords";
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
-import { db } from "@/lib/sql/database";
 import { exportAllData, getTableCounts, validateSnapshot } from "@/lib/sql/backup";
+import { getDb } from "@/lib/sql/database";
 import { listAdminAuditLogs } from "@/lib/sql/functions/adminAudit";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { createTenant, getTenantByName, listTenants } from "@/lib/sql/functions/tenants";
 import { createUser, listUsersByTenants } from "@/lib/sql/functions/users";
-import { parseProductsCSV } from "@/lib/utils/parseProductsCSV";
 import { getMigrationStatus } from "@/lib/sql/migrate";
 import { allMigrations } from "@/lib/sql/migrations";
+import { parseProductsCSV } from "@/lib/utils/parseProductsCSV";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, publicProcedure, router } from "../init";
@@ -47,7 +47,15 @@ export const adminRouter = router({
       typeof ctx.session?.tenant_name === "string"
         ? ctx.session.tenant_name
         : null;
-    return { isAdmin: ctx.isAdmin, role, tenantName };
+    const username =
+      typeof ctx.session?.username === "string" ? ctx.session.username : null;
+    return {
+      isAdmin: ctx.isAdmin,
+      role,
+      tenantName,
+      username,
+      session: ctx.session,
+    };
   }),
 
   /** Get current migration status */
@@ -357,7 +365,7 @@ export const adminRouter = router({
         };
       }
 
-      await db
+      await getDb()
         .deleteFrom("products")
         .where("tenant_id", "=", input.tenantId)
         .execute();
