@@ -13,8 +13,8 @@ const mockReturningAll = vi.fn(() => ({
   executeTakeFirst: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/lib/sql/database", () => ({
-  db: {
+vi.mock("@/lib/sql/database", () => {
+  const d = {
     selectFrom: vi.fn(() => ({
       selectAll: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -33,11 +33,15 @@ vi.mock("@/lib/sql/database", () => ({
         })),
       })),
     })),
-  },
-  sql: Object.assign(vi.fn(() => null), {
-    raw: vi.fn(),
-  }),
-}));
+  };
+  return {
+    db: d,
+    getDb: () => d,
+    sql: Object.assign(vi.fn(() => null), {
+      raw: vi.fn(),
+    }),
+  };
+});
 
 // Mock the tokenCrypto module — pass-through (no real encryption)
 vi.mock("@/lib/services/mercadopago/tokenCrypto", () => ({

@@ -9,8 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockExecuteTakeFirst = vi.fn();
 const mockExecute = vi.fn().mockResolvedValue([]);
 
-vi.mock("@/lib/sql/database", () => ({
-  db: {
+vi.mock("@/lib/sql/database", () => {
+  const d = {
     selectFrom: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       selectAll: vi.fn().mockReturnThis(),
@@ -36,11 +36,15 @@ vi.mock("@/lib/sql/database", () => ({
         })),
       })),
     })),
-  },
-  sql: Object.assign(vi.fn(() => null), {
-    raw: vi.fn(),
-  }),
-}));
+  };
+  return {
+    db: d,
+    getDb: () => d,
+    sql: Object.assign(vi.fn(() => null), {
+      raw: vi.fn(),
+    }),
+  };
+});
 
 import { db } from "@/lib/sql/database";
 import { processBillingEvent } from "../billingWebhookService";

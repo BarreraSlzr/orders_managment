@@ -9,8 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockExecuteTakeFirst = vi.fn();
 const mockExecute = vi.fn().mockResolvedValue([]);
 
-vi.mock("@/lib/sql/database", () => ({
-  db: {
+vi.mock("@/lib/sql/database", () => {
+  const d = {
     selectFrom: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -25,8 +25,9 @@ vi.mock("@/lib/sql/database", () => ({
         })),
       })),
     })),
-  },
-}));
+  };
+  return { db: d, getDb: () => d };
+});
 
 import { db } from "@/lib/sql/database";
 import { checkMpEntitlement } from "../checkEntitlement";

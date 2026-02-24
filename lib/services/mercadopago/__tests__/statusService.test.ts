@@ -9,8 +9,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockExecuteTakeFirst = vi.fn();
 const mockExecute = vi.fn().mockResolvedValue([]);
 
-vi.mock("@/lib/sql/database", () => ({
-  db: {
+vi.mock("@/lib/sql/database", () => {
+  const d = {
     selectFrom: vi.fn(() => ({
       select: vi.fn().mockReturnThis(),
       selectAll: vi.fn().mockReturnThis(),
@@ -26,8 +26,9 @@ vi.mock("@/lib/sql/database", () => ({
         })),
       })),
     })),
-  },
-}));
+  };
+  return { db: d, getDb: () => d };
+});
 
 const mockCancelPDVPaymentIntent = vi.fn().mockResolvedValue(undefined);
 vi.mock("@/lib/services/mercadopago/paymentService", () => ({
