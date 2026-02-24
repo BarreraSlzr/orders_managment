@@ -450,6 +450,17 @@ export async function processWebhook(params: {
       });
       break;
 
+    // New MP Orders API (v1/orders) emits type "order" instead of
+    // "point_integration_wh".  Action mapping is equivalent so we reuse
+    // the same handler.
+    case "order":
+      result = await handlePointIntegrationEvent({
+        notification,
+        credentials,
+        tenantId,
+      });
+      break;
+
     case "mp-connect":
       result = await handleMpConnectEvent({ notification, tenantId });
       break;

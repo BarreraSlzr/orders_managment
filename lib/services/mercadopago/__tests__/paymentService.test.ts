@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     cancelPDVPaymentIntent,
+    createPDVPaymentIntent,
     listTerminals,
 } from "../paymentService";
 
@@ -78,7 +79,7 @@ describe("paymentService", () => {
       });
 
       expect(globalThis.fetch).toHaveBeenCalledWith(
-        "https://api.mercadopago.com/point/integration-api/devices/DEVICE-1/payment-intents/intent-xyz",
+        "https://api.mercadopago.com/v1/orders/intent-xyz",
         expect.objectContaining({
           method: "DELETE",
         }),
@@ -113,6 +114,70 @@ describe("paymentService", () => {
           intentId: "intent-xyz",
         }),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  // ── PDV createPDVPaymentIntent (new Orders API) ────────────────────────────
+
+  describe("createPDVPaymentIntent — Orders API v1", () => {
+    it("calls POST /v1/orders with decimal amount string", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          id: "order-abc",
+          status: "open",
+          external_reference: "order-123",
+          transactions: { payments: [{ id: "pay-1", amount: "15.00", status: "pending" }] },
+        }),
+      });
+
+      const result = await createPDVPaymentIntent({
+        accessToken: "tok",
+        deviceId: "DEVICE-1",
+        amountCents: 1500,
+        externalReference: "order-123",
+      });
+
+      expect(globalThis.fetch).toHaveBeenCalledWith(
+        "https://api.mercadopago.com/v1/orders",
+        expect.objectContaining({ method: "POST" }),
+      );
+
+      // Amount must be a decimal string, not an integer
+      const callArgs = vi.mocked(globalThis.fetch).mock.calls[0];
+      const sentBody = JSON.parse(callArgs[1]?.body as string);
+      expect(sentBody.transactions.payments[0].amount).toBe("15.00");
+      expect(sentBody.config.point.terminal_id).toBe("DEVICE-1");
+      expect(sentBody.type).toBe("point");
+
+      expect(result.id).toBe("order-abc");
+      expect(result.status).toBe("open");
+    });
+
+    it("sends X-Idempotency-Key header", async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          id: "order-xyz",
+          status: "open",
+          external_reference: "order-999",
+          transactions: { payments: [] },
+        }),
+      });
+
+      await createPDVPaymentIntent({
+        accessToken: "tok",
+        deviceId: "DEVICE-1",
+        amountCents: 500,
+        externalReference: "order-999",
+      });
+
+      const callArgs = vi.mocked(globalThis.fetch).mock.calls[0];
+      const sentHeaders = callArgs[1]?.headers as Record<string, string>;
+      expect(sentHeaders["X-Idempotency-Key"]).toBeDefined();
+      // Should be a non-empty string (UUID)
+      expect(typeof sentHeaders["X-Idempotency-Key"]).toBe("string");
+      expect(sentHeaders["X-Idempotency-Key"].length).toBeGreaterThan(0);
     });
   });
 });
