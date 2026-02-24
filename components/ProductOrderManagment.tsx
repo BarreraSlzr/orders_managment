@@ -5,7 +5,7 @@ import { useProductsFilter } from "@/context/useProductsFilter";
 import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { Product } from "@/lib/types";
 import { useEffect, useState } from "react";
-import { AdminSettingsPanel } from "./Admin/AdminSettingsPanel";
+import { SettingsModal } from "./Admin/SettingsPanel";
 import EmptyState from "./Products/EmptyState";
 import { ProductForm } from "./Products/Form";
 import { ListProducts } from "./Products/List";
@@ -15,12 +15,12 @@ import TagList from "./Tag/List";
 
 export default function ProductOrderManagment() {
   const { visibleProducts, visibleTags } = useProductsFilter();
-  const { isAdmin, role } = useAdminStatus();
+  const { isAdmin, role, tenantName, username, session } = useAdminStatus();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [initialTab, setInitialTab] = useState<string | undefined>();
   const canOpenSettings = isAdmin || role === "manager";
 
-  // Listen for custom events to open Admin Settings
+  // Listen for custom events to open Settings
   useEffect(() => {
     const handleOpenSettings = (event: Event) => {
       const customEvent = event as CustomEvent<{ tab?: string }>;
@@ -29,9 +29,9 @@ export default function ProductOrderManagment() {
         setSettingsOpen(true);
       }
     };
-    window.addEventListener("openAdminSettings", handleOpenSettings);
+    window.addEventListener("openSettings", handleOpenSettings);
     return () => {
-      window.removeEventListener("openAdminSettings", handleOpenSettings);
+      window.removeEventListener("openSettings", handleOpenSettings);
     };
   }, [canOpenSettings]);
 
@@ -41,7 +41,7 @@ export default function ProductOrderManagment() {
         type="button"
         className="fixed top-3 right-3 z-50 rounded-full bg-white/80 p-2 text-slate-500 shadow hover:bg-white hover:text-slate-800 transition"
         onClick={() => setSettingsOpen(true)}
-        aria-label="Admin settings"
+        aria-label="Settings"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -59,12 +59,18 @@ export default function ProductOrderManagment() {
         </svg>
       </button>
       {settingsOpen && (
-        <AdminSettingsPanel
-          onClose={() => {
+        <SettingsModal
+          onCloseAction={() => {
             setSettingsOpen(false);
             setInitialTab(undefined);
           }}
           initialTab={initialTab}
+          tenantName={tenantName ?? "ACME"}
+          userName={
+            username ??
+            (role ? role.charAt(0).toUpperCase() + role.slice(1) : "User")
+          }
+          sessionData={session as Record<string, unknown> | null}
         />
       )}
       <div className="sticky top-0 z-10 bg-slate-100/76 p-3 backdrop-blur-sm">

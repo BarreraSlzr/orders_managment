@@ -16,13 +16,13 @@ import {
   upsertAccessRequest,
 } from "@/lib/services/mercadopago/accessRequestsService";
 import {
-    getCredentials,
-    upsertCredentials,
+  getCredentials,
+  upsertCredentials,
 } from "@/lib/services/mercadopago/credentialsService";
 import {
-    cancelActiveAttempt,
-    getAttempt,
-    getLatestAttempt,
+  cancelActiveAttempt,
+  getAttempt,
+  getLatestAttempt,
 } from "@/lib/services/mercadopago/statusService";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { TRPCError } from "@trpc/server";
@@ -174,7 +174,7 @@ const paymentRouter = router({
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
           message:
-            "Mercado Pago not configured. Add your credentials in Admin Settings → Mercado Pago.",
+            "Mercado Pago not configured. Add your credentials in Settings → Mercado Pago.",
         });
       }
 

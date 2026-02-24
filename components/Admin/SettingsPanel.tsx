@@ -1,92 +1,253 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { useTRPC } from "@/lib/trpc/react";
-import { getIsoTimestamp } from "@/utils/stamp";
+import { formatUnixSecondsToReadable, getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  BookOpen,
+  Building2,
   CheckCircle,
+  CreditCard,
   Download,
   FileText,
   LogOut,
+  Package,
   RefreshCw,
-  Settings,
   Trash2,
   Upload,
-  X,
+  User,
+  XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CSVPreviewTable } from "./CSVPreviewTable";
 
-type Tab = "csv" | "export" | "links" | "mercadopago";
+type Tab = "settings" | "csv" | "export";
 
-export function AdminSettingsPanel({
-  onClose,
+function normalizeInitialTab(initialTab?: string): Tab {
+  if (initialTab === "csv") return "csv";
+  if (initialTab === "export") return "export";
+  return "settings";
+}
+
+export function SettingsModal({
+  onCloseAction,
   initialTab,
+  tenantName = "Acme Corporation",
+  userName = "John Doe",
+  sessionData = null,
 }: {
-  onClose: () => void;
+  onCloseAction: () => void;
   initialTab?: string;
+  tenantName?: string;
+  userName?: string;
+  sessionData?: Record<string, unknown> | null;
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>((initialTab as Tab) ?? "csv");
+  const [activeTab, setActiveTab] = useState<Tab>(
+    normalizeInitialTab(initialTab),
+  );
 
-  const tabs: Array<{ key: Tab; label: string }> = [
-    { key: "csv", label: "CSV Import" },
-    { key: "export", label: "Export" },
-    { key: "links", label: "Links" },
-    { key: "mercadopago", label: "Mercado Pago" },
-  ];
+  const tabTitles: Record<Tab, string> = {
+    settings: "Settings",
+    csv: "Import",
+    export: "Export",
+  };
+
+  const sessionHeaderItems = [
+    { key: "role", label: "Role" },
+    { key: "tenant_id", label: "Tenant" },
+    {
+      key: "exp",
+      label: "Expires",
+      format: (value: unknown) =>
+        formatUnixSecondsToReadable(value as number | string) ?? String(value),
+    },
+  ]
+    .map((item) => {
+      const value = sessionData?.[item.key];
+      if (value === undefined || value === null || value === "") return null;
+      return {
+        label: item.label,
+        value: item.format ? item.format(value) : String(value),
+      };
+    })
+    .filter((item): item is { label: string; value: string } => item !== null);
+
+  useEffect(() => {
+    setActiveTab(normalizeInitialTab(initialTab));
+  }, [initialTab]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <CardHeader className="flex-shrink-0 flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-lg font-bold flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Admin Settings
-          </CardTitle>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1 hover:bg-slate-100"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </CardHeader>
-        <div className="flex gap-1 px-6 border-b">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.key
-                  ? "border-slate-900 text-slate-900"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCloseAction();
+      }}
+    >
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="space-y-2 pb-2 border-b">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="rounded-md bg-muted p-2 shrink-0">
+                <Building2 className="size-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="truncate">{tenantName}</DialogTitle>
+                <DialogDescription className="flex items-center gap-1.5 mt-1 text-xs">
+                  <User className="size-3.5" />
+                  <span className="truncate">{userName}</span>
+                </DialogDescription>
+              </div>
+            </div>
+            <span className="text-xs rounded-full border px-2 py-1 mr-7 text-muted-foreground shrink-0">
+              {tabTitles[activeTab].toLocaleUpperCase()}
+            </span>
+          </div>
+          {sessionHeaderItems.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {sessionHeaderItems.map((item) => (
+                <span
+                  key={item.label}
+                  className="text-[10px] rounded border px-1.5 py-0.5 text-muted-foreground"
+                >
+                  {item.label}: {item.value}
+                </span>
+              ))}
+            </div>
+          )}
+        </DialogHeader>
+
+        <div className="pt-4">
+          {activeTab === "settings" && (
+            <SettingsHomeTab onOpenTab={(tab) => setActiveTab(tab)} />
+          )}
+          {activeTab === "csv" && (
+            <CSVImportTab onBackToSettings={() => setActiveTab("settings")} />
+          )}
+          {activeTab === "export" && (
+            <ExportTab onBackToSettings={() => setActiveTab("settings")} />
+          )}
         </div>
-        <CardContent className="flex-1 overflow-y-auto pt-4">
-          {activeTab === "csv" && <CSVImportTab />}
-          {activeTab === "export" && <ExportTab />}
-          {activeTab === "links" && <QuickLinksTab />}
-          {activeTab === "mercadopago" && <MercadoPagoTab />}
-        </CardContent>
-      </Card>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SettingsHomeTab({
+  onOpenTab,
+}: {
+  onOpenTab: (tab: "csv" | "export") => void;
+}) {
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Logout failed:", error);
+      setIsLoggingOut(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <section className="space-y-2">
+        <Button
+          size="sm"
+          variant="destructive"
+          className="w-full justify-start"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="h-3.5 w-3.5 mr-1" />
+          {isLoggingOut ? "Logging out..." : "Logout"}
+        </Button>
+
+        <div className="grid gap-2">
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="justify-between"
+          >
+            <Link href="/onboardings">
+              <span className="flex items-center gap-2">
+                <BookOpen className="size-4" />
+                Onboarding
+              </span>
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="justify-between"
+          >
+            <Link href="/items">
+              <span className="flex items-center gap-2">
+                <Package className="size-4" />
+                Inventory
+              </span>
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
+        </div>
+      </section>
+
+      <Separator />
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <CreditCard className="size-4" />
+          <h3 className="text-sm font-semibold">Mercado Pago</h3>
+        </div>
+        <MercadoPagoTab />
+      </section>
+
+      <Separator />
+
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Data</h3>
+        <div className="grid grid-cols-2 gap-2">
+          <Button size="sm" variant="outline" onClick={() => onOpenTab("csv")}>
+            <Upload className="h-3.5 w-3.5 mr-1" />
+            Import
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onOpenTab("export")}
+          >
+            <Download className="h-3.5 w-3.5 mr-1" />
+            Export
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }
 
 // ── CSV Import Tab ────────────────────────────────────────────────────────
 
-function CSVImportTab() {
+function CSVImportTab({ onBackToSettings }: { onBackToSettings: () => void }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,6 +354,16 @@ function CSVImportTab() {
 
   return (
     <div className="space-y-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2"
+        onClick={onBackToSettings}
+      >
+        <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+        Back to Settings
+      </Button>
+
       {/* Format hint */}
       <div className="text-xs text-muted-foreground bg-muted rounded p-2 font-mono">
         <p className="font-semibold mb-1">CSV Format:</p>
@@ -300,7 +471,7 @@ function UploadResultDisplay({
 
 // ── Export Tab ────────────────────────────────────────────────────────────
 
-function ExportTab() {
+function ExportTab({ onBackToSettings }: { onBackToSettings: () => void }) {
   const trpc = useTRPC();
   const exportQuery = useQuery(trpc.products.export.queryOptions());
   const exportDate = getIsoTimestamp().slice(0, 10);
@@ -345,6 +516,16 @@ function ExportTab() {
 
   return (
     <div className="space-y-4">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="-ml-2"
+        onClick={onBackToSettings}
+      >
+        <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+        Back to Settings
+      </Button>
+
       <p className="text-sm text-muted-foreground">
         Export current products for backup or transfer to another environment.
       </p>
@@ -377,57 +558,13 @@ function ExportTab() {
   );
 }
 
-// ── Quick Links Tab ───────────────────────────────────────────────────────
-
-function QuickLinksTab() {
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  const handleLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      await fetch("/api/auth/logout", { method: "POST" });
-      window.location.href = "/login";
-    } catch (error) {
-      console.error("Logout failed:", error);
-      setIsLoggingOut(false);
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Jump to onboarding workflows or inventory management.
-      </p>
-      <div className="flex flex-col gap-2">
-        <Button asChild size="sm">
-          <Link href="/onboardings">Go to Onboarding</Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link href="/items">Go to Inventory</Link>
-        </Button>
-      </div>
-
-      <div className="pt-4 border-t">
-        <p className="text-sm text-muted-foreground mb-2">Session management</p>
-        <Button
-          size="sm"
-          variant="destructive"
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-        >
-          <LogOut className="h-3.5 w-3.5 mr-1" />
-          {isLoggingOut ? "Logging out..." : "Logout"}
-        </Button>
-      </div>
-    </div>
-  );
-}
 // ── Mercado Pago Onboarding Tab ───────────────────────────────────────────────
 
 function MercadoPagoTab() {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [contactEmail, setContactEmail] = useState("");
+  const [disconnectedMode, setDisconnectedMode] = useState(false);
 
   const credentialsQuery = useQuery(
     trpc.mercadopago.credentials.get.queryOptions(),
@@ -441,6 +578,7 @@ function MercadoPagoTab() {
   const oauthAvailable = oauthCheckQuery.data?.available ?? false;
   const normalizedContactEmail = contactEmail.trim().toLowerCase();
   const isContactEmailValid = /^\S+@\S+\.\S+$/.test(normalizedContactEmail);
+  const isConnected = creds?.status === "active" && !disconnectedMode;
 
   // Pre-fill email from existing credentials
   useEffect(() => {
@@ -448,6 +586,12 @@ function MercadoPagoTab() {
       setContactEmail(creds.contactEmail);
     }
   }, [contactEmail, creds?.contactEmail]);
+
+  useEffect(() => {
+    if (creds?.status === "active") {
+      setDisconnectedMode(false);
+    }
+  }, [creds?.status]);
 
   // Handle OAuth callback notifications
   useEffect(() => {
@@ -490,106 +634,89 @@ function MercadoPagoTab() {
     window.location.href = oauthUrl.toString();
   };
 
+  const handleDisconnect = () => {
+    setDisconnectedMode(true);
+  };
+
   return (
     <div className="space-y-4">
-      {/* ── Connected status ── */}
-      {creds?.status === "active" && (
-        <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-green-50 text-green-700 border border-green-200">
-          <CheckCircle className="h-4 w-4 shrink-0" />
-          <span>
-            Conectado — Cuenta {creds.userId}
-            {creds.contactEmail ? ` (${creds.contactEmail})` : ""}
-          </span>
-        </div>
-      )}
-
-      {creds?.status === "error" && (
+      {creds?.status === "error" && !disconnectedMode && (
         <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-red-50 text-red-700 border border-red-200">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>{creds.errorMessage ?? "Error de conexión"}</span>
         </div>
       )}
 
-      {/* ── Connect flow ── */}
-      {creds?.status !== "active" && (
-        <>
-          <div className="space-y-1">
-            <Label htmlFor="mp-contact-email" className="text-xs">
-              Correo del negocio <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="mp-contact-email"
-              type="email"
-              placeholder="cliente@empresa.com"
-              value={contactEmail}
-              onChange={(event) => setContactEmail(event.target.value)}
-              className="mt-1 text-xs"
-            />
-            <p className="text-xs text-muted-foreground">
-              Correo asociado a la cuenta de Mercado Pago del negocio.
-            </p>
+      <div className="rounded-md border bg-muted/50 p-4 space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="mp-contact-email">Email Address</Label>
+          <Input
+            id="mp-contact-email"
+            type="email"
+            placeholder="your@email.com"
+            value={contactEmail}
+            onChange={(event) => setContactEmail(event.target.value)}
+            disabled={isConnected}
+            className="bg-background"
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            {isConnected ? (
+              <>
+                <CheckCircle className="size-4 text-green-500" />
+                <span className="text-sm text-green-600 font-medium">
+                  Connected
+                </span>
+              </>
+            ) : (
+              <>
+                <XCircle className="size-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Not connected
+                </span>
+              </>
+            )}
           </div>
 
-          {oauthAvailable ? (
+          {isConnected ? (
+            <Button variant="outline" size="sm" onClick={handleDisconnect}>
+              Disconnect
+            </Button>
+          ) : oauthAvailable ? (
             <Button
+              size="sm"
               onClick={handleOAuthConnect}
-              className="w-full bg-[#009EE3] hover:bg-[#0082c1] text-white font-semibold"
-              size="lg"
               disabled={!isContactEmailValid}
             >
-              <svg
-                className="h-5 w-5 mr-2"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2a7.2 7.2 0 01-6-3.22c.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08a7.2 7.2 0 01-6 3.22z"
-                  fill="currentColor"
-                />
-              </svg>
-              Conectar con Mercado Pago
+              Connect
             </Button>
           ) : (
-            !credentialsQuery.isLoading && (
-              <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-600 border">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>
-                  Mercado Pago OAuth no configurado. Configura las variables de
-                  entorno para habilitar la conexión.
-                </span>
-              </div>
-            )
-          )}
-        </>
-      )}
-
-      {/* Re-connect option when already connected */}
-      {creds?.status === "active" && (
-        <div className="space-y-2 pt-2 border-t">
-          <p className="text-xs text-muted-foreground">
-            ¿Necesitas reconectar con otra cuenta?
-          </p>
-          <div className="space-y-1">
-            <Input
-              type="email"
-              placeholder="nuevo-correo@empresa.com"
-              value={contactEmail}
-              onChange={(event) => setContactEmail(event.target.value)}
-              className="text-xs"
-            />
-          </div>
-          {oauthAvailable && (
-            <Button
-              onClick={handleOAuthConnect}
-              variant="outline"
-              size="sm"
-              disabled={!isContactEmailValid}
-            >
-              Reconectar
+            <Button size="sm" variant="outline" disabled>
+              Connect
             </Button>
           )}
         </div>
+      </div>
+
+      {!oauthAvailable && !credentialsQuery.isLoading && (
+        <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-600 border">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Mercado Pago OAuth is not configured.</span>
+        </div>
+      )}
+
+      {isConnected && creds?.userId && (
+        <p className="text-xs text-muted-foreground">
+          Connected as account {creds.userId}.
+        </p>
+      )}
+
+      {disconnectedMode && (
+        <p className="text-xs text-muted-foreground">
+          Disconnected locally. Connect again to replace tenant credentials.
+        </p>
       )}
     </div>
   );
