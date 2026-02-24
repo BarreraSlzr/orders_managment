@@ -46,7 +46,7 @@ bun run dev
 
 ### With OAuth (Simplified)
 
-1. User opens Admin Settings → Mercado Pago tab
+1. User opens Workspace Settings → Mercado Pago tab
 2. Clicks "Conectar con Mercado Pago" button (MP-branded)
 3. Redirects to MercadoPago authorization page
 4. User authorizes the application
