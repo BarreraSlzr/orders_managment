@@ -185,6 +185,9 @@ interface AdminAuditLogsTable {
 export interface MercadopagoCredentialsTable extends BaseTable {
   tenant_id: string;
   access_token: string; // encrypted in production
+  refresh_token: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  token_expires_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  refreshed_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
   app_id: string;
   user_id: string; // MP user ID from onboarding
   contact_email: ColumnType<string | null, string | null | undefined, string | null | undefined>;
@@ -213,8 +216,55 @@ export interface PaymentSyncAttemptsTable {
   amount_cents: number;
   response_data: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
   error_data: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  /** Last MP notification id processed for this attempt — used for deduplication. */
+  last_mp_notification_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  /** Timestamp of the last successfully processed webhook notification. */
+  last_processed_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
   created: ColumnType<Date, string | undefined, never>;
   updated: ColumnType<Date, string | undefined, never>;
+}
+
+// ─── Platform subscription + entitlement domain ───────────────────────────────
+
+export type TenantSubscriptionStatus =
+  | 'none'
+  | 'active'
+  | 'past_due'
+  | 'grace_period'
+  | 'canceled'
+  | 'expired';
+
+export interface TenantSubscriptionsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  /** Billing provider identifier, e.g. 'mercadopago' | 'stripe' | 'manual' */
+  provider: string;
+  external_subscription_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  status: TenantSubscriptionStatus;
+  current_period_end: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  canceled_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
+  updated_at: ColumnType<Date, string | undefined, Date | undefined>;
+}
+
+export interface TenantEntitlementsTable {
+  tenant_id: string;
+  subscription_status: TenantSubscriptionStatus;
+  features_enabled: ColumnType<string[], string[] | undefined, string[] | undefined>;
+  grace_period_end: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
+  updated_at: ColumnType<Date, string | undefined, Date | undefined>;
+}
+
+export interface TenantBillingEventsTable {
+  id: Generated<string>;
+  tenant_id: string;
+  event_type: string;
+  /** Provider-side event id for deduplication (e.g. MP notification id). */
+  external_event_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  payload: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
 }
 
 // Keys of this interface are table names.
@@ -237,6 +287,9 @@ export interface Database {
   mercadopago_access_requests: MercadopagoAccessRequestsTable;
   payment_sync_attempts: PaymentSyncAttemptsTable;
   product_consumptions: ProductConsumptionsTable;
+  tenant_subscriptions: TenantSubscriptionsTable;
+  tenant_entitlements: TenantEntitlementsTable;
+  tenant_billing_events: TenantBillingEventsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;
 }

@@ -8,6 +8,10 @@
  */
 import { verifySessionToken } from "@/lib/auth/session";
 import {
+    checkMpEntitlement,
+    mpEntitlementMessage,
+} from "@/lib/services/entitlements/checkEntitlement";
+import {
     generateOAuthState,
     getAuthorizeUrl,
     getOAuthConfig,
@@ -50,6 +54,17 @@ export async function GET(request: NextRequest) {
         { error: "Not authenticated" },
         { status: 401 },
       );
+    }
+
+    // Entitlement check — blocks OAuth connect when subscription inactive
+    const ent = await checkMpEntitlement({ tenantId: session.tenant_id });
+    if (!ent.allowed) {
+      const redirectUrl = new URL(request.url);
+      redirectUrl.pathname = "/";
+      redirectUrl.search = "";
+      redirectUrl.searchParams.set("mp_oauth", "entitlement_error");
+      redirectUrl.searchParams.set("message", mpEntitlementMessage(ent.reason ?? "none"));
+      return NextResponse.redirect(redirectUrl);
     }
 
     // Generate OAuth state for CSRF protection

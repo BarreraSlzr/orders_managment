@@ -14,11 +14,11 @@
  *   https://www.mercadopago.com.mx/developers/en/docs/your-integrations/notifications/webhooks
  *   https://www.mercadopago.com.mx/developers/en/docs/mp-point/integration-configuration/integrate-with-pdv/notifications
  */
-import { createHmac } from "crypto";
-import { db } from "@/lib/sql/database";
-import { MpCredentials } from "./credentialsService";
-import { updateAttempt } from "./statusService";
+import { getDb } from "@/lib/sql/database";
 import type { PaymentSyncAttemptsTable } from "@/lib/sql/types";
+import { createHmac, timingSafeEqual } from "crypto";
+import { getCredentials, MpCredentials } from "./credentialsService";
+import { updateAttempt } from "./statusService";
 
 type SyncAttemptStatus = PaymentSyncAttemptsTable["status"];
 
@@ -88,12 +88,16 @@ export function validateWebhookSignature(params: {
   if (ts) segments.push(`ts:${ts}`);
   const manifest = segments.join(";") + ";";
 
-  // HMAC-SHA256 with the webhook secret
+  // HMAC-SHA256 with the webhook secret — timing-safe comparison
   const computed = createHmac("sha256", secret)
     .update(manifest)
     .digest("hex");
 
-  return computed === hash;
+  try {
+    return timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(hash, "hex"));
+  } catch {
+    return false;
+  }
 }
 
 // ─── Tenant Resolution ──────────────────────────────────────────────────────
@@ -120,7 +124,7 @@ export async function resolveWebhookTenant(params: {
   const { mpUserId, contactEmail } = params;
 
   // Primary: match by MP user_id
-  let row = await db
+  let row = await getDb()
     .selectFrom("mercadopago_credentials")
     .selectAll()
     .where("user_id", "=", mpUserId)
@@ -132,7 +136,7 @@ export async function resolveWebhookTenant(params: {
 
   // Secondary fallback: match by contact_email
   if (!row && contactEmail) {
-    row = await db
+    row = await getDb()
       .selectFrom("mercadopago_credentials")
       .selectAll()
       .where("contact_email", "=", contactEmail)
@@ -152,6 +156,9 @@ export async function resolveWebhookTenant(params: {
 
 const MP_BASE_URL = "https://api.mercadopago.com";
 
+/** Timeout for MP API calls during webhook processing (15s). */
+const MP_WEBHOOK_FETCH_TIMEOUT_MS = 15_000;
+
 /**
  * Fetches full payment details from the Payments API.
  * Required for `payment` webhook events where we need `external_reference`
@@ -163,12 +170,21 @@ export async function fetchPaymentDetails(params: {
 }): Promise<MpPaymentDetails> {
   const { accessToken, paymentId } = params;
 
-  const res = await fetch(`${MP_BASE_URL}/v1/payments/${paymentId}`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MP_WEBHOOK_FETCH_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${MP_BASE_URL}/v1/payments/${paymentId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     const txt = await res.text().catch(() => "Unknown error");
@@ -223,10 +239,26 @@ export async function handlePaymentEvent(params: {
 }): Promise<WebhookHandlerResult> {
   const { notification, credentials, tenantId } = params;
 
-  const payment = await fetchPaymentDetails({
-    accessToken: credentials.access_token,
-    paymentId: notification.data.id,
-  });
+  const activeCreds = await getCredentials({ tenantId });
+  const accessToken = activeCreds?.access_token ?? credentials.access_token;
+
+  let payment: MpPaymentDetails;
+  try {
+    payment = await fetchPaymentDetails({
+      accessToken,
+      paymentId: notification.data.id,
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown fetch error";
+    console.error(
+      `[webhook] fetchPaymentDetails failed for notification ${notification.id}:`,
+      msg,
+    );
+    return {
+      handled: false,
+      detail: `Failed to fetch payment ${notification.data.id}: ${msg}`,
+    };
+  }
 
   const orderId = payment.external_reference;
   if (!orderId) {
@@ -234,7 +266,7 @@ export async function handlePaymentEvent(params: {
   }
 
   // Find the active (non-terminal) sync attempt for this order
-  const attempt = await db
+  const attempt = await getDb()
     .selectFrom("payment_sync_attempts")
     .selectAll()
     .where("tenant_id", "=", tenantId)
@@ -248,6 +280,16 @@ export async function handlePaymentEvent(params: {
     return { handled: false, detail: `No active attempt for order ${orderId}` };
   }
 
+  // ── Idempotency guard ────────────────────────────────────────────────────
+  // If this notification was already applied, skip processing silently.
+  const notificationId = notification.id.toString();
+  if (attempt.last_mp_notification_id === notificationId) {
+    return {
+      handled: true,
+      detail: `Duplicate payment notification ${notificationId} — already processed`,
+    };
+  }
+
   const newStatus = mapMpStatus(payment.status);
 
   await updateAttempt({
@@ -255,6 +297,8 @@ export async function handlePaymentEvent(params: {
     status: newStatus,
     mpTransactionId: payment.id.toString(),
     responseData: payment as unknown as Record<string, unknown>,
+    lastMpNotificationId: notificationId,
+    lastProcessedAt: new Date(),
   });
 
   return { handled: true, detail: `Payment ${payment.id} → ${newStatus}` };
@@ -287,7 +331,7 @@ export async function handlePointIntegrationEvent(params: {
   }
 
   // Find attempt by mp_transaction_id (the payment intent id)
-  const attempt = await db
+  const attempt = await getDb()
     .selectFrom("payment_sync_attempts")
     .selectAll()
     .where("tenant_id", "=", tenantId)
@@ -304,10 +348,21 @@ export async function handlePointIntegrationEvent(params: {
     };
   }
 
+  // ── Idempotency guard ────────────────────────────────────────────────────
+  const notificationId = notification.id.toString();
+  if (attempt.last_mp_notification_id === notificationId) {
+    return {
+      handled: true,
+      detail: `Duplicate point notification ${notificationId} — already processed`,
+    };
+  }
+
   await updateAttempt({
     id: attempt.id,
     status: newStatus,
     responseData: notification as unknown as Record<string, unknown>,
+    lastMpNotificationId: notificationId,
+    lastProcessedAt: new Date(),
   });
 
   return { handled: true, detail: `Point intent ${intentId} → ${newStatus}` };
@@ -325,7 +380,7 @@ export async function handleMpConnectEvent(params: {
   const { notification, tenantId } = params;
 
   if (notification.action === "application.deauthorized") {
-    await db
+    await getDb()
       .updateTable("mercadopago_credentials")
       .set({ status: "inactive" })
       .where("tenant_id", "=", tenantId)
