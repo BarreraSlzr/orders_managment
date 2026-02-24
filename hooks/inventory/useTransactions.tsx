@@ -18,7 +18,7 @@ export const useTransactions = (selectedItem?: Item | null) => {
   const { data: transactions } = useQuery(listOpts);
 
   const addMutation = useMutation(
-    trpc.inventory.transactions.add.mutationOptions(),
+    trpc.inventory.transactions.upsert.mutationOptions(),
   );
   const deleteMutation = useMutation(
     trpc.inventory.transactions.delete.mutationOptions(),

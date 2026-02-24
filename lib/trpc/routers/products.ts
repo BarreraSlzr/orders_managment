@@ -2,9 +2,10 @@ import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { db } from "@/lib/sql/database";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getProducts } from "@/lib/sql/functions/getProducts";
+import { getProductConsumptions } from "@/lib/sql/functions/productConsumptions";
 import {
-  parseProductsCSV,
-  type ProductRow,
+    parseProductsCSV,
+    type ProductRow,
 } from "@/lib/utils/parseProductsCSV";
 import { z } from "zod";
 import { managerProcedure, router, tenantProcedure } from "../init";
@@ -192,4 +193,42 @@ export const productsRouter = router({
         totalLines: parsed.totalLines,
       };
     }),
+
+  // ── Product consumptions (ingredient / composition) ──────────────────────
+  consumptions: router({
+    list: tenantProcedure
+      .input(z.object({ productId: z.string() }))
+      .query(async ({ ctx, input }) => {
+        return getProductConsumptions({
+          tenantId: ctx.tenantId,
+          productId: input.productId,
+        });
+      }),
+
+    add: managerProcedure
+      .input(
+        z.object({
+          productId: z.string(),
+          itemId: z.string(),
+          quantity: z.number().positive(),
+          quantityTypeValue: z.string().min(1),
+          isTakeaway: z.boolean().optional(),
+        }),
+      )
+      .mutation(async ({ ctx, input }) => {
+        return dispatchDomainEvent({
+          type: "product.consumption.added",
+          payload: { tenantId: ctx.tenantId, ...input },
+        });
+      }),
+
+    remove: managerProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        return dispatchDomainEvent({
+          type: "product.consumption.removed",
+          payload: { tenantId: ctx.tenantId, id: input.id },
+        });
+      }),
+  }),
 });

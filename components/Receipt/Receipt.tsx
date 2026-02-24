@@ -124,9 +124,6 @@ function ReceiptForm({
               <>
                 {order.closed ? (
                   <>
-                    <span className="text-xs text-muted-foreground">
-                      Orden cerrada
-                    </span>
                     <Button
                       variant="default"
                       size="sm"
@@ -164,29 +161,7 @@ function ReceiptForm({
                 )}
               </>
             ) : (
-              <>
-                {children || <ReceiptActions />}
-                {order.closed ? (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    type="submit"
-                    id="open"
-                    className="bg-green-600 hover:bg-green-700"
-                  >
-                    Abrir orden
-                  </Button>
-                ) : (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    type="submit"
-                    id="close"
-                  >
-                    Cerrar orden
-                  </Button>
-                )}
-              </>
+              <>{children || <ReceiptActions />}</>
             )}
           </CardFooter>
         </form>

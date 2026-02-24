@@ -27,7 +27,7 @@ vi.mock("@/lib/sql/functions/inventory", () => ({
   deleteItem: vi.fn(),
 }));
 vi.mock("@/lib/sql/functions/transactions", () => ({
-  addTransaction: vi.fn(),
+  upsertTransaction: vi.fn(),
   deleteTransaction: vi.fn(),
 }));
 vi.mock("@/lib/sql/functions/categories", () => ({
@@ -46,6 +46,7 @@ vi.mock("@/lib/sql/functions/adminAudit", () => ({
 
 // Import after mocks
 import { domainEventHandlers } from "@/lib/events/handlers";
+import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
 import {
     deleteCategory,
     toggleCategoryItem,
@@ -65,8 +66,8 @@ import {
 } from "@/lib/sql/functions/inventory";
 import { splitOrder } from "@/lib/sql/functions/splitOrder";
 import {
-    addTransaction,
     deleteTransaction,
+    upsertTransaction,
 } from "@/lib/sql/functions/transactions";
 import { updateOrderItem } from "@/lib/sql/functions/updateOrderItem";
 import {
@@ -75,7 +76,6 @@ import {
     toggleTakeAway,
 } from "@/lib/sql/functions/updateTakeAway";
 import { upsertProduct } from "@/lib/sql/functions/upsertProduct";
-import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
 
 describe("domainEventHandlers", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -171,8 +171,8 @@ describe("domainEventHandlers", () => {
   });
 
   it("order.products.removed → calls removeProducts", async () => {
-    const deleted = [{ numDeletedRows: BigInt(2) }];
-    (removeProducts as Mock).mockResolvedValue(deleted as any);
+    const kyleselyResult = [{ numDeletedRows: BigInt(2) }];
+    (removeProducts as Mock).mockResolvedValue(kyleselyResult as any);
 
     const result = await domainEventHandlers["order.products.removed"]({
       payload: { tenantId: "t1", orderId: "o1", itemIds: [1, 2] },
@@ -183,7 +183,8 @@ describe("domainEventHandlers", () => {
       orderId: "o1",
       itemIds: [1, 2],
     });
-    expect(result).toEqual(deleted);
+    // Handler converts BigInt → number for JSON serialization
+    expect(result).toEqual([{ numDeletedRows: 2 }]);
   });
 
   // ── Product events ────────────────────────────────────────────────────────
@@ -272,10 +273,10 @@ describe("domainEventHandlers", () => {
 
   // ── Transaction events ────────────────────────────────────────────────────
 
-  it("inventory.transaction.added → calls addTransaction", async () => {
-    (addTransaction as Mock).mockResolvedValue(undefined as any);
+  it("inventory.transaction.upserted → calls upsertTransaction", async () => {
+    (upsertTransaction as Mock).mockResolvedValue(undefined as any);
 
-    await domainEventHandlers["inventory.transaction.added"]({
+    await domainEventHandlers["inventory.transaction.upserted"]({
       payload: {
         tenantId: "t1",
         itemId: "i1",
@@ -286,13 +287,14 @@ describe("domainEventHandlers", () => {
       },
     });
 
-    expect(addTransaction).toHaveBeenCalledWith({
+    expect(upsertTransaction).toHaveBeenCalledWith({
       tenantId: "t1",
       itemId: "i1",
       type: "IN",
       price: 100,
       quantity: 5,
       quantityTypeValue: "kg",
+      id: undefined,
     });
   });
 

@@ -196,19 +196,19 @@ graph LR
         M4["✓ Bulk Import"]
         M5["✓ Manage Extras"]
         M6["✓ Close Orders"]
-        M7["✓ Manage Inventory"]
-        M8["✓ Create Categories"]
-        M9["✓ Add Transactions"]
+        M7["✓ Manage Inventory Items"]
+        M8["✓ Manage Categories"]
+        M9["✓ Batch Close Orders"]
+        M10["✓ Product Compositions"]
     end
 
     subgraph "Staff (Tenant Only)"
-        S1["✓ View Orders"]
-        S2["✓ Create Orders"]
-        S3["✓ Update Order Items"]
+        S1["✓ View/Create Orders"]
+        S2["✓ Update Order Items"]
+        S3["✓ Add/Edit/Delete Transactions"]
         S4["✓ View Products"]
         S5["✓ View Inventory"]
-        S6["✓ View Transactions"]
-        S7["✓ View Categories"]
+        S6["✓ View Categories"]
     end
 
     style A1 fill:#ff6b6b
@@ -226,13 +226,13 @@ graph LR
     style M7 fill:#ffa500
     style M8 fill:#ffa500
     style M9 fill:#ffa500
+    style M10 fill:#ffa500
     style S1 fill:#51cf66
     style S2 fill:#51cf66
     style S3 fill:#51cf66
     style S4 fill:#51cf66
     style S5 fill:#51cf66
     style S6 fill:#51cf66
-    style S7 fill:#51cf66
 ```
 
 ---
@@ -713,16 +713,18 @@ await trpc.inventory.items.add.mutation({
 // Requires managerProcedure (role check + tenant scoping)
 // Emits domain event: "inventory.item.added"
 
-// Add transaction (manager only)
-await trpc.inventory.transactions.add.mutation({
+// Upsert transaction (any tenant user — staff or manager)
+await trpc.inventory.transactions.upsert.mutation({
   itemId: "item-uuid",
   type: "IN",  // or "OUT"
   quantity: 25,
   price: 45000, // in cents
   quantityTypeValue: "kg",
+  // id: 42,  // ← include id to UPDATE existing, omit to INSERT new
 });
-// Requires managerProcedure
-// Emits domain event: "inventory.transaction.added"
+// Requires tenantProcedure (any authenticated tenant member)
+// Emits domain event: "inventory.transaction.upserted"
+// SQL: INSERT when no id, UPDATE when id present (upsertTransaction)
 ```
 
 ### Pattern: Manage inventory categories (manager only)
@@ -815,9 +817,12 @@ erDiagram
 | **inventory.items.add** | `managerProcedure` | Manager | Create new inventory item |
 | **inventory.items.toggle** | `managerProcedure` | Manager | Toggle item status (pending ↔ completed) |
 | **inventory.items.delete** | `managerProcedure` | Manager | Delete inventory item |
+| **inventory.items.lowStock** | `tenantProcedure` | Staff, Manager | Get items below `min_stock` threshold |
 | **inventory.transactions.list** | `tenantProcedure` | Staff, Manager | View transaction history for an item |
-| **inventory.transactions.add** | `managerProcedure` | Manager | Record IN/OUT transaction |
-| **inventory.transactions.delete** | `managerProcedure` | Manager | Delete transaction record |
+| **inventory.transactions.upsert** | `tenantProcedure` | Staff, Manager | Create or update IN/OUT transaction (gasto) |
+| **inventory.transactions.delete** | `tenantProcedure` | Staff, Manager | Delete transaction record |
+| **inventory.transactions.dailyGastos** | `tenantProcedure` | Staff, Manager | Aggregated IN transactions by date (grouped by item) |
+| **inventory.transactions.byDate** | `tenantProcedure` | Staff, Manager | Individual IN transactions for a date (for edit/delete) |
 | **inventory.categories.list** | `tenantProcedure` | Staff, Manager | View all categories |
 | **inventory.categories.upsert** | `managerProcedure` | Manager | Create or update category |
 | **inventory.categories.delete** | `managerProcedure` | Manager | Delete category |
@@ -896,16 +901,20 @@ export async function getItems(params: {
 
 ### Domain Events Emitted
 
-| Event Type | Payload | Trigger |
-|------------|---------|---------|
-| `inventory.item.added` | `{ tenantId, name, quantityTypeKey, categoryId? }` | Manager adds item |
-| `inventory.item.toggled` | `{ tenantId, id }` | Manager toggles item status |
-| `inventory.item.deleted` | `{ tenantId, id }` | Manager deletes item |
-| `inventory.transaction.added` | `{ tenantId, itemId, type, quantity, price, quantityTypeValue }` | Manager records transaction |
-| `inventory.transaction.deleted` | `{ tenantId, id }` | Manager deletes transaction |
-| `inventory.category.upserted` | `{ tenantId, id?, name }` | Manager creates/updates category |
-| `inventory.category.deleted` | `{ tenantId, id }` | Manager deletes category |
-| `inventory.category.item.toggled` | `{ tenantId, categoryId, itemId }` | Manager adds/removes item from category |
+| Event Type | Payload | Procedure | Trigger |
+|------------|---------|-----------|---------|
+| `inventory.item.added` | `{ tenantId, name, quantityTypeKey, categoryId? }` | `managerProcedure` | Manager adds item |
+| `inventory.item.toggled` | `{ tenantId, id }` | `managerProcedure` | Manager toggles item status |
+| `inventory.item.deleted` | `{ tenantId, id }` | `managerProcedure` | Manager deletes item |
+| `inventory.transaction.upserted` | `{ tenantId, itemId, type, quantity, price, quantityTypeValue, id? }` | `tenantProcedure` | Any tenant user creates or edits transaction (gasto) |
+| `inventory.transaction.deleted` | `{ tenantId, id }` | `tenantProcedure` | Any tenant user deletes transaction |
+| `inventory.category.upserted` | `{ tenantId, id?, name }` | `managerProcedure` | Manager creates/updates category |
+| `inventory.category.deleted` | `{ tenantId, id }` | `managerProcedure` | Manager deletes category |
+| `inventory.category.item.toggled` | `{ tenantId, categoryId, itemId }` | `managerProcedure` | Manager adds/removes item from category |
+| `inventory.eod.reconciled` | `{ tenantId, date }` | *(side-effect)* | Triggered by `order.batch.closed` handler |
+| `order.batch.closed` | `{ tenantId, date, timeZone }` | `tenantProcedure` + runtime `requireRole(["manager","admin"])` | Manager batch-closes day's orders |
+| `product.consumption.added` | `{ tenantId, productId, itemId, dimensionId, quantityRequired }` | `managerProcedure` | Manager adds ingredient to product |
+| `product.consumption.removed` | `{ tenantId, productId, itemId }` | `managerProcedure` | Manager removes ingredient from product |
 
 ### UI Flow: Adding Inventory Item with Category
 
@@ -936,11 +945,12 @@ sequenceDiagram
 
 ### Transaction Tracking
 
-Transactions record inventory movements (IN = stock added, OUT = stock depleted):
+Transactions record inventory movements (IN = stock added, OUT = stock depleted).
+The `upsertTransaction` SQL function handles both INSERT (new) and UPDATE (edit) via the optional `id` field:
 
 ```typescript
 interface Transaction {
-  id: number;                    // Auto-increment
+  id: number;                    // Auto-increment (serial)
   tenant_id: string;             // Tenant scoping
   item_id: string;               // FK to inventory_items
   type: "IN" | "OUT";            // Movement direction
@@ -949,13 +959,19 @@ interface Transaction {
   quantity_type_value: string;   // Unit (kg, L, units)
   created: Date;                 // ISO timestamp
 }
+
+// Upsert behavior:
+// - No id → INSERT new transaction
+// - id present → UPDATE item_id, quantity_type_value, price for existing row
 ```
 
 **UI Features:**
 - Transaction history with type filters (all/IN/OUT)
 - Date range filtering (dateFrom/dateTo)
 - Formatted display with badges, price, and date
-- Manager-only deletion capability
+- Any tenant user can add/edit/delete transactions (gastos)
+- `ItemSelectorContent` reused for both add and edit flows
+- Price input with `$` prefix, `MXN` suffix, Intl locale formatting
 
 ---
 
@@ -1039,20 +1055,131 @@ graph TB
 | **lib/auth/session.ts** | Token verification | `verifySessionToken()`, `SessionPayload` |
 | **lib/auth/admin.ts** | Admin key validation | `hasAdminApiKey()`, `getAdminConfig()` |
 | **lib/sql/database.ts** | Kysely setup | `db` instance, dialect config |
-| **lib/sql/migrations.ts** | Schema + constraints | v4 (tenants/users), v6 (audit logs) |
-| **lib/sql/functions/inventory.ts** | Inventory items queries | `getItems()`, `addItem()`, `toggleItem()`, `deleteItem()` |
+| **lib/sql/migrations.ts** | Schema + constraints | v4 (tenants/users), v6 (audit logs), v10 (product_consumptions), v11 (min_stock) |
+| **lib/sql/functions/inventory.ts** | Inventory items queries | `getItems()`, `addItem()`, `toggleItem()`, `deleteItem()`, `getLowStockAlerts()` |
 | **lib/sql/functions/categories.ts** | Category management | `getCategories()`, `upsertCategory()`, `toggleCategoryItem()` |
-| **lib/sql/functions/transactions.ts** | Transaction tracking | `getTransactions()`, `addTransaction()`, `deleteTransaction()` |
+| **lib/sql/functions/transactions.ts** | Transaction tracking | `upsertTransaction()`, `deleteTransaction()`, `getTransactions()`, `getDailyGastos()`, `getGastosByDate()` |
+| **lib/sql/functions/productConsumptions.ts** | Product composition | `getProductConsumptions()`, `addProductConsumption()`, `removeProductConsumption()` |
+| **lib/sql/functions/closeOrder.ts** | EOD batch operations | `batchCloseOrders()`, `deductDayConsumptions()` |
 | **lib/sql/functions/** | Scoped queries | `getOrders()`, `getProducts()`, etc. |
 | **lib/trpc/routers/admin.ts** | Admin endpoints | `exportData`, `listAuditLogs`, etc. |
-| **lib/trpc/routers/orders.ts** | Tenant endpoints | `list`, `create`, `update` (all scoped) |
+| **lib/trpc/routers/orders.ts** | Tenant endpoints | `list`, `create`, `update`, `batchClose` (all scoped) |
+| **lib/trpc/routers/products.ts** | Product endpoints | `upsert`, `consumptions.*` (manager), `list`, `export` (tenant) |
 | **lib/trpc/routers/inventory.ts** | Inventory endpoints | `items.*`, `transactions.*`, `categories.*` |
+| **lib/trpc/routers/extras.ts** | Extras endpoints | `list`, `upsert`, `delete`, `toggleOnItem` |
+| **lib/events/contracts.ts** | Event type definitions | `DomainEventType`, `DomainEventMap`, typed payloads |
 | **lib/events/dispatch.ts** | Event emission | `dispatchDomainEvent()` |
-| **lib/events/handlers.ts** | Admin audit handler | `admin.audit.logged` listener |
+| **lib/events/handlers.ts** | Event handlers | All domain event → SQL function mappings |
+| **lib/utils/currency.ts** | Currency formatting | `parseCurrencyToCents()`, `centsToMxDisplay()` |
+| **components/Inventory/ItemSelector.tsx** | Reusable item selector | `ItemSelectorContent` — search, create, details (qty/unit/price) |
 
 ---
 
-## 13. Deployment Checklist
+## 13. RBAC × Domain Event Emissions Matrix
+
+> **Complete mapping**: Every tRPC route that dispatches a domain event, its required access level, the event type, and the SQL function ultimately invoked.
+
+### Access-Level Legend
+
+| Color | Procedure | Access |
+|-------|-----------|--------|
+| 🟢 | `tenantProcedure` | Any authenticated tenant member (staff, manager, admin) |
+| 🟠 | `managerProcedure` | Manager or admin role required |
+| 🟡 | `tenantProcedure` + runtime `requireRole` | Tenant procedure with additional inline role guard |
+| 🔴 | `adminProcedure` | Superadmin API key required |
+
+### Orders Domain
+
+| Route | Access | Event | Handler → SQL |
+|-------|--------|-------|---------------|
+| `orders.create` | 🟡 Staff+ | `order.created` + `order.item.updated` | `insertOrder()` + `updateOrderItem()` |
+| `orders.updateItem` | 🟡 Staff+ | `order.item.updated` | `updateOrderItem()` |
+| `orders.split` | 🟡 Staff+ | `order.split` | `splitOrder()` |
+| `orders.combine` | 🟡 Staff+ | `order.combined` | `combineOrders()` |
+| `orders.close` | 🟡 Staff+ | `order.closed` | `closeOrder()` |
+| `orders.open` | 🟡 Staff+ | `order.opened` | `openOrder()` |
+| `orders.togglePayment` | 🟡 Staff+ | `order.payment.toggled` | `togglePaymentOption()` |
+| `orders.setPaymentOption` | 🟡 Staff+ | `order.payment.set` | `setPaymentOption()` |
+| `orders.toggleTakeaway` | 🟡 Staff+ | `order.takeaway.toggled` | `toggleTakeAway()` |
+| `orders.removeProducts` | 🟡 Staff+ | `order.products.removed` | `removeProducts()` |
+| `orders.batchClose` | 🟡 Manager+ | `order.batch.closed` | `batchCloseOrders()` → `deductDayConsumptions()` |
+
+### Inventory Domain
+
+| Route | Access | Event | Handler → SQL |
+|-------|--------|-------|---------------|
+| `inventory.items.add` | 🟠 Manager | `inventory.item.added` | `addItem()` + optionally `toggleCategoryItem()` |
+| `inventory.items.toggle` | 🟠 Manager | `inventory.item.toggled` | `toggleItem()` |
+| `inventory.items.delete` | 🟠 Manager | `inventory.item.deleted` | `deleteItem()` |
+| `inventory.transactions.upsert` | 🟢 Tenant | `inventory.transaction.upserted` | `upsertTransaction()` (INSERT or UPDATE) |
+| `inventory.transactions.delete` | 🟢 Tenant | `inventory.transaction.deleted` | `deleteTransaction()` |
+| `inventory.categories.upsert` | 🟠 Manager | `inventory.category.upserted` | `upsertCategory()` |
+| `inventory.categories.delete` | 🟠 Manager | `inventory.category.deleted` | `deleteCategory()` |
+| `inventory.categories.toggleItem` | 🟠 Manager | `inventory.category.item.toggled` | `toggleCategoryItem()` |
+
+### Products Domain
+
+| Route | Access | Event | Handler → SQL |
+|-------|--------|-------|---------------|
+| `products.upsert` | 🟠 Manager | `product.upserted` | `upsertProduct()` |
+| `products.csvUpload` | 🟠 Manager | `product.upserted` × N | `upsertProduct()` (loop) |
+| `products.resetAndImport` | 🟠 Manager | `product.upserted` × N | delete all → `upsertProduct()` (loop) |
+| `products.consumptions.add` | 🟠 Manager | `product.consumption.added` | `addProductConsumption()` |
+| `products.consumptions.remove` | 🟠 Manager | `product.consumption.removed` | `removeProductConsumption()` |
+
+### Extras Domain
+
+| Route | Access | Event | Handler → SQL |
+|-------|--------|-------|---------------|
+| `extras.upsert` | 🟠 Manager | `extra.upserted` | `upsertExtra()` |
+| `extras.delete` | 🟠 Manager | `extra.deleted` | `deleteExtra()` |
+| `extras.toggleOnItem` | 🟢 Tenant | `order.item.extra.toggled` | `toggleOrderItemExtra()` |
+
+### MercadoPago Domain
+
+| Route | Access | Event | Handler → SQL |
+|-------|--------|-------|---------------|
+| `mercadopago.credentials.upsert` | 🟠 Manager | `mercadopago.credentials.upserted` | *(audit-only, returns identifier)* |
+| `mercadopago.payment.start` | 🟠 Manager | `order.payment.mercadopago.start` | `getCredentials()` → MP API |
+
+### Admin Domain
+
+| Route | Access | Event | Handler → SQL |
+|-------|--------|-------|---------------|
+| `admin.migrationStatus` | 🔴 Admin | `admin.audit.logged` | `createAdminAuditLog()` |
+| `admin.tableCounts` | 🔴 Admin | `admin.audit.logged` | `createAdminAuditLog()` |
+| `admin.listTenants` | 🔴 Admin | `admin.audit.logged` | `createAdminAuditLog()` |
+| `admin.exportData` | 🔴 Admin | `admin.audit.logged` | `createAdminAuditLog()` |
+| `admin.importTenantProducts` | 🔴 Admin | `admin.audit.logged` + `product.upserted` × N | `createAdminAuditLog()` + `upsertProduct()` |
+
+### Side-Effect Events (Not Directly Dispatched by Routes)
+
+| Event | Triggered By | Handler → SQL |
+|-------|-------------|---------------|
+| `inventory.eod.reconciled` | `order.batch.closed` handler | `deductDayConsumptions()` |
+
+### Read-Only Routes (No Events)
+
+These routes perform direct SQL queries with no domain event dispatch:
+
+| Route | Procedure | SQL Function |
+|-------|-----------|-------------|
+| `orders.list` | 🟢 Tenant | `getOrders()` |
+| `orders.getDetails` | 🟢 Tenant | `getOrderItemsView()` |
+| `inventory.items.list` | 🟢 Tenant | `getItems()` |
+| `inventory.items.lowStock` | 🟢 Tenant | `getLowStockAlerts()` |
+| `inventory.transactions.list` | 🟢 Tenant | `getTransactions()` |
+| `inventory.transactions.dailyGastos` | 🟢 Tenant | `getDailyGastos()` |
+| `inventory.transactions.byDate` | 🟢 Tenant | `getGastosByDate()` |
+| `inventory.categories.list` | 🟢 Tenant | `getCategories()` |
+| `products.list` | 🟢 Tenant | `getProducts()` |
+| `products.export` | 🟢 Tenant | `exportProductsJSON()` |
+| `products.consumptions.list` | 🟢 Tenant | `getProductConsumptions()` |
+| `extras.list` | 🟢 Tenant | `getExtras()` |
+
+---
+
+## 14. Deployment Checklist
 
 - [ ] `ADMIN_SECRET` set in `.env` (x-admin-key validation)
 - [ ] `AUTH_SECRET` set for session token signing
@@ -1063,7 +1190,9 @@ graph TB
 - [ ] `__session` cookie httpOnly and sameSite attributes set
 - [ ] Audit logs queryable for compliance checks
 - [ ] Domain events handler subscribed to `admin.audit.logged`
-- [ ] Inventory domain event handlers registered (`inventory.*`)
+- [ ] Inventory domain event handlers registered (`inventory.*`, `product.consumption.*`, `order.batch.closed`)
+- [ ] Product consumptions table (v10 migration) applied
+- [ ] `min_stock` column (v11 migration) applied
 
 ---
 

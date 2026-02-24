@@ -7,6 +7,7 @@ import { Category } from "./useCategories";
 
 export type Item = Selectable<InventoryItemsTable> & {
   hasCategory: boolean;
+  stock: number;
 };
 
 export const useItems = (selectedCategory?: Pick<Category, "id"> | null) => {

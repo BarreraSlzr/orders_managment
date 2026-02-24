@@ -882,6 +882,75 @@ END $$;
   },
 };
 
+// ── v10: Product compositions ─────────────────────────────────────────────
+
+const migration010: Migration = {
+  version: 10,
+  description:
+    "Add product_consumptions table — links products to inventory items with quantity + unit",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  CREATE TABLE IF NOT EXISTS product_consumptions (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id uuid REFERENCES tenants(id),
+    product_id uuid NOT NULL,
+    item_id uuid NOT NULL,
+    quantity numeric NOT NULL DEFAULT 1,
+    quantity_type_value varchar NOT NULL,
+    is_takeaway boolean NOT NULL DEFAULT false,
+    created timestamptz NOT NULL DEFAULT now(),
+    updated timestamptz NOT NULL DEFAULT now(),
+    deleted timestamptz
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'product_consumptions_product_id_fkey'
+  ) THEN
+    ALTER TABLE product_consumptions
+      ADD CONSTRAINT product_consumptions_product_id_fkey
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'product_consumptions_item_id_fkey'
+  ) THEN
+    ALTER TABLE product_consumptions
+      ADD CONSTRAINT product_consumptions_item_id_fkey
+      FOREIGN KEY (item_id) REFERENCES inventory_items(id) ON DELETE CASCADE;
+  END IF;
+
+  CREATE INDEX IF NOT EXISTS product_consumptions_product_id_idx ON product_consumptions(product_id);
+  CREATE INDEX IF NOT EXISTS product_consumptions_item_id_idx ON product_consumptions(item_id);
+  CREATE INDEX IF NOT EXISTS product_consumptions_tenant_id_idx ON product_consumptions(tenant_id);
+END $$;
+`
+      )
+    );
+
+    console.info("[v10] product_consumptions table created.");
+  },
+};
+
+// ── v11: Inventory min_stock threshold + EOD reconciliation support ──────────
+
+const migration011: Migration = {
+  version: 11,
+  description:
+    "Add min_stock column to inventory_items for low-stock alerts",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS min_stock numeric DEFAULT NULL;`
+      )
+    );
+    console.info("[v11] min_stock column added to inventory_items.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -894,4 +963,6 @@ export const allMigrations: Migration[] = [
   migration007,
   migration008,
   migration009,
+  migration010,
+  migration011,
 ];

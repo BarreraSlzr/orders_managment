@@ -1,6 +1,6 @@
 import type {
-  DispatchDomainEventParams,
-  DomainEventType
+    DispatchDomainEventParams,
+    DomainEventType
 } from "@/lib/events/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -24,7 +24,7 @@ describe("Event contracts – completeness", () => {
     "inventory.item.added",
     "inventory.item.toggled",
     "inventory.item.deleted",
-    "inventory.transaction.added",
+    "inventory.transaction.upserted",
     "inventory.transaction.deleted",
     "inventory.category.upserted",
     "inventory.category.deleted",
@@ -71,9 +71,9 @@ describe("Event contracts – completeness", () => {
     expect(params.payload.name).toBe("Taco");
   });
 
-  it("DispatchDomainEventParams accepts valid payloads for inventory.transaction.added", () => {
-    const params: DispatchDomainEventParams<"inventory.transaction.added"> = {
-      type: "inventory.transaction.added",
+  it("DispatchDomainEventParams accepts valid payloads for inventory.transaction.upserted", () => {
+    const params: DispatchDomainEventParams<"inventory.transaction.upserted"> = {
+      type: "inventory.transaction.upserted",
       payload: {
         tenantId: "t1",
         itemId: "item-1",

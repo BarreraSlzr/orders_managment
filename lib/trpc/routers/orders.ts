@@ -2,7 +2,7 @@ import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { getOrders } from "@/lib/sql/functions/getOrders";
 import { z } from "zod";
-import { tenantProcedure, router } from "../init";
+import { router, tenantProcedure } from "../init";
 import { requireRole } from "../tenancy";
 
 export const ordersRouter = router({
@@ -182,5 +182,19 @@ export const ordersRouter = router({
         payload: { tenantId: ctx.tenantId, ...input },
       });
       return result.pop()?.numDeletedRows;
+    }),
+
+  /**
+   * Closes all open orders for a given date and runs EOD inventory deduction.
+   * Idempotent — safe to call multiple times for the same date.
+   */
+  batchClose: tenantProcedure
+    .input(z.object({ date: z.string() })) // 'YYYY-MM-DD'
+    .mutation(async ({ ctx, input }) => {
+      requireRole(ctx.session, ["manager", "admin"]);
+      return dispatchDomainEvent({
+        type: "order.batch.closed",
+        payload: { tenantId: ctx.tenantId, date: input.date },
+      });
     }),
 });

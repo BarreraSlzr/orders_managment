@@ -112,6 +112,8 @@ export interface InventoryItemsTable extends BaseTable {
   name: string;
   status: 'pending' | 'completed';
   quantity_type_key: string;
+  /** Minimum stock threshold. When net stock drops below this, item is flagged as low. */
+  min_stock: ColumnType<number | null, number | null | undefined, number | null | undefined>;
 }
 
 export interface TransactionsTable {
@@ -136,9 +138,11 @@ interface CategoryInventoryItemTable {
   tenant_id: ColumnType<string | null, string | undefined, never>;
 }
 
-interface ProductConsumptionsTable extends BaseTable {
+export interface ProductConsumptionsTable extends BaseTable {
+  tenant_id: ColumnType<string | null, string | undefined, never>;
   product_id: string;
   item_id: string;
+  quantity_type_value: string;
   is_takeaway: ColumnType<boolean, boolean | undefined, boolean | undefined>;
   quantity: number;
 }
@@ -232,7 +236,7 @@ export interface Database {
   mercadopago_credentials: MercadopagoCredentialsTable;
   mercadopago_access_requests: MercadopagoAccessRequestsTable;
   payment_sync_attempts: PaymentSyncAttemptsTable;
-  // product_consumptions: ProductConsumptionsTable;
+  product_consumptions: ProductConsumptionsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;
 }
