@@ -1,11 +1,5 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
-import { useAdminStatus } from "@/hooks/useAdminStatus";
-import { useTRPC } from "@/lib/trpc/react";
-import { getAvailableWorkflows } from "@/lib/workflows/definitions";
-import { useQuery } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -13,7 +7,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Pencil, Plus } from "lucide-react";
+import { useAdminStatus } from "@/hooks/useAdminStatus";
+import { useTRPC } from "@/lib/trpc/react";
+import { getAvailableWorkflows } from "@/lib/workflows/definitions";
+import { useQuery } from "@tanstack/react-query";
+import { ArrowRight, CheckCircle2, CreditCard, Pencil, Plus, XCircle } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
 
 export default function OnboardingsPage() {
   type RosterUser = {
@@ -74,10 +74,16 @@ export default function OnboardingsPage() {
   const canEditManagers = role === "admin";
   const canEditStaff = role === "admin" || role === "manager";
 
+  const mpEnvStatusQuery = useQuery({
+    ...trpc.admin.mpEnvStatus.queryOptions(),
+    enabled: !isLoading && effectiveRole === "admin",
+  });
+
   const staffOnboardHref = "/onboardings/onboard-staff";
   const managerOnboardHref = "/onboardings/onboard-manager";
   const canCreateManager = role === "admin" && isSystemAdmin;
   const canCreateStaff = role === "admin" || role === "manager";
+  const canConfigurePlatform = effectiveRole === "admin";
   const selectedTenant =
     isSystemAdmin && selectedTenantId !== "all"
       ? tenantsQuery.data?.find((tenant) => tenant.id === selectedTenantId)
@@ -126,6 +132,21 @@ export default function OnboardingsPage() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Platform Configuration (admin-only) ─────────────────────── */}
+      {!isLoading && canConfigurePlatform && (
+        <section className="rounded-2xl border border-slate-200 bg-white/70 p-6">
+          <h3 className="font-[var(--font-onboarding)] text-lg text-slate-900">
+            Configuración de plataforma
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Configura las integraciones de la plataforma antes de habilitar cobros.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <MpEnvWorkflowCard envStatus={mpEnvStatusQuery.data ?? null} />
           </div>
         </section>
       )}
@@ -449,6 +470,134 @@ export default function OnboardingsPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+// ── MP Env Workflow Card ──────────────────────────────────────────────────────
+
+interface MpEnvStatus {
+  MP_CLIENT_ID: boolean;
+  MP_CLIENT_SECRET: boolean;
+  MP_REDIRECT_URI: boolean;
+  MP_WEBHOOK_SECRET: boolean;
+  MP_BILLING_WEBHOOK_SECRET: boolean;
+  MP_TOKENS_ENCRYPTION_KEY: boolean;
+}
+
+function MpEnvWorkflowCard({ envStatus }: { envStatus: MpEnvStatus | null }) {
+  // Count configured required keys
+  const requiredKeys: (keyof MpEnvStatus)[] = [
+    "MP_CLIENT_ID",
+    "MP_CLIENT_SECRET",
+    "MP_REDIRECT_URI",
+    "MP_WEBHOOK_SECRET",
+  ];
+  const optionalKeys: (keyof MpEnvStatus)[] = [
+    "MP_BILLING_WEBHOOK_SECRET",
+    "MP_TOKENS_ENCRYPTION_KEY",
+  ];
+
+  const requiredConfigured = envStatus
+    ? requiredKeys.filter((k) => envStatus[k]).length
+    : 0;
+  const allRequiredSet = requiredConfigured === requiredKeys.length;
+  const optionalConfigured = envStatus
+    ? optionalKeys.filter((k) => envStatus[k]).length
+    : 0;
+
+  return (
+    <div className="rounded-2xl border bg-white/90 p-5">
+      <div className="flex items-center gap-2">
+        <CreditCard className="h-4 w-4 text-sky-600" />
+        <span className="text-xs uppercase tracking-[0.18em] text-slate-400">
+          Mercado Pago
+        </span>
+      </div>
+      <h2 className="mt-2 text-xl font-semibold text-slate-900">
+        Configurar credenciales
+      </h2>
+      <p className="mt-2 text-sm text-slate-600">
+        Client ID, secretos de webhook y claves de cifrado para habilitar cobros.
+      </p>
+
+      {/* Live env status */}
+      {envStatus && (
+        <div className="mt-3 space-y-1.5">
+          <p className="text-[10px] uppercase tracking-widest text-slate-400">
+            Estado del servidor
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {requiredKeys.map((key) => (
+              <span
+                key={key}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  envStatus[key]
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-red-50 text-red-600"
+                }`}
+              >
+                {envStatus[key] ? (
+                  <CheckCircle2 className="h-2.5 w-2.5" />
+                ) : (
+                  <XCircle className="h-2.5 w-2.5" />
+                )}
+                {key.replace("MP_", "")}
+              </span>
+            ))}
+            {optionalKeys.map((key) => (
+              <span
+                key={key}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  envStatus[key]
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-100 text-slate-400"
+                }`}
+              >
+                {envStatus[key] ? (
+                  <CheckCircle2 className="h-2.5 w-2.5" />
+                ) : (
+                  <XCircle className="h-2.5 w-2.5" />
+                )}
+                {key.replace("MP_", "")}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-4">
+        <Link
+          href="/onboardings/configure-mp-env"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-900 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white"
+        >
+          {allRequiredSet ? (
+            <>
+              <Pencil className="h-3.5 w-3.5" />
+              Revisar configuración
+            </>
+          ) : (
+            <>
+              <ArrowRight className="h-3.5 w-3.5" />
+              Configurar
+            </>
+          )}
+        </Link>
+        {allRequiredSet && (
+          <p className="mt-2 text-xs text-emerald-600 flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Requeridas completas
+            {optionalConfigured > 0 &&
+              ` + ${optionalConfigured} opcional${optionalConfigured > 1 ? "es" : ""}`}
+          </p>
+        )}
+        {!allRequiredSet && envStatus && (
+          <p className="mt-2 text-xs text-amber-600">
+            {requiredConfigured}/{requiredKeys.length} variables requeridas configuradas.
+            Requiere redeploy después de guardar.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
