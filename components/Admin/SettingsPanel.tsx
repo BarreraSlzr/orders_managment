@@ -1,48 +1,269 @@
 "use client";
 
 import { EntitlementBanner } from "@/components/MercadoPago/EntitlementBanner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import type { PlatformAlert } from "@/lib/sql/types";
+import { TEST_IDS, tid } from "@/lib/testIds";
 import { useTRPC } from "@/lib/trpc/react";
 import { formatUnixSecondsToReadable, getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    AlertCircle,
-    ArrowLeft,
-    ArrowRight,
-    BookOpen,
-    Building2,
-    CheckCircle,
-    CreditCard,
-    Download,
-    FileText,
-    LogOut,
-    Package,
-    RefreshCw,
-    Trash2,
-    Upload,
-    User,
-    XCircle,
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  BellOff,
+  BookOpen,
+  Building2,
+  CheckCircle,
+  CreditCard,
+  Download,
+  FileText,
+  Info,
+  LogOut,
+  Package,
+  RefreshCw,
+  Trash2,
+  Upload,
+  User,
+  XCircle
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CSVPreviewTable } from "./CSVPreviewTable";
 
-type Tab = "settings" | "csv" | "export";
+type Tab = "settings" | "csv" | "export" | "notifications";
+
+// ── Notifications Tab ────────────────────────────────────────────────────────
+
+function AlertSeverityIcon({ severity }: { severity: string }) {
+  if (severity === "critical")
+    return <AlertTriangle className="size-4 text-red-500 shrink-0" />;
+  if (severity === "warning")
+    return <AlertCircle className="size-4 text-yellow-500 shrink-0" />;
+  return <Info className="size-4 text-blue-500 shrink-0" />;
+}
+
+function AlertCard({
+  alert,
+  onRead,
+  onClose,
+}: {
+  alert: PlatformAlert;
+  onRead: (id: string) => void;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const meta =
+    alert.metadata != null && typeof alert.metadata === "object"
+      ? (alert.metadata as Record<string, unknown>)
+      : null;
+  const orderId: string | null =
+    meta && typeof meta.order_id === "string" ? meta.order_id : null;
+
+  const isRead = alert.read_at != null;
+
+  const handleOrderLink = () => {
+    if (orderId) {
+      onClose();
+      router.push(`/?orderId=${orderId}`);
+    }
+  };
+
+  return (
+    <div
+      className={`rounded-lg border p-3 text-sm space-y-1.5 ${
+        isRead ? "opacity-60" : "bg-muted/30"
+      }`}
+      data-testid={tid(TEST_IDS.ALERTS.CARD, alert.id)}
+    >
+      <div className="flex items-start gap-2">
+        <AlertSeverityIcon severity={alert.severity} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium truncate">{alert.title}</span>
+            <span className="text-[10px] text-muted-foreground shrink-0">
+              {new Intl.RelativeTimeFormat("es", { numeric: "auto" }).format(
+                Math.round(
+                  (new Date(alert.created_at).getTime() - Date.now()) /
+                    1000 /
+                    60,
+                ),
+                "minute",
+              )}
+            </span>
+          </div>
+          {alert.body && (
+            <p className="text-muted-foreground text-xs mt-0.5">{alert.body}</p>
+          )}
+          <div className="flex items-center gap-2 mt-2">
+            {!isRead && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-xs px-2"
+                onClick={() => onRead(alert.id)}
+                data-testid={tid(TEST_IDS.ALERTS.MARK_READ_BTN, alert.id)}
+              >
+                Marcar leído
+              </Button>
+            )}
+            {orderId && (
+              <Button
+                size="sm"
+                variant="link"
+                className="h-6 text-xs px-2 text-primary"
+                onClick={handleOrderLink}
+                data-testid={tid(TEST_IDS.ALERTS.ORDER_LINK_BTN, alert.id)}
+              >
+                Ver orden →
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationsTab({
+  onBackToSettings,
+  onClose,
+}: {
+  onBackToSettings: () => void;
+  onClose: () => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [unreadOnly, setUnreadOnly] = useState(false);
+
+  const alertsQuery = useQuery(
+    trpc.alerts.list.queryOptions({ unreadOnly }),
+  );
+
+  const markReadMutation = useMutation(
+    trpc.alerts.markRead.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: trpc.alerts.list.queryKey() }),
+    }),
+  );
+
+  const markAllMutation = useMutation(
+    trpc.alerts.markAllRead.mutationOptions({
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: trpc.alerts.list.queryKey() }),
+    }),
+  );
+
+  const alerts = alertsQuery.data?.alerts ?? [];
+  const unreadCount = alertsQuery.data?.unreadCount ?? 0;
+
+  return (
+    <div className="space-y-4" data-testid={TEST_IDS.SETTINGS.NOTIFICATIONS_TAB}>
+      <div className="flex items-center gap-2">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7"
+          onClick={onBackToSettings}
+        >
+          <ArrowLeft className="size-4" />
+        </Button>
+        <div className="flex items-center gap-1.5">
+          <Bell className="size-4" />
+          <h3 className="font-semibold text-sm">Notificaciones</h3>
+          {unreadCount > 0 && (
+            <Badge
+              variant="destructive"
+              className="text-[10px] px-1.5 py-0"
+              data-testid={TEST_IDS.SETTINGS.UNREAD_BADGE}
+            >
+              {unreadCount}
+            </Badge>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <Button
+          size="sm"
+          variant={unreadOnly ? "secondary" : "outline"}
+          className="h-7 text-xs"
+          onClick={() => setUnreadOnly((v) => !v)}
+          data-testid={TEST_IDS.SETTINGS.UNREAD_FILTER_BTN}
+        >
+          {unreadOnly ? (
+            <>
+              <Bell className="size-3 mr-1" /> Solo no leídas
+            </>
+          ) : (
+            <>
+              <BellOff className="size-3 mr-1" /> Todas
+            </>
+          )}
+        </Button>
+        {unreadCount > 0 && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs"
+            disabled={markAllMutation.isPending}
+            onClick={() => markAllMutation.mutate({})}
+            data-testid={TEST_IDS.SETTINGS.MARK_ALL_READ_BTN}
+          >
+            <CheckCircle className="size-3 mr-1" />
+            Marcar todas como leídas
+          </Button>
+        )}
+      </div>
+
+      {alertsQuery.isLoading && (
+        <div className="text-xs text-muted-foreground text-center py-6">
+          Cargando...
+        </div>
+      )}
+
+      {!alertsQuery.isLoading && alerts.length === 0 && (
+        <div className="text-xs text-muted-foreground text-center py-8 space-y-2">
+          <BellOff className="size-6 mx-auto opacity-40" />
+          <p>Sin notificaciones</p>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {alerts.map((alert) => (
+          <AlertCard
+            key={alert.id}
+            alert={alert}
+            onRead={(id) => markReadMutation.mutate({ id })}
+            onClose={onClose}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Tab routing ───────────────────────────────────────────────────────────────
 
 function normalizeInitialTab(initialTab?: string): Tab {
   if (initialTab === "csv") return "csv";
   if (initialTab === "export") return "export";
+  if (initialTab === "notifications") return "notifications";
   return "settings";
 }
 
@@ -67,6 +288,7 @@ export function SettingsModal({
     settings: "Settings",
     csv: "Import",
     export: "Export",
+    notifications: "Notificaciones",
   };
 
   const sessionHeaderItems = [
@@ -100,7 +322,10 @@ export function SettingsModal({
         if (!open) onCloseAction();
       }}
     >
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className="max-w-3xl max-h-[90vh] overflow-y-auto"
+          data-testid={TEST_IDS.SETTINGS.MODAL}
+        >
         <DialogHeader className="space-y-2 pb-2 border-b">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-start gap-3 min-w-0">
@@ -143,6 +368,12 @@ export function SettingsModal({
           {activeTab === "export" && (
             <ExportTab onBackToSettings={() => setActiveTab("settings")} />
           )}
+          {activeTab === "notifications" && (
+            <NotificationsTab
+              onBackToSettings={() => setActiveTab("settings")}
+              onClose={onCloseAction}
+            />
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -152,7 +383,7 @@ export function SettingsModal({
 function SettingsHomeTab({
   onOpenTab,
 }: {
-  onOpenTab: (tab: "csv" | "export") => void;
+  onOpenTab: (tab: "csv" | "export" | "notifications") => void;
 }) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -170,6 +401,23 @@ function SettingsHomeTab({
   return (
     <div className="space-y-5">
       <section className="space-y-2">
+        <h3 className="text-sm font-semibold">Alertas</h3>
+        <Button
+          size="sm"
+          variant="outline"
+          className="w-full justify-between"
+          onClick={() => onOpenTab("notifications")}
+        >
+          <span className="flex items-center gap-2">
+            <Bell className="size-4" />
+            Notificaciones
+          </span>
+          <ArrowRight className="size-4" />
+        </Button>
+      </section>
+      <Separator />
+      <section className="space-y-2">
+
         <Button
           size="sm"
           variant="destructive"
