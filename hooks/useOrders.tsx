@@ -3,11 +3,11 @@
 import { OrderItem, OrderItemsView } from "@/lib/sql/types";
 import { useTRPC } from "@/lib/trpc/react";
 import {
-  MpSyncResult,
-  Order,
-  OrderContextActions,
-  OrderContextState,
-  OrdersQuery,
+    MpSyncResult,
+    Order,
+    OrderContextActions,
+    OrderContextState,
+    OrdersQuery,
 } from "@/lib/types";
 import { getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -82,12 +82,6 @@ export function useOrders({
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState<OrdersQuery>(initialQuery);
-  // currentOrderId is stored in the URL as ?orderId=... for deep-linking and testability
-  const [currentOrderId, setCurrentOrderId] = useQueryState(
-    "orderId",
-    parseAsString.withDefault(""),
-  );
-
   // selectedOrderIds is stored in the URL as ?selected=id1,id2 for multi-select
   const [selectedOrderIds, setSelectedOrderIds] = useQueryState(
     "selected",
@@ -95,16 +89,10 @@ export function useOrders({
   );
 
   // Ref always holds the latest value — avoids stale nuqs closure in callbacks
-  const currentOrderIdRef = useRef(currentOrderId);
-  useEffect(() => {
-    currentOrderIdRef.current = currentOrderId;
-  }, [currentOrderId]);
+  const currentOrderIdRef = useRef("");
 
-  // When exactly 1 order is selected, treat it as the active detail without
-  // writing to ?orderId — keeps the URL clean (no duplicate params).
-  // Priority: selection > explicit orderId deep-link.
-  const detailId =
-    selectedOrderIds.length === 1 ? selectedOrderIds[0] : currentOrderId;
+  // A single selected order is the active detail.
+  const detailId = selectedOrderIds.length === 1 ? selectedOrderIds[0] : "";
 
   // Keep ref in sync with whichever source is active
   useEffect(() => {
@@ -171,13 +159,12 @@ export function useOrders({
 
   useEffect(() => {
     const closeHandler = () => {
-      void setCurrentOrderId("");
       void setSelectedOrderIds([]);
     };
     window.addEventListener("close-order-details", closeHandler);
     return () =>
       window.removeEventListener("close-order-details", closeHandler);
-  }, [setCurrentOrderId, setSelectedOrderIds]);
+  }, [setSelectedOrderIds]);
 
   const orders = useMemo(
     () =>
@@ -197,9 +184,9 @@ export function useOrders({
       if (!orders.has(updatedOrder.id)) {
         invalidateOrders();
       }
-      setCurrentOrderId(updatedOrder.id);
+      setSelectedOrderIds([updatedOrder.id]);
     } else {
-      setCurrentOrderId("");
+      setSelectedOrderIds([]);
     }
     invalidateDetail();
   };
@@ -368,10 +355,10 @@ export function useOrders({
 
     async setCurrentOrderDetails(order: Order | null) {
       if (!order) {
-        void setCurrentOrderId("");
+        void setSelectedOrderIds([]);
         return;
       }
-      void setCurrentOrderId(order.id);
+      void setSelectedOrderIds([order.id]);
       invalidateDetail();
     },
 
@@ -404,8 +391,7 @@ export function useOrders({
       const [targetOrderId, ...sourceOrderIds] = selectedOrderIds;
       try {
         await combineMutation.mutateAsync({ targetOrderId, sourceOrderIds });
-        void setSelectedOrderIds([]);
-        void setCurrentOrderId(targetOrderId);
+        void setSelectedOrderIds([targetOrderId]);
         // Refetch orders list and detail after combine
         await queryClient.refetchQueries({ queryKey: listOpts.queryKey });
         invalidateDetail();
@@ -424,7 +410,6 @@ export function useOrders({
           ),
         );
         void setSelectedOrderIds([]);
-        void setCurrentOrderId("");
         // Refetch orders list after closing multiple
         await queryClient.refetchQueries({ queryKey: listOpts.queryKey });
         return true;

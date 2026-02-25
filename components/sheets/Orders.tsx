@@ -2,10 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
 } from "@/components/ui/sheet";
 import { useOrders } from "@/context/useOrders";
 import { OrderItemsView } from "@/lib/sql/types";
@@ -17,19 +17,19 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import {
-  Calendar,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Layers,
-  Pencil,
-  Plus,
-  ShoppingBag,
-  Trash2,
-  X,
+    Calendar,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    Layers,
+    Pencil,
+    Plus,
+    ShoppingBag,
+    Trash2,
+    X,
 } from "lucide-react";
 import Link from "next/link";
-import { parseAsBoolean, parseAsString, useQueryState } from "nuqs";
+import { parseAsString, useQueryState } from "nuqs";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { ItemSelectorContent } from "../Inventory/ItemSelector";
 import OrderStatus from "../Orders/OrderControls";
@@ -114,11 +114,16 @@ export function OpenOrderSheet() {
     handleCombineOrders,
     handleCloseMultiple,
   } = useOrders();
-  const [sheetOpen, setSheetOpen] = useQueryState(
+  const [sheetParam, setSheetParam] = useQueryState(
     "sheet",
-    parseAsBoolean.withDefault(false),
+    parseAsString.withDefault(""),
   );
-  const [filterStatus, setFilterStatus] = useState("opened");
+  const [filterStatus, setFilterStatus] = useState<"opened" | "closed" | "all">(
+    "opened",
+  );
+  const sheetOpen = sheetParam !== "" && sheetParam !== "false";
+  const tabFromSheetParam =
+    sheetParam === "closed" || sheetParam === "all" ? sheetParam : "opened";
   const today = useMemo(
     () =>
       new Intl.DateTimeFormat("en-CA", {
@@ -259,10 +264,17 @@ export function OpenOrderSheet() {
 
   // Auto-switch to "closed" tab when viewing a closed order
   useEffect(() => {
+    if (sheetOpen) {
+      setFilterStatus(tabFromSheetParam);
+    }
+  }, [sheetOpen, tabFromSheetParam]);
+
+  useEffect(() => {
     if (currentOrder?.closed) {
       setFilterStatus("closed");
+      void setSheetParam("closed");
     }
-  }, [currentOrder?.closed]);
+  }, [currentOrder?.closed, setSheetParam]);
 
   useEffect(() => {
     if (sheetOpen) {
@@ -276,8 +288,14 @@ export function OpenOrderSheet() {
   }, [sheetOpen]);
 
   function handleClose() {
-    void setSheetOpen(false);
+    void setSheetParam("");
     void setCurrentOrderDetails(null);
+  }
+
+  function handleFilterStatusChange(value: string) {
+    const nextStatus = (value || "opened") as "opened" | "closed" | "all";
+    setFilterStatus(nextStatus);
+    void setSheetParam(nextStatus === "opened" ? "true" : nextStatus);
   }
 
   const isMultiSelect = selectedOrderIds.length > 1;
@@ -287,7 +305,7 @@ export function OpenOrderSheet() {
       open={sheetOpen}
       onOpenChange={(open) => {
         if (!open) handleClose();
-        else void setSheetOpen(true);
+        else void setSheetParam("true");
       }}
     >
       {/* Trigger area — plain div, not SheetTrigger, so open state is fully controlled */}
@@ -299,7 +317,7 @@ export function OpenOrderSheet() {
           <Button
             variant={"default"}
             className="h-16 rounded-full relative px-8 flex-grow"
-            onClick={() => void setSheetOpen(true)}
+            onClick={() => void setSheetParam("true")}
             data-testid={TEST_IDS.ORDER_SHEET.ACTIVE_ORDER_BADGE}
           >
             <OrderSummary order={currentOrder} minimal />
@@ -307,7 +325,7 @@ export function OpenOrderSheet() {
         )}
         <Button
           className="relative h-16 w-16 rounded-full ms-auto"
-          onClick={() => void setSheetOpen(true)}
+          onClick={() => void setSheetParam("true")}
         >
           <ShoppingBag className="!h-6 !w-6 text-primary-foreground" />
           <span
@@ -342,7 +360,7 @@ export function OpenOrderSheet() {
             <OrderStatus
               defaultStatus="opened"
               value={filterStatus}
-              onValueChange={setFilterStatus}
+              onValueChange={handleFilterStatusChange}
               openCount={openCount}
               closedCount={closedCount}
               totalCount={totalCount}
@@ -606,7 +624,7 @@ export function OpenOrderSheet() {
               <>
                 {!currentOrder.closed && (
                   <ChevronFloodButton
-                    onClick={() => void setSheetOpen(false)}
+                    onClick={handleClose}
                     testId={TEST_IDS.ORDER_SHEET.ADD_MORE_BTN}
                   />
                 )}

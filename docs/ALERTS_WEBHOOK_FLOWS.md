@@ -157,9 +157,9 @@ sequenceDiagram
     Bell->>Modal: open with initialTab="notifications"
     Modal->>Modal: render NotificationsTab
     User->>Modal: click "Ver orden →" on alert card
-    Modal->>Router: router.push("/?orderId=<id>")
+    Modal->>Router: router.push("/?sheet=true&selected=<id>")
     Modal->>Modal: onClose() → Dialog closes
-    Router->>POS: navigate, nuqs sets orderId param
+    Router->>POS: navigate, nuqs sets selected param
     POS->>POS: order panel opens for that order
 ```
 
@@ -198,11 +198,11 @@ This is intentional — the architecture relies on **server-emitted lightweight
 events** and **client-side TanStack Query intelligence** to decide what to
 refetch.
 
-#### Considered & rejected: `/api/sse?orderId=X&date=Y&sheet=true`
+#### Considered & rejected: `/api/sse?selected=X&date=Y&sheet=true`
 
 | Problem | Detail |
 |---------|--------|
-| **EventSource is read-only** | The browser `EventSource` API sets URL params **only at connection time**. Every time `?orderId` or `?date` changes (nuqs writes to the URL bar), we'd need to **close and reconnect** — killing the event stream and introducing latency spikes. |
+| **EventSource is read-only** | The browser `EventSource` API sets URL params **only at connection time**. Every time `?selected` or `?date` changes (nuqs writes to the URL bar), we'd need to **close and reconnect** — killing the event stream and introducing latency spikes. |
 | **Multi-tab / multi-user** | Each tab and each user has different params. The server would need per-connection state tracking — session affinity, connection maps, cleanup timers — all for marginal gain. |
 | **TanStack Query already filters for free** | `queryClient.invalidateQueries()` only triggers a **network refetch for active queries** (those with a mounted React `useQuery` observer). Inactive/stale cache entries are just marked stale; they refetch lazily when the component using them next mounts. Zero wasted bandwidth. |
 
@@ -237,11 +237,9 @@ refetches queries that have an active observer.
 
 | nuqs param | tRPC query affected | SSE table trigger | Active? |
 |------------|--------------------|--------------------|---------|
-| `?orderId=abc` | `orders.getDetails({id:"abc"})` | `orders`, `order_items`, `order_item_extras` | ✅ Only if order panel is open |
 | `?selected=a,b` | `orders.getDetails({id})` for each | Same as above | ✅ Only the mounted detail |
 | `?date=2026-02-24` | `orders.list({date, timeZone, status})` | `orders` | ✅ Always mounted on POS |
 | `?sheet=true` | `orders.list(...)` (history sheet) | `orders` | ✅ Only while sheet is open |
-| `?admin=true` | `admin.status`, `alerts.adminList` | `platform_alerts` | ✅ Only in admin view |
 | _(none — POS default)_ | `products.list`, `extras.list`, `alerts.list({unreadOnly})` | `products`, `extras`, `platform_alerts` | ✅ Always mounted |
 
 ### tRPC v11 query key format & why `TABLE_INVALIDATION_MAP` needed fixing

@@ -4,7 +4,8 @@ import { useTRPC } from "@/lib/trpc/react";
 import { Product, ProductContextType } from "@/lib/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Updateable } from "kysely";
-import { useCallback, useMemo, useState } from "react";
+import { parseAsArrayOf, parseAsString, useQueryState } from "nuqs";
+import { useCallback, useMemo } from "react";
 
 const defaultProduct: Updateable<Product> = {
   id: "",
@@ -25,15 +26,31 @@ export function useProducts(): ProductContextType {
   const upsertMutation = useMutation(trpc.products.upsert.mutationOptions());
   const deleteMutation = useMutation(trpc.products.delete.mutationOptions());
 
-  const [currentProduct, setCurrentProduct] = useState<
-    Updateable<Product> | Product | undefined
-  >();
+  // Use shared 'selected' param for both products and orders
+  // System determines type by checking which Map contains the ID
+  const [selectedIds, setSelectedIds] = useQueryState(
+    "selected",
+    parseAsArrayOf(parseAsString).withDefault([]),
+  );
 
   const productsMap = useMemo(() => {
     return new Map<string, Product>(
       productsData?.map((p: Product) => [p.id, p]) ?? [],
     );
   }, [productsData]);
+
+  // Derive currentProduct from URL param
+  // Single selection: if ID exists in products map, it's a product
+  const currentProduct = useMemo(() => {
+    if (selectedIds.length !== 1) return undefined;
+    const selectedId = selectedIds[0];
+    
+    if (selectedId === "new") return { ...defaultProduct };
+    
+    // Check if this ID is a product (vs an order)
+    const product = productsMap.get(selectedId);
+    return product ? { ...defaultProduct, ...product } : undefined;
+  }, [selectedIds, productsMap]);
 
   const invalidateProducts = useCallback(
     () =>
@@ -47,11 +64,14 @@ export function useProducts(): ProductContextType {
     product?: Updateable<Product> | Product | null,
   ) => {
     if (typeof product === "undefined") {
-      setCurrentProduct(() => undefined);
+      // Close the form by clearing selection
+      setSelectedIds([]);
     } else if (product === null) {
-      setCurrentProduct({ ...defaultProduct });
+      // Open create form with "new" marker
+      setSelectedIds(["new"]);
     } else {
-      setCurrentProduct({ ...defaultProduct, ...product });
+      // Open edit form with product ID (single selection)
+      setSelectedIds([product.id || "new"]);
     }
   };
 
@@ -80,8 +100,9 @@ export function useProducts(): ProductContextType {
       await deleteMutation.mutateAsync({ id });
       await invalidateProducts();
 
+      // Close form if we just deleted the current product
       if (currentProduct?.id === id) {
-        setCurrentProduct(undefined);
+        setSelectedIds([]);
       }
     } catch (error) {
       throw error;

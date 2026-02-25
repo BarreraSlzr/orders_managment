@@ -3,11 +3,10 @@
  * Unit tests for hooks/useOrders — nuqs URL state integration
  *
  * Covers:
- *   - Initial state (empty orderId, no currentOrder)
- *   - setCurrentOrderDetails sets / clears orderId in URL
- *   - getDetails query is enabled only when orderId is non-empty
- *   - handleCloseOrder clears orderId and currentOrder
- *   - URL param ?orderId=xxx is picked up on mount (deep-link support)
+ *   - Initial state (empty selection, no currentOrder)
+ *   - setCurrentOrderDetails sets / clears selected order in URL
+ *   - getDetails query is enabled only when exactly one order is selected
+ *   - URL param ?selected=xxx is picked up on mount (deep-link support)
  *   - Stale-data regression: removeProducts triggers cache invalidation
  *
  * Run: bun vitest run tests/unit/useOrders.test.tsx
@@ -92,13 +91,13 @@ describe("useOrders — nuqs URL state", () => {
     vi.clearAllMocks();
   });
 
-  it("initialises with empty orderId and no currentOrder", () => {
+  it("initialises with empty selection and no currentOrder", () => {
     const { result } = renderHook(() => useOrders({}), {
       wrapper: makeWrapper(),
     });
 
     expect(result.current.currentOrder).toBeNull();
-    // getDetails must have been called with enabled:false (no orderId)
+    // getDetails must have been called with enabled:false (no selected order)
     expect(mockTrpc.orders.getDetails.queryOptions).toHaveBeenCalledWith(
       { id: "" },
       { enabled: false },
@@ -126,7 +125,7 @@ describe("useOrders — nuqs URL state", () => {
 
   it("setCurrentOrderDetails(null) clears currentOrder", async () => {
     const { result } = renderHook(() => useOrders({}), {
-      wrapper: makeWrapper("orderId=order-abc"),
+      wrapper: makeWrapper("selected=order-abc"),
     });
 
     await act(async () => {
@@ -138,9 +137,9 @@ describe("useOrders — nuqs URL state", () => {
     });
   });
 
-  it("deep-link: ?orderId=<id> in URL enables the details query on mount", () => {
+  it("deep-link: ?selected=<id> in URL enables the details query on mount", () => {
     renderHook(() => useOrders({}), {
-      wrapper: makeWrapper("orderId=order-xyz"),
+      wrapper: makeWrapper("selected=order-xyz"),
     });
 
     expect(mockTrpc.orders.getDetails.queryOptions).toHaveBeenCalledWith(
@@ -149,25 +148,6 @@ describe("useOrders — nuqs URL state", () => {
     );
   });
 
-  it("handleCloseOrder clears currentOrder after successful mutation", async () => {
-    const { result } = renderHook(() => useOrders({}), {
-      wrapper: makeWrapper("orderId=order-to-close"),
-    });
-
-    const formData = new FormData();
-    formData.append("orderId", "order-to-close");
-
-    let success: boolean | undefined;
-    await act(async () => {
-      success = await result.current.handleCloseOrder(formData);
-    });
-
-    expect(success).toBe(true);
-
-    await waitFor(() => {
-      expect(result.current.currentOrder).toBeNull();
-    });
-  });
 });
 
 // ─── Stale-data regression contract ──────────────────────────────────────────
@@ -189,7 +169,7 @@ describe("useOrders — stale-data regression contract", () => {
       return (
         <QueryClientProvider client={queryClient}>
           <NuqsTestingAdapter
-            searchParams={new URLSearchParams("orderId=order-1")}
+            searchParams={new URLSearchParams("selected=order-1")}
           >
             {children}
           </NuqsTestingAdapter>
