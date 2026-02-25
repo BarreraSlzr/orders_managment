@@ -61,6 +61,23 @@ export async function createPlatformAlert(params: CreateAlertParams): Promise<st
     .returning("id")
     .executeTakeFirstOrThrow();
 
+  // Emit a processed domain_event so the SSE stream can invalidate
+  // the alerts.list query on connected clients without waiting for the
+  // 60-second polling fallback.
+  try {
+    await getDb()
+      .insertInto("domain_events")
+      .values({
+        event_type: "platform_alert.created",
+        payload: JSON.stringify({ id: result.id, tenantId: tenantId ?? null }),
+        status: "processed",
+        tenant_id: tenantId ?? undefined,
+      })
+      .execute();
+  } catch {
+    // Non-fatal — alert was created; SSE will fall back to polling
+  }
+
   return result.id;
 }
 
