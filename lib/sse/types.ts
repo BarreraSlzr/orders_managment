@@ -15,6 +15,8 @@ export const NOTIFY_TABLES = [
   "inventory_items",
   "categories",
   "transactions",
+  "platform_alerts",
+  "product_consumptions",
 ] as const;
 
 export type NotifyTable = (typeof NOTIFY_TABLES)[number];
@@ -58,6 +60,10 @@ export const TABLE_INVALIDATION_MAP: Record<NotifyTable, string[][]> = {
   inventory_items: [["inventory", "items", "list"]],
   categories: [["inventory", "categories", "list"]],
   transactions: [["inventory", "transactions", "list"]],
+  /** Invalidate the tenant alerts list and unread badge */
+  platform_alerts: [["alerts", "list"]],
+  /** Invalidate product consumption / ingredient links */
+  product_consumptions: [["products", "consumptions", "list"]],
 };
 
 /** SSE endpoint configuration */
