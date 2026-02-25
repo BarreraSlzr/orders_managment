@@ -69,6 +69,18 @@ This project now routes write operations through explicit domain events.
 
 - `lib/sql/seed.ts` now provisions `domain_events` for event-store persistence.
 - Existing `calculate_order_total` trigger remains active and compatible with event-based order item writes.
+
+## Mercado Pago Docs Note
+
+When referencing Mercado Pago external documentation for retrieval/automation, prefer the same docs URL with `.md` appended (markdown-friendly content). If a specific page does not support `.md`, use the original HTML URL as fallback.
+
+## Mercado Pago Docs Index
+
+- [Platform + Tenant Architecture](docs/MERCADOPAGO_PLATFORM_TENANT_ARCHITECTURE.md)
+- [Issue 24 Context Pack](docs/MERCADOPAGO_ISSUE_24_CONTEXT.md)
+- [OAuth Integration](docs/MERCADOPAGO_OAUTH.md)
+- [Integration Diagrams](docs/MERCADOPAGO_DIAGRAMS.md)
+
 ## Authentication & Authorization
 
 Cookie-based session management using HMAC-SHA256 signatures (Web Crypto API, zero dependencies).

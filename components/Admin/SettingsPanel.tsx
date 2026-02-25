@@ -1,12 +1,13 @@
 "use client";
 
+import { EntitlementBanner } from "@/components/MercadoPago/EntitlementBanner";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,22 +16,22 @@ import { useTRPC } from "@/lib/trpc/react";
 import { formatUnixSecondsToReadable, getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle,
-  ArrowLeft,
-  ArrowRight,
-  BookOpen,
-  Building2,
-  CheckCircle,
-  CreditCard,
-  Download,
-  FileText,
-  LogOut,
-  Package,
-  RefreshCw,
-  Trash2,
-  Upload,
-  User,
-  XCircle,
+    AlertCircle,
+    ArrowLeft,
+    ArrowRight,
+    BookOpen,
+    Building2,
+    CheckCircle,
+    CreditCard,
+    Download,
+    FileText,
+    LogOut,
+    Package,
+    RefreshCw,
+    Trash2,
+    Upload,
+    User,
+    XCircle,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -640,6 +641,10 @@ function MercadoPagoTab() {
 
   return (
     <div className="space-y-4">
+      <EntitlementBanner
+        subscriptionStatus={creds?.subscriptionStatus}
+        gracePeriodEnd={creds?.gracePeriodEnd}
+      />
       {creds?.status === "error" && !disconnectedMode && (
         <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-red-50 text-red-700 border border-red-200">
           <AlertCircle className="h-4 w-4 shrink-0" />

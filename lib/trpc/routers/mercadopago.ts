@@ -11,6 +11,10 @@
  */
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import {
+  checkMpEntitlement,
+  mpEntitlementMessage,
+} from "@/lib/services/entitlements/checkEntitlement";
+import {
   completeAccessRequest,
   getLatestAccessRequest,
   upsertAccessRequest,
@@ -24,6 +28,7 @@ import {
   getAttempt,
   getLatestAttempt,
 } from "@/lib/services/mercadopago/statusService";
+import { getDb } from "@/lib/sql/database";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -35,10 +40,19 @@ const credentialsRouter = router({
   /**
    * Returns the connection status for the current tenant.
    * Note: access_token is NEVER returned to the client.
+   * Also includes the subscription/entitlement status so UI banners
+   * can warn about past_due or grace_period states.
    */
   get: tenantProcedure.query(async ({ ctx }) => {
     const creds = await getCredentials({ tenantId: ctx.tenantId });
     if (!creds) return null;
+
+    // Read entitlement row (may not exist when billing is not yet wired)
+    const entitlement = await getDb()
+      .selectFrom("tenant_entitlements")
+      .select(["subscription_status", "grace_period_end"])
+      .where("tenant_id", "=", ctx.tenantId)
+      .executeTakeFirst();
 
     return {
       id: creds.id,
@@ -48,6 +62,9 @@ const credentialsRouter = router({
       status: creds.status,
       errorMessage: creds.error_message,
       createdAt: creds.created,
+      // Subscription / entitlement — null when billing not yet enabled
+      subscriptionStatus: entitlement?.subscription_status ?? null,
+      gracePeriodEnd: entitlement?.grace_period_end ?? null,
     };
   }),
 
@@ -108,6 +125,8 @@ const credentialsRouter = router({
     .input(
       z.object({
         accessToken: z.string().min(1, "Access token is required"),
+        refreshToken: z.string().min(1).optional(),
+        expiresInSeconds: z.number().int().positive().optional(),
         appId: z.string().min(1, "App ID is required"),
         userId: z.string().min(1, "MP User ID is required"),
         contactEmail: z
@@ -120,6 +139,8 @@ const credentialsRouter = router({
       const creds = await upsertCredentials({
         tenantId: ctx.tenantId,
         accessToken: input.accessToken,
+        refreshToken: input.refreshToken,
+        expiresInSeconds: input.expiresInSeconds,
         appId: input.appId,
         userId: input.userId,
         contactEmail: input.contactEmail,
@@ -178,6 +199,15 @@ const paymentRouter = router({
         });
       }
 
+      // Entitlement check — hard block when subscription inactive
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
+
       // Fetch order total from DB (amount_cents = total * 100)
       const order = await getOrderItemsView({
         tenantId: ctx.tenantId,
@@ -194,6 +224,14 @@ const paymentRouter = router({
       }
 
       const amountCents = Math.round(order.total * 100);
+
+      if (amountCents <= 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "El total de la orden debe ser mayor a $0 para cobrar con Mercado Pago.",
+        });
+      }
 
       return dispatchDomainEvent({
         type: "order.payment.mercadopago.start",
@@ -241,6 +279,15 @@ const paymentRouter = router({
   cancel: managerProcedure
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      // Entitlement check (must have active sub to cancel — prevents orphan cancels)
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
+
       await cancelActiveAttempt({
         orderId: input.orderId,
         tenantId: ctx.tenantId,

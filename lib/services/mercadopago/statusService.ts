@@ -5,9 +5,11 @@
  * its lifecycle from pending → processing → approved/rejected/canceled/error.
  * Idempotency: only one non-terminal attempt per order is allowed.
  */
-import { db } from "@/lib/sql/database";
+import { getDb } from "@/lib/sql/database";
 import { PaymentSyncAttemptsTable } from "@/lib/sql/types";
 import { Selectable } from "kysely";
+import { getCredentials } from "./credentialsService";
+import { cancelPDVPaymentIntent } from "./paymentService";
 
 export type SyncAttempt = Selectable<PaymentSyncAttemptsTable>;
 export type SyncAttemptStatus = PaymentSyncAttemptsTable["status"];
@@ -40,7 +42,7 @@ export async function createAttempt({
   terminalId,
 }: CreateAttemptParams): Promise<SyncAttempt> {
   // Idempotency: block duplicate active attempts
-  const existing = await db
+  const existing = await getDb()
     .selectFrom("payment_sync_attempts")
     .select(["id", "status"])
     .where("tenant_id", "=", tenantId)
@@ -54,7 +56,7 @@ export async function createAttempt({
     );
   }
 
-  const row = await db
+  const row = await getDb()
     .insertInto("payment_sync_attempts")
     .values({
       tenant_id: tenantId,
@@ -79,10 +81,16 @@ export interface UpdateAttemptParams {
   terminalId?: string;
   responseData?: Record<string, unknown>;
   errorData?: Record<string, unknown>;
+  /** MP notification id for webhook deduplication. */
+  lastMpNotificationId?: string;
+  /** Timestamp of the successfully processed notification. */
+  lastProcessedAt?: Date;
 }
 
 /**
  * Updates an attempt's status and optional metadata.
+ * Pass `lastMpNotificationId` + `lastProcessedAt` from webhook handlers to
+ * record the notification that caused the transition (deduplication guard).
  */
 export async function updateAttempt({
   id,
@@ -92,8 +100,10 @@ export async function updateAttempt({
   terminalId,
   responseData,
   errorData,
+  lastMpNotificationId,
+  lastProcessedAt,
 }: UpdateAttemptParams): Promise<void> {
-  await db
+  await getDb()
     .updateTable("payment_sync_attempts")
     .set({
       status,
@@ -104,6 +114,12 @@ export async function updateAttempt({
       ...(terminalId !== undefined && { terminal_id: terminalId }),
       ...(responseData !== undefined && { response_data: responseData }),
       ...(errorData !== undefined && { error_data: errorData }),
+      ...(lastMpNotificationId !== undefined && {
+        last_mp_notification_id: lastMpNotificationId,
+      }),
+      ...(lastProcessedAt !== undefined && {
+        last_processed_at: lastProcessedAt,
+      }),
     })
     .where("id", "=", id)
     .execute();
@@ -121,7 +137,7 @@ export async function getAttempt({
   id: number;
   tenantId: string;
 }): Promise<SyncAttempt | null> {
-  const row = await db
+  const row = await getDb()
     .selectFrom("payment_sync_attempts")
     .selectAll()
     .where("id", "=", id)
@@ -141,7 +157,7 @@ export async function getLatestAttempt({
   orderId: string;
   tenantId: string;
 }): Promise<SyncAttempt | null> {
-  const row = await db
+  const row = await getDb()
     .selectFrom("payment_sync_attempts")
     .selectAll()
     .where("tenant_id", "=", tenantId)
@@ -155,6 +171,10 @@ export async function getLatestAttempt({
 
 /**
  * Cancels any non-terminal attempt for an order (allows retry).
+ *
+ * When the active attempt has a `terminal_id` + `mp_transaction_id` (PDV /
+ * Point Smart flow) we also send a best-effort cancel to the Mercado Pago API
+ * so the terminal stops waiting for the customer tap.
  */
 export async function cancelActiveAttempt({
   orderId,
@@ -163,11 +183,40 @@ export async function cancelActiveAttempt({
   orderId: string;
   tenantId: string;
 }): Promise<void> {
-  await db
-    .updateTable("payment_sync_attempts")
-    .set({ status: "canceled" })
+  // 1. Read the active attempt to obtain terminal / intent ids
+  const active = await getDb()
+    .selectFrom("payment_sync_attempts")
+    .select(["id", "terminal_id", "mp_transaction_id"])
     .where("tenant_id", "=", tenantId)
     .where("order_id", "=", orderId)
     .where("status", "not in", TERMINAL_STATUSES)
+    .executeTakeFirst();
+
+  if (!active) return; // nothing to cancel
+
+  // 2. Best-effort: cancel the PDV payment intent on the MP terminal
+  if (active.terminal_id && active.mp_transaction_id) {
+    try {
+      const creds = await getCredentials({ tenantId });
+      if (creds?.access_token) {
+        await cancelPDVPaymentIntent({
+          accessToken: creds.access_token,
+          deviceId: active.terminal_id,
+          intentId: active.mp_transaction_id,
+        });
+      }
+    } catch (error) {
+      console.warn(
+        `[statusService] Best-effort PDV cancel failed for attempt ${active.id}:`,
+        error instanceof Error ? error.message : error,
+      );
+    }
+  }
+
+  // 3. Mark the row as canceled in the DB
+  await getDb()
+    .updateTable("payment_sync_attempts")
+    .set({ status: "canceled" })
+    .where("id", "=", active.id)
     .execute();
 }

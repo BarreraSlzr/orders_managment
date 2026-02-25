@@ -1,3 +1,4 @@
+import { checkMpEntitlement } from "@/lib/services/entitlements/checkEntitlement";
 import {
     getCredentials,
     markCredentialsError,
@@ -227,6 +228,15 @@ export const domainEventHandlers: {
 
   "order.payment.mercadopago.start": async ({ payload }) => {
     const { tenantId, orderId, amountCents, flow } = payload;
+
+    // Entitlement check — mirrors the tRPC guard so direct dispatches
+    // cannot bypass the soft-gate when ENTITLEMENT_ENABLED=true
+    const entitlement = await checkMpEntitlement({ tenantId });
+    if (!entitlement.allowed) {
+      throw new Error(
+        `Tenant ${tenantId} is not entitled to Mercado Pago features (status: ${entitlement.reason}).`,
+      );
+    }
 
     // Fetch stored credentials
     const creds = await getCredentials({ tenantId });

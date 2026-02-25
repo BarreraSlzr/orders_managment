@@ -12,13 +12,18 @@
 
 const MP_BASE_URL = "https://api.mercadopago.com";
 
+/** Default timeout for all MP API calls (20s — MP expects response within 22s). */
+const MP_FETCH_TIMEOUT_MS = 20_000;
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface MpTerminal {
   id: string;
-  name: string;
+  name?: string;
   operating_mode: string;
   pos_id?: number;
+  store_id?: string;
+  external_pos_id?: string;
 }
 
 export interface MpQRPaymentResult {
@@ -26,11 +31,22 @@ export interface MpQRPaymentResult {
   in_store_order_id: string;
 }
 
+/** @deprecated Legacy Point API shape — use MpOrderResult for new v1/orders responses */
 export interface MpPDVPaymentIntentResult {
   id: string;
   state: string;
   device_id: string;
   amount: number;
+}
+
+/** MP Orders API v1 response shape (PDV flow, new endpoint) */
+export interface MpOrderResult {
+  id: string;
+  status: "open" | "closed" | "expired";
+  external_reference: string;
+  transactions: {
+    payments: Array<{ id: string; amount: string; status: string }>;
+  };
 }
 
 // ─── Internal helper ─────────────────────────────────────────────────────────
@@ -40,19 +56,31 @@ async function mpFetch<T>(params: {
   method?: "GET" | "POST" | "PUT" | "DELETE";
   path: string;
   body?: unknown;
+  /** Additional headers merged on top of Authorization + Content-Type */
+  extraHeaders?: Record<string, string>;
 }): Promise<T> {
-  const { accessToken, method = "GET", path, body } = params;
+  const { accessToken, method = "GET", path, body, extraHeaders } = params;
 
   const headers: HeadersInit = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
+    ...extraHeaders,
   };
 
-  const res = await fetch(`${MP_BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MP_FETCH_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${MP_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const json = await res.json();
 
@@ -78,11 +106,14 @@ export async function listTerminals({
 }: {
   accessToken: string;
 }): Promise<MpTerminal[]> {
-  const data = await mpFetch<{ devices?: MpTerminal[] }>({
+  const data = await mpFetch<{
+    data?: { terminals?: MpTerminal[] };
+    devices?: MpTerminal[];
+  }>({
     accessToken,
     path: "/terminals/v1/list",
   });
-  return data.devices ?? [];
+  return data.data?.terminals ?? data.devices ?? [];
 }
 
 // ─── QR flow ─────────────────────────────────────────────────────────────────
@@ -159,7 +190,13 @@ export interface CreatePDVPaymentIntentParams {
 
 /**
  * Sends a payment intent to a physical Point terminal (PDV mode).
- * Endpoint: POST /point/integration-api/devices/{device_id}/payment-intents
+ * Endpoint: POST /v1/orders  (MP Orders API — replaces legacy PDV endpoint)
+ *
+ * Changes from legacy:
+ *  - Amount is a decimal string ("15.00"), not integer cents
+ *  - Body nests payments inside transactions[]
+ *  - terminal_id goes inside config.point
+ *  - X-Idempotency-Key header required per call
  */
 export async function createPDVPaymentIntent({
   accessToken,
@@ -167,23 +204,77 @@ export async function createPDVPaymentIntent({
   amountCents,
   externalReference,
   description = "Orden",
-}: CreatePDVPaymentIntentParams): Promise<MpPDVPaymentIntentResult> {
+}: CreatePDVPaymentIntentParams): Promise<MpOrderResult> {
   const body = {
-    amount: amountCents / 100,
+    type: "point",
+    external_reference: externalReference,
     description,
-    payment: {
-      type: "debit_card",
+    transactions: {
+      payments: [
+        {
+          amount: (amountCents / 100).toFixed(2),
+        },
+      ],
     },
-    additional_info: {
-      external_reference: externalReference,
-      print_on_terminal: true,
+    config: {
+      point: {
+        terminal_id: deviceId,
+        print_on_terminal: "full_ticket",
+      },
+      payment_method: {
+        default_type: "any",
+      },
     },
   };
 
-  return mpFetch<MpPDVPaymentIntentResult>({
+  return mpFetch<MpOrderResult>({
     accessToken,
     method: "POST",
-    path: `/point/integration-api/devices/${deviceId}/payment-intents`,
+    path: "/v1/orders",
     body,
+    extraHeaders: {
+      "X-Idempotency-Key": crypto.randomUUID(),
+    },
   });
+}
+
+// ─── PDV cancel intent ─────────────────────────────────────────────────────────
+
+export interface CancelPDVPaymentIntentParams {
+  accessToken: string;
+  /** Terminal device_id */
+  deviceId: string;
+  /** Payment intent id (mp_transaction_id) */
+  intentId: string;
+}
+
+/**
+ * Cancels a payment intent on the Point terminal.
+ * Endpoint: DELETE /v1/orders/{orderId}  (MP Orders API)
+ *
+ * Note: the new Orders API no longer uses device_id in the cancel path.
+ * The deviceId parameter is kept in the interface for backward compatibility
+ * but is not sent to the API.
+ *
+ * Best-effort: swallows errors if the intent was already finished or does not
+ * exist on the MP side.  The DB row is still marked canceled by the caller.
+ */
+export async function cancelPDVPaymentIntent({
+  accessToken,
+  // deviceId kept for API compatibility — not used by new Orders API cancel endpoint
+  intentId,
+}: CancelPDVPaymentIntentParams): Promise<void> {
+  try {
+    await mpFetch<unknown>({
+      accessToken,
+      method: "DELETE",
+      path: `/v1/orders/${intentId}`,
+    });
+  } catch (error) {
+    // Best-effort — the intent may already be finished / expired.
+    console.warn(
+      `[mp-pdv] cancelPDVPaymentIntent best-effort failure for intent ${intentId}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
 }

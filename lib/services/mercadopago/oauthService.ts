@@ -18,6 +18,27 @@ const MP_AUTH_BASE_URL =
   process.env.MP_AUTH_BASE_URL || "https://auth.mercadopago.com.mx";
 const MP_API_BASE_URL = process.env.MP_API_BASE_URL || "https://api.mercadopago.com.mx";
 
+/** Timeout for all MP OAuth / API calls (20s). */
+const MP_OAUTH_TIMEOUT_MS = 20_000;
+
+/**
+ * Creates a fetch call with an AbortController timeout.
+ * Cleans up the timer regardless of outcome.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = MP_OAUTH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface OAuthConfig {
   clientId: string;
   clientSecret: string;
@@ -121,7 +142,7 @@ export async function exchangeCodeForToken(params: {
     redirect_uri: config.redirectUri,
   });
 
-  const response = await fetch(`${MP_API_BASE_URL}/oauth/token`, {
+  const response = await fetchWithTimeout(`${MP_API_BASE_URL}/oauth/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -140,6 +161,40 @@ export async function exchangeCodeForToken(params: {
 }
 
 /**
+ * Exchanges a refresh token for a new access token.
+ */
+export async function refreshAccessToken(params: {
+  config: OAuthConfig;
+  refreshToken: string;
+}): Promise<OAuthTokenResponse> {
+  const { config, refreshToken } = params;
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
+    refresh_token: refreshToken,
+  });
+
+  const response = await fetchWithTimeout(`${MP_API_BASE_URL}/oauth/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const error = await response.text().catch(() => "Unknown error");
+    throw new Error(`Failed to refresh token: ${error}`);
+  }
+
+  const data = await response.json();
+  return data as OAuthTokenResponse;
+}
+
+/**
  * Fetches user info from MP API using access token.
  */
 export async function getUserInfo(params: {
@@ -147,7 +202,7 @@ export async function getUserInfo(params: {
 }): Promise<OAuthUserInfo> {
   const { accessToken } = params;
 
-  const response = await fetch(`${MP_API_BASE_URL}/users/me`, {
+  const response = await fetchWithTimeout(`${MP_API_BASE_URL}/users/me`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",

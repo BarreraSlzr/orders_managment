@@ -2,9 +2,9 @@ import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import { completeAccessRequest } from "@/lib/services/mercadopago/accessRequestsService";
 import { upsertCredentials } from "@/lib/services/mercadopago/credentialsService";
 import {
-  exchangeCodeForToken,
-  getOAuthConfig,
-  getUserInfo,
+    exchangeCodeForToken,
+    getOAuthConfig,
+    getUserInfo,
 } from "@/lib/services/mercadopago/oauthService";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -69,6 +69,8 @@ export async function handleOAuthCallback(request: NextRequest) {
     const creds = await upsertCredentials({
       tenantId,
       accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token,
+      expiresInSeconds: tokenResponse.expires_in,
       appId: config.clientId,
       userId: userInfo.id.toString(),
       contactEmail,

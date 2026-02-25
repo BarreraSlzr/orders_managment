@@ -1,7 +1,7 @@
 /**
  * accessRequestsService — manage Mercado Pago access requests per tenant.
  */
-import { db } from "@/lib/sql/database";
+import { getDb } from "@/lib/sql/database";
 import { MercadopagoAccessRequestsTable } from "@/lib/sql/types";
 import { getIsoTimestamp } from "@/utils/stamp";
 import { Selectable } from "kysely";
@@ -16,7 +16,7 @@ export interface GetLatestAccessRequestParams {
 export async function getLatestAccessRequest({
   tenantId,
 }: GetLatestAccessRequestParams): Promise<MpAccessRequest | null> {
-  const row = await db
+  const row = await getDb()
     .selectFrom("mercadopago_access_requests")
     .selectAll()
     .where("tenant_id", "=", tenantId)
@@ -38,7 +38,7 @@ export async function upsertAccessRequest({
 }: UpsertAccessRequestParams): Promise<MpAccessRequest> {
   const now = getIsoTimestamp();
 
-  const existing = await db
+  const existing = await getDb()
     .selectFrom("mercadopago_access_requests")
     .selectAll()
     .where("tenant_id", "=", tenantId)
@@ -48,7 +48,7 @@ export async function upsertAccessRequest({
     .executeTakeFirst();
 
   if (existing) {
-    return db
+    return getDb()
       .updateTable("mercadopago_access_requests")
       .set({
         contact_email: contactEmail,
@@ -60,7 +60,7 @@ export async function upsertAccessRequest({
       .executeTakeFirstOrThrow();
   }
 
-  return db
+  return getDb()
     .insertInto("mercadopago_access_requests")
     .values({
       tenant_id: tenantId,
@@ -84,7 +84,7 @@ export async function completeAccessRequest({
 }: CompleteAccessRequestParams): Promise<void> {
   const now = getIsoTimestamp();
 
-  const query = db
+  const query = getDb()
     .updateTable("mercadopago_access_requests")
     .set({
       status: "completed",

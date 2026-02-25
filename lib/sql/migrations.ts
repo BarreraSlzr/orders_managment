@@ -951,6 +951,232 @@ const migration011: Migration = {
   },
 };
 
+// ── v12: Mercado Pago token lifecycle fields ───────────────────────────────
+
+const migration012: Migration = {
+  version: 12,
+  description:
+    "Add refresh_token and token expiry tracking fields to mercadopago_credentials",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'mercadopago_credentials'
+      AND column_name = 'refresh_token'
+  ) THEN
+    ALTER TABLE mercadopago_credentials
+      ADD COLUMN refresh_token varchar;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'mercadopago_credentials'
+      AND column_name = 'token_expires_at'
+  ) THEN
+    ALTER TABLE mercadopago_credentials
+      ADD COLUMN token_expires_at timestamptz;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_name = 'mercadopago_credentials'
+      AND column_name = 'refreshed_at'
+  ) THEN
+    ALTER TABLE mercadopago_credentials
+      ADD COLUMN refreshed_at timestamptz;
+  END IF;
+END $$;
+`
+      )
+    );
+
+    console.info("[v12] mercadopago_credentials refresh token fields added.");
+  },
+};
+
+// ── v13: Platform subscription + entitlement domain ─────────────────────────
+
+const migration013: Migration = {
+  version: 13,
+  description:
+    "Add tenant_subscriptions, tenant_entitlements, tenant_billing_events for entitlement soft-gate",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+CREATE TABLE IF NOT EXISTS tenant_subscriptions (
+  id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id                TEXT NOT NULL,
+  provider                 TEXT NOT NULL,
+  external_subscription_id TEXT,
+  status                   TEXT NOT NULL DEFAULT 'none',
+  current_period_end       TIMESTAMPTZ,
+  canceled_at              TIMESTAMPTZ,
+  metadata                 JSONB,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS tenant_subscriptions_active_uniq
+  ON tenant_subscriptions (tenant_id, provider)
+  WHERE status NOT IN ('canceled', 'expired');
+
+CREATE TABLE IF NOT EXISTS tenant_entitlements (
+  tenant_id           TEXT PRIMARY KEY,
+  subscription_status TEXT NOT NULL DEFAULT 'none',
+  features_enabled    TEXT[] NOT NULL DEFAULT '{}',
+  grace_period_end    TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tenant_billing_events (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id  TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload    JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS tenant_billing_events_tenant_id_idx
+  ON tenant_billing_events (tenant_id);
+`
+      )
+    );
+
+    console.info(
+      "[v13] tenant_subscriptions, tenant_entitlements, tenant_billing_events created.",
+    );
+  },
+};
+
+// ── v14: Idempotency columns on payment_sync_attempts ────────────────────────
+
+const migration014: Migration = {
+  version: 14,
+  description:
+    "Add last_mp_notification_id and last_processed_at to payment_sync_attempts for webhook deduplication",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'payment_sync_attempts'
+      AND column_name = 'last_mp_notification_id'
+  ) THEN
+    ALTER TABLE payment_sync_attempts
+      ADD COLUMN last_mp_notification_id TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'payment_sync_attempts'
+      AND column_name = 'last_processed_at'
+  ) THEN
+    ALTER TABLE payment_sync_attempts
+      ADD COLUMN last_processed_at TIMESTAMPTZ;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS payment_sync_attempts_notification_id_idx
+  ON payment_sync_attempts (last_mp_notification_id)
+  WHERE last_mp_notification_id IS NOT NULL;
+`
+      )
+    );
+
+    console.info(
+      "[v14] payment_sync_attempts idempotency columns (last_mp_notification_id, last_processed_at) added.",
+    );
+  },
+};
+
+// ── v15: Billing event deduplication — external_event_id ─────────────────────
+
+const migration015: Migration = {
+  version: 15,
+  description:
+    "Add external_event_id to tenant_billing_events for webhook deduplication",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'tenant_billing_events'
+      AND column_name = 'external_event_id'
+  ) THEN
+    ALTER TABLE tenant_billing_events
+      ADD COLUMN external_event_id TEXT;
+  END IF;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_events_external_event_id
+  ON tenant_billing_events (external_event_id)
+  WHERE external_event_id IS NOT NULL;
+`
+      )
+    );
+
+    console.info(
+      "[v15] tenant_billing_events.external_event_id column + unique partial index added.",
+    );
+  },
+};
+
+// ── v16: platform_alerts — cross-scope notification store ────────────────────
+
+const migration016: Migration = {
+  version: 16,
+  description:
+    "Add platform_alerts table for claims, subscription events and changelog notices",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+CREATE TABLE IF NOT EXISTS platform_alerts (
+  id          TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  tenant_id   TEXT        NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  scope       TEXT        NOT NULL DEFAULT 'tenant', -- 'tenant' | 'admin'
+  type        TEXT        NOT NULL,                  -- 'claim' | 'subscription' | 'changelog' | 'system'
+  severity    TEXT        NOT NULL DEFAULT 'info',   -- 'info' | 'warning' | 'critical'
+  title       TEXT        NOT NULL,
+  body        TEXT        NOT NULL DEFAULT '',
+  source_type TEXT        NULL,                      -- 'mp_claim' | 'mp_subscription' | 'changelog'
+  source_id   TEXT        NULL,                      -- external id for drill-down
+  metadata    JSONB       NULL,
+  read_at     TIMESTAMPTZ NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS platform_alerts_tenant_id_idx
+  ON platform_alerts (tenant_id)
+  WHERE tenant_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS platform_alerts_scope_type_idx
+  ON platform_alerts (scope, type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS platform_alerts_unread_idx
+  ON platform_alerts (tenant_id, created_at DESC)
+  WHERE read_at IS NULL;
+`
+      )
+    );
+
+    console.info("[v16] platform_alerts table created.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -965,4 +1191,9 @@ export const allMigrations: Migration[] = [
   migration009,
   migration010,
   migration011,
+  migration012,
+  migration013,
+  migration014,
+  migration015,
+  migration016,
 ];
