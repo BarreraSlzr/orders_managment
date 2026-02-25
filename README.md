@@ -74,12 +74,37 @@ This project now routes write operations through explicit domain events.
 
 When referencing Mercado Pago external documentation for retrieval/automation, prefer the same docs URL with `.md` appended (markdown-friendly content). If a specific page does not support `.md`, use the original HTML URL as fallback.
 
+## Test Commands (Env-safe)
+
+Use these commands to avoid test-runner/env mismatches:
+
+- Unit tests (Vitest):
+
+   ```bash
+   bun run test
+   ```
+
+- E2E tests (Playwright + `.env.local` auto-loaded):
+
+   ```bash
+   bun run test:e2e
+   ```
+
+- Full check (unit + e2e):
+
+   ```bash
+   bun run test:all
+   ```
+
+Important: do not run Playwright specs with `bun test` directly. That can produce errors like `Playwright Test did not expect test.beforeEach()/test.describe()`.
+
 ## Mercado Pago Docs Index
 
 - [Platform + Tenant Architecture](docs/MERCADOPAGO_PLATFORM_TENANT_ARCHITECTURE.md)
 - [Issue 24 Context Pack](docs/MERCADOPAGO_ISSUE_24_CONTEXT.md)
 - [OAuth Integration](docs/MERCADOPAGO_OAUTH.md)
 - [Integration Diagrams](docs/MERCADOPAGO_DIAGRAMS.md)
+- [nuqs URL State Guide](docs/NUQS_URL_STATE.md)
 
 ## Authentication & Authorization
 
@@ -128,24 +153,3 @@ Cookie-based session management using HMAC-SHA256 signatures (Web Crypto API, ze
 ```bash
 bun vitest run lib/auth/__tests__
 ```
-
-## Admin Query Prompt
-
-You can pass `?admin=role:key:username:email` on any page to trigger a global
-toast-style prompt that requests the admin password. Any payload is accepted
-as long as the password matches. Successful verification sets a cross-domain
-cookie with the shared API key.
-
-### Required Env Vars
-
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `ADMIN_PASSWORD` | **yes** | — | Admin password used by the prompt |
-| `ADMIN_SHARED_API_KEY` | **yes** | — | Shared API key stored in cookie |
-| `ADMIN_API_KEY_COOKIE` | no | `__admin_api_key` | Cookie name for shared API key |
-
-### Server-to-Server Usage
-
-`POST /api/admin/verify` is public and requires the admin password plus the
-`admin` payload. Successful validation sets or refreshes the shared API key
-cookie. Other `/api/admin/*` endpoints require the shared API key.
