@@ -14,6 +14,7 @@
  *   https://www.mercadopago.com.mx/developers/en/docs/your-integrations/notifications/webhooks
  *   https://www.mercadopago.com.mx/developers/en/docs/mp-point/integration-configuration/integrate-with-pdv/notifications
  */
+import { createPlatformAlert } from "@/lib/services/alerts/alertsService";
 import { getDb } from "@/lib/sql/database";
 import type { PaymentSyncAttemptsTable } from "@/lib/sql/types";
 import { createHmac, timingSafeEqual } from "crypto";
@@ -396,6 +397,158 @@ export async function handleMpConnectEvent(params: {
   };
 }
 
+// ─── Claim handler ───────────────────────────────────────────────────────────
+
+/**
+ * Handles `type: "claim"` webhooks (buyer dispute against a payment).
+ *
+ * - Creates a platform_alert for the tenant so it shows up in the
+ *   Notifications tab (severity: 'critical' — requires attention).
+ * - Also creates an admin-scoped alert so the platform owner is aware.
+ * - Marks the linked payment sync attempt as 'error' so the POS UI
+ *   reflects the conflict (attempt is looked up via mp_transaction_id
+ *   matching data.id, which MP populates with the real payment_id for
+ *   claim events).
+ *
+ * @see https://www.mercadopago.com.mx/developers/en/docs/your-integrations/notifications/webhooks
+ */
+export async function handleClaimEvent(params: {
+  notification: MpWebhookNotification;
+  tenantId: string;
+}): Promise<WebhookHandlerResult> {
+  const { notification, tenantId } = params;
+  const claimId = notification.data.id;
+  const action = notification.action ?? "created";
+
+  // Only act on first creation to avoid re-alerting on subsequent updates
+  const titleSuffix = action === "created" ? "" : ` (${action})`;
+
+  await Promise.all([
+    // Tenant alert — visible in the Settings > Notificaciones tab
+    createPlatformAlert({
+      tenantId,
+      scope: "tenant",
+      type: "claim",
+      severity: "critical",
+      title: `Reclamo recibido${titleSuffix}`,
+      body:
+        "Mercado Pago registró un reclamo asociado a un pago de esta cuenta. " +
+        "Revisa el Panel de MP para más detalles y responde dentro del plazo indicado.",
+      sourceType: "mp_claim",
+      sourceId: claimId,
+      metadata: {
+        notification_id: notification.id,
+        action,
+        user_id: notification.user_id,
+      },
+    }),
+    // Admin alert — always cc'd on claims for billing awareness
+    createPlatformAlert({
+      tenantId,
+      scope: "admin",
+      type: "claim",
+      severity: "warning",
+      title: `Reclamo MP — tenant ${tenantId}${titleSuffix}`,
+      body: `Claim ID: ${claimId}. Action: ${action}.`,
+      sourceType: "mp_claim",
+      sourceId: claimId,
+      metadata: {
+        tenant_id: tenantId,
+        notification_id: notification.id,
+        action,
+      },
+    }),
+  ]);
+
+  // Mark the linked active payment attempt as 'error' so the POS reflects it.
+  // MP claim data.id is the payment_id — match against mp_transaction_id.
+  const attempt = await getDb()
+    .selectFrom("payment_sync_attempts")
+    .select("id")
+    .where("tenant_id", "=", tenantId)
+    .where("mp_transaction_id", "=", claimId)
+    .where("status", "not in", TERMINAL_STATUSES)
+    .orderBy("created", "desc")
+    .limit(1)
+    .executeTakeFirst();
+
+  if (attempt) {
+    await updateAttempt({
+      id: attempt.id,
+      status: "error",
+      responseData: notification as unknown as Record<string, unknown>,
+      lastMpNotificationId: notification.id.toString(),
+      lastProcessedAt: new Date(),
+    });
+  }
+
+  return {
+    handled: true,
+    detail: `Claim ${claimId} (action=${action}) — alert created${attempt ? ", attempt marked error" : ""}`,
+  };
+}
+
+// ─── Subscription handler ────────────────────────────────────────────────────
+
+/**
+ * Handles subscription webhook types arriving at the TENANT payment endpoint:
+ *   - `subscription_preapproval`            (plan created / updated)
+ *   - `subscription_authorized_payment`     (payment charged / failed)
+ *
+ * These billing events are fully processed by the dedicated billing app via
+ * /api/billing/mercadopago/webhook. When they arrive here (because the app
+ * has both Point and subscription events enabled on the same webhook URL)
+ * we create informational alerts but skip subscription state mutations —
+ * those are handled by billingWebhookService.
+ *
+ * This ensures tenants and admins see subscription activity in the
+ * Notifications tab without duplicating billing logic.
+ */
+export async function handleSubscriptionEvent(params: {
+  notification: MpWebhookNotification;
+  tenantId: string;
+}): Promise<WebhookHandlerResult> {
+  const { notification, tenantId } = params;
+  const subId = notification.data.id;
+  const eventType = notification.type;
+  const action = notification.action ?? "";
+
+  const isPaymentEvent = eventType === "subscription_authorized_payment";
+  const isFailedPayment =
+    isPaymentEvent &&
+    (action.includes("fail") || action.includes("reject") || action.includes("cancel"));
+
+  await createPlatformAlert({
+    tenantId,
+    scope: "tenant",
+    type: "subscription",
+    severity: isFailedPayment ? "warning" : "info",
+    title: isPaymentEvent
+      ? isFailedPayment
+        ? "Pago de suscripción fallido"
+        : "Pago de suscripción procesado"
+      : "Actualización de suscripción",
+    body: isPaymentEvent
+      ? isFailedPayment
+        ? "Un cobro de suscripción no pudo procesarse. Revisa el estado en el Panel de MP."
+        : "Se procesó correctamente un cobro de suscripción."
+      : `Estado de suscripción actualizado (${action || eventType}).`,
+    sourceType: "mp_subscription",
+    sourceId: subId,
+    metadata: {
+      notification_id: notification.id,
+      event_type: eventType,
+      action,
+      user_id: notification.user_id,
+    },
+  });
+
+  return {
+    handled: true,
+    detail: `Subscription event ${eventType}/${action} for sub ${subId} — alert created`,
+  };
+}
+
 // ─── Main Processor ──────────────────────────────────────────────────────────
 
 export interface ProcessWebhookResult {
@@ -463,6 +616,18 @@ export async function processWebhook(params: {
 
     case "mp-connect":
       result = await handleMpConnectEvent({ notification, tenantId });
+      break;
+
+    // Buyer dispute against a payment — creates critical alert + marks attempt error.
+    case "claim":
+      result = await handleClaimEvent({ notification, tenantId });
+      break;
+
+    // Subscription lifecycle events (primarily handled by billing endpoint).
+    // Create informational alerts here so they appear in the Notifications tab.
+    case "subscription_preapproval":
+    case "subscription_authorized_payment":
+      result = await handleSubscriptionEvent({ notification, tenantId });
       break;
 
     default:

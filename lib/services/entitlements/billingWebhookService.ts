@@ -22,6 +22,7 @@
  *   subscription.expired     → status: 'expired'
  *   subscription.reactivated → status: 'active'
  */
+import { createPlatformAlert } from "@/lib/services/alerts/alertsService";
 import { getDb, sql } from "@/lib/sql/database";
 import { z } from "zod";
 
@@ -152,6 +153,52 @@ export async function processBillingEvent(raw: unknown): Promise<void> {
       payload: raw as Record<string, unknown>,
     })
     .execute();
+
+  // 4. Create platform alert for actionable billing states
+  const alertConfig: Record<
+    string,
+    { severity: "info" | "warning" | "critical"; title: string; body: string } | undefined
+  > = {
+    past_due: {
+      severity: "warning",
+      title: "Pago de suscripción pendiente",
+      body: "No se pudo cobrar el plan. Actualiza tu método de pago en Mercado Pago para evitar interrupciones.",
+    },
+    grace_period: {
+      severity: "warning",
+      title: "Período de gracia activo",
+      body: "Tu suscripción entró en período de gracia. Regulariza el pago para mantener el acceso completo.",
+    },
+    canceled: {
+      severity: "critical",
+      title: "Suscripción cancelada",
+      body: "El plan fue cancelado. Contacta a soporte si esto fue un error o reactiva la suscripción.",
+    },
+    expired: {
+      severity: "critical",
+      title: "Suscripción expirada",
+      body: "El plan ha expirado. Algunas funciones pueden estar deshabilitadas hasta que renueves.",
+    },
+  };
+
+  const alertDef = alertConfig[event.status];
+  if (alertDef) {
+    await createPlatformAlert({
+      tenantId: event.tenantId,
+      scope: "tenant",
+      type: "subscription",
+      severity: alertDef.severity,
+      title: alertDef.title,
+      body: alertDef.body,
+      sourceType: "mp_subscription",
+      sourceId: event.externalSubscriptionId,
+      metadata: {
+        event_type: event.eventType,
+        provider: event.provider,
+        external_event_id: event.externalEventId,
+      },
+    });
+  }
 
   console.info(
     `[billingWebhook] tenant=${event.tenantId} provider=${event.provider} event=${event.eventType} status=${event.status}`,

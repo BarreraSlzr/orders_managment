@@ -1134,6 +1134,49 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_billing_events_external_event_id
   },
 };
 
+// ── v16: platform_alerts — cross-scope notification store ────────────────────
+
+const migration016: Migration = {
+  version: 16,
+  description:
+    "Add platform_alerts table for claims, subscription events and changelog notices",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+CREATE TABLE IF NOT EXISTS platform_alerts (
+  id          TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+  tenant_id   TEXT        NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  scope       TEXT        NOT NULL DEFAULT 'tenant', -- 'tenant' | 'admin'
+  type        TEXT        NOT NULL,                  -- 'claim' | 'subscription' | 'changelog' | 'system'
+  severity    TEXT        NOT NULL DEFAULT 'info',   -- 'info' | 'warning' | 'critical'
+  title       TEXT        NOT NULL,
+  body        TEXT        NOT NULL DEFAULT '',
+  source_type TEXT        NULL,                      -- 'mp_claim' | 'mp_subscription' | 'changelog'
+  source_id   TEXT        NULL,                      -- external id for drill-down
+  metadata    JSONB       NULL,
+  read_at     TIMESTAMPTZ NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS platform_alerts_tenant_id_idx
+  ON platform_alerts (tenant_id)
+  WHERE tenant_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS platform_alerts_scope_type_idx
+  ON platform_alerts (scope, type, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS platform_alerts_unread_idx
+  ON platform_alerts (tenant_id, created_at DESC)
+  WHERE read_at IS NULL;
+`
+      )
+    );
+
+    console.info("[v16] platform_alerts table created.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1152,4 +1195,5 @@ export const allMigrations: Migration[] = [
   migration013,
   migration014,
   migration015,
+  migration016,
 ];

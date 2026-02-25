@@ -267,6 +267,32 @@ export interface TenantBillingEventsTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+// ─── Platform alerts ─────────────────────────────────────────────────────────
+
+export type AlertType = "claim" | "subscription" | "changelog" | "system";
+export type AlertSeverity = "info" | "warning" | "critical";
+export type AlertScope = "tenant" | "admin";
+
+export interface PlatformAlertsTable {
+  id: Generated<string>;
+  /** NULL = admin-only (global) or changelog broadcast */
+  tenant_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  scope: AlertScope;
+  type: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  body: string;
+  /** Discriminator for the source system: 'mp_claim' | 'mp_subscription' | 'changelog' | etc. */
+  source_type: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  /** Provider-side id (claim_id, subscription_id, entry slug…) for drill-down */
+  source_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  read_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+export type PlatformAlert = Selectable<PlatformAlertsTable>;
+
 // Keys of this interface are table names.
 export interface Database {
   tenants: TenantTable;
@@ -290,6 +316,7 @@ export interface Database {
   tenant_subscriptions: TenantSubscriptionsTable;
   tenant_entitlements: TenantEntitlementsTable;
   tenant_billing_events: TenantBillingEventsTable;
+  platform_alerts: PlatformAlertsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;
 }
