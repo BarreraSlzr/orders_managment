@@ -68,7 +68,6 @@ describe("/api/billing/mercadopago/webhook", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    vi.resetModules();
     mockProcessBillingEvent.mockClear();
     process.env = { ...originalEnv };
   });

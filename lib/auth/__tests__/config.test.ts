@@ -25,6 +25,10 @@ describe("lib/auth/config", () => {
 
   it("returns config with defaults when only AUTH_SECRET is set", () => {
     process.env.AUTH_SECRET = "a".repeat(32);
+    delete process.env.AUTH_COOKIE_NAME;
+    delete process.env.AUTH_SESSION_TTL;
+    delete process.env.AUTH_ALLOWED_ORIGINS;
+    delete process.env.AUTH_COOKIE_DOMAIN;
     const cfg = getAuthConfig();
 
     expect(cfg.secret).toBe("a".repeat(32));

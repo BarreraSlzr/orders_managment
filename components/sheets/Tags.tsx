@@ -2,21 +2,28 @@
 
 import { Button } from "@/components/ui/button";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
 } from "@/components/ui/sheet";
 import { useProductsFilter } from "@/context/useProductsFilter";
 import { Search } from "lucide-react";
+import { parseAsBoolean, useQueryState } from "nuqs";
 import { FilterControls } from "../FilterControls";
 
 export function TagsSheet() {
   const { selectedTags, searchQuery } = useProductsFilter();
+  
+  // Use nuqs for filter sheet state (supports E2E direct navigation)
+  const [filtersOpen, setFiltersOpen] = useQueryState(
+    "filters",
+    parseAsBoolean.withDefault(false),
+  );
 
   return (
-    <Sheet>
+    <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
       <SheetTrigger asChild>
         <Button className="relative h-16 w-16 rounded-full">
           <Search className="!h-6 !w-6 text-primary-foreground" />

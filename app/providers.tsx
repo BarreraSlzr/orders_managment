@@ -1,6 +1,5 @@
 "use client";
 
-import AdminQueryListener from "@/components/Admin/AdminQueryListener";
 import SSEInvalidationListener from "@/components/SSE/SSEInvalidationListener";
 import { AdminDefaultsProvider } from "@/context/useAdminDefaults";
 import { TRPCProvider } from "@/lib/trpc/react";
@@ -36,7 +35,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <AdminDefaultsProvider>
           <NuqsAdapter>
             <Suspense>
-              <AdminQueryListener />
               <SSEInvalidationListener />
               {children}
             </Suspense>

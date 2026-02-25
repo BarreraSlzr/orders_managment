@@ -133,6 +133,34 @@ export const TEST_IDS = {
     /** The `<form>` wrapping the receipt */
     FORM: "receipt-form",
   },
+
+  // ─── Settings FAB + Modal ─────────────────────────────────────────────────
+  SETTINGS: {
+    /** Gear FAB button that opens the settings modal */
+    FAB: "settings-fab",
+    /** AlertFABPrefix chip shown to the left of the gear */
+    ALERT_PREFIX_CHIP: "settings-alert-prefix-chip",
+    /** The SettingsModal Dialog root */
+    MODAL: "settings-modal",
+    /** Root of the Notifications tab inside SettingsModal */
+    NOTIFICATIONS_TAB: "settings-notifications-tab",
+    /** Unread count badge inside Notifications tab header */
+    UNREAD_BADGE: "settings-notifications-unread-badge",
+    /** Toggle button that filters unread-only alerts */
+    UNREAD_FILTER_BTN: "settings-notifications-unread-filter",
+    /** "Marcar todas como leídas" button */
+    MARK_ALL_READ_BTN: "settings-notifications-mark-all-read",
+  },
+
+  // ─── Platform Alerts (cards inside Notifications tab) ────────────────────
+  ALERTS: {
+    /** Alert card root — append `:${alert.id}` */
+    CARD: "alert-card",
+    /** "Marcar leído" button — append `:${alert.id}` */
+    MARK_READ_BTN: "alert-mark-read-btn",
+    /** "Ver orden →" link button — append `:${alert.id}` */
+    ORDER_LINK_BTN: "alert-order-link-btn",
+  },
 } as const;
 
 /** Helper to build a dynamic testid with a suffix (e.g. row id, product id) */

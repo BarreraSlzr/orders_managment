@@ -419,12 +419,25 @@ export async function handleClaimEvent(params: {
   const { notification, tenantId } = params;
   const claimId = notification.data.id;
   const action = notification.action ?? "created";
-
-  // Only act on first creation to avoid re-alerting on subsequent updates
   const titleSuffix = action === "created" ? "" : ` (${action})`;
 
+  // Resolve linked order first — so we can embed order_id in alert metadata
+  // for the deep-link in the Notifications tab (/?sheet=true&selected=<orderId>).
+  // MP populates data.id with the real payment_id for claim events.
+  const attempt = await getDb()
+    .selectFrom("payment_sync_attempts")
+    .select(["id", "order_id"])
+    .where("tenant_id", "=", tenantId)
+    .where("mp_transaction_id", "=", claimId)
+    .orderBy("created", "desc")
+    .limit(1)
+    .executeTakeFirst();
+
+  const orderId = attempt?.order_id ?? null;
+
   await Promise.all([
-    // Tenant alert — visible in the Settings > Notificaciones tab
+    // Tenant alert — visible in the Settings > Notificaciones tab.
+    // order_id stored in metadata enables the deep-link button on the alert card.
     createPlatformAlert({
       tenantId,
       scope: "tenant",
@@ -440,38 +453,30 @@ export async function handleClaimEvent(params: {
         notification_id: notification.id,
         action,
         user_id: notification.user_id,
+        // deep-link target — used by the Notifications tab AlertCard
+        ...(orderId ? { order_id: orderId } : {}),
       },
     }),
-    // Admin alert — always cc'd on claims for billing awareness
+    // Admin alert — cc'd for billing / dispute awareness.
     createPlatformAlert({
       tenantId,
       scope: "admin",
       type: "claim",
       severity: "warning",
       title: `Reclamo MP — tenant ${tenantId}${titleSuffix}`,
-      body: `Claim ID: ${claimId}. Action: ${action}.`,
+      body: `Claim ID: ${claimId}. Action: ${action}.${orderId ? ` Order: ${orderId}.` : ""}`,
       sourceType: "mp_claim",
       sourceId: claimId,
       metadata: {
         tenant_id: tenantId,
         notification_id: notification.id,
         action,
+        ...(orderId ? { order_id: orderId } : {}),
       },
     }),
   ]);
 
-  // Mark the linked active payment attempt as 'error' so the POS reflects it.
-  // MP claim data.id is the payment_id — match against mp_transaction_id.
-  const attempt = await getDb()
-    .selectFrom("payment_sync_attempts")
-    .select("id")
-    .where("tenant_id", "=", tenantId)
-    .where("mp_transaction_id", "=", claimId)
-    .where("status", "not in", TERMINAL_STATUSES)
-    .orderBy("created", "desc")
-    .limit(1)
-    .executeTakeFirst();
-
+  // Mark the linked attempt as 'error' when a claim is filed.
   if (attempt) {
     await updateAttempt({
       id: attempt.id,

@@ -27,22 +27,42 @@ export const dynamic = "force-dynamic";
  * Map domain_event.event_type → affected table(s) for SSE routing.
  */
 const EVENT_TYPE_TO_TABLES: Record<string, NotifyTable[]> = {
+  // ── Orders ────────────────────────────────────────────────────────────────
   "order.created": ["orders"],
   "order.item.updated": ["orders", "order_items"],
   "order.split": ["orders", "order_items"],
+  "order.combined": ["orders", "order_items"],
   "order.closed": ["orders"],
-  "order.payment.toggled": ["order_items"],
-  "order.takeaway.toggled": ["order_items"],
+  "order.opened": ["orders"],
+  "order.payment.toggled": ["orders", "order_items"],
+  "order.payment.set": ["orders", "order_items"],
+  "order.takeaway.toggled": ["orders", "order_items"],
   "order.products.removed": ["orders", "order_items"],
+  "order.batch.closed": ["orders", "order_items"],
+
+  // ── Products ──────────────────────────────────────────────────────────────
   "product.upserted": ["products"],
+  "product.consumption.added": ["product_consumptions"],
+  "product.consumption.removed": ["product_consumptions"],
+
+  // ── Extras ────────────────────────────────────────────────────────────────
+  "extra.upserted": ["extras"],
+  "extra.deleted": ["extras"],
+  "order.item.extra.toggled": ["order_item_extras"],
+
+  // ── Inventory ─────────────────────────────────────────────────────────────
   "inventory.item.added": ["inventory_items"],
   "inventory.item.toggled": ["inventory_items"],
   "inventory.item.deleted": ["inventory_items"],
-  "inventory.transaction.added": ["transactions"],
+  "inventory.transaction.upserted": ["transactions"],
   "inventory.transaction.deleted": ["transactions"],
+  "inventory.eod.reconciled": ["inventory_items", "transactions"],
   "inventory.category.upserted": ["categories"],
   "inventory.category.deleted": ["categories"],
   "inventory.category.item.toggled": ["categories", "inventory_items"],
+
+  // ── Platform ──────────────────────────────────────────────────────────────
+  "platform_alert.created": ["platform_alerts"],
 };
 
 function parseCookies(cookieHeader: string | null): Record<string, string> {

@@ -1146,7 +1146,7 @@ const migration016: Migration = {
         `
 CREATE TABLE IF NOT EXISTS platform_alerts (
   id          TEXT        PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-  tenant_id   TEXT        NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tenant_id   UUID        NULL REFERENCES tenants(id) ON DELETE CASCADE,
   scope       TEXT        NOT NULL DEFAULT 'tenant', -- 'tenant' | 'admin'
   type        TEXT        NOT NULL,                  -- 'claim' | 'subscription' | 'changelog' | 'system'
   severity    TEXT        NOT NULL DEFAULT 'info',   -- 'info' | 'warning' | 'critical'
@@ -1158,6 +1158,36 @@ CREATE TABLE IF NOT EXISTS platform_alerts (
   read_at     TIMESTAMPTZ NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'platform_alerts'
+      AND column_name = 'tenant_id'
+      AND data_type IN ('text', 'character varying')
+  ) THEN
+    ALTER TABLE platform_alerts
+      ALTER COLUMN tenant_id TYPE uuid
+      USING CASE
+        WHEN tenant_id IS NULL OR btrim(tenant_id) = '' THEN NULL
+        WHEN tenant_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN NULL
+        ELSE tenant_id::uuid
+      END;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'platform_alerts_tenant_id_fkey'
+  ) THEN
+    ALTER TABLE platform_alerts
+      ADD CONSTRAINT platform_alerts_tenant_id_fkey
+      FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS platform_alerts_tenant_id_idx
   ON platform_alerts (tenant_id)
