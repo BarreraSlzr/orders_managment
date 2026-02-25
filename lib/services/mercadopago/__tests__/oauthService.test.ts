@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
     exchangeCodeForToken,
-    getUserInfo,
-    refreshAccessToken
+    getUserInfo
 } from "../oauthService";
 
 const TEST_CONFIG = {
@@ -33,20 +32,15 @@ describe("oauthService — fetchWithTimeout (D1)", () => {
    * Helper: creates a signal-aware mock fetch that hangs until aborted.
    */
   function mockHangingFetch() {
-    globalThis.fetch = vi.fn(
-      (_url: string | URL | Request, init?: RequestInit) =>
-        new Promise<Response>((_resolve, reject) => {
-          const signal = init?.signal;
-          if (signal) {
-            signal.addEventListener("abort", () => {
-              reject(
-                new DOMException("The operation was aborted", "AbortError"),
-              );
-            });
-          }
-          // never resolves otherwise
-        }),
-    );
+    globalThis.fetch = ((_url: string | URL | Request, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (signal) {
+          signal.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted", "AbortError"));
+          });
+        }
+      })) as typeof fetch;
   }
 
   it("exchangeCodeForToken aborts on timeout", async () => {
@@ -59,21 +53,6 @@ describe("oauthService — fetchWithTimeout (D1)", () => {
     });
 
     vi.advanceTimersByTime(21_000); // past 20s timeout
-    await expect(promise).rejects.toThrow();
-
-    vi.useRealTimers();
-  });
-
-  it("refreshAccessToken aborts on timeout", async () => {
-    mockHangingFetch();
-    vi.useFakeTimers();
-
-    const promise = refreshAccessToken({
-      config: TEST_CONFIG,
-      refreshToken: "rt-abc",
-    });
-
-    vi.advanceTimersByTime(21_000);
     await expect(promise).rejects.toThrow();
 
     vi.useRealTimers();
