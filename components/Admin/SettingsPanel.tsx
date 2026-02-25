@@ -956,7 +956,7 @@ function MercadoPagoTab() {
       {!oauthAvailable && !credentialsQuery.isLoading && (
         <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-600 border">
           <AlertCircle className="h-4 w-4 shrink-0" />
-          <span>Mercado Pago OAuth is not configured.</span>
+          <span>Mercado Pago OAuth no está configurado.</span>
         </div>
       )}
 
