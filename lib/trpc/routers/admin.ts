@@ -502,5 +502,27 @@ export const adminRouter = router({
 
       return { success: true };
     }),
+
+  /**
+   * Returns which Mercado Pago environment variables are currently configured
+   * in the running server.  Never exposes the actual values — only boolean flags.
+   * Admin-only (requires admin API key cookie / header).
+   */
+  mpEnvStatus: adminProcedure.query(() => {
+    const isSet = (key: string) => {
+      const val = process.env[key];
+      return typeof val === "string" && val.trim().length > 0;
+    };
+
+    return {
+      MP_CLIENT_ID: isSet("MP_CLIENT_ID"),
+      MP_CLIENT_SECRET: isSet("MP_CLIENT_SECRET"),
+      MP_REDIRECT_URI: isSet("MP_REDIRECT_URI"),
+      MP_WEBHOOK_SECRET: isSet("MP_WEBHOOK_SECRET"),
+      MP_BILLING_WEBHOOK_SECRET: isSet("MP_BILLING_WEBHOOK_SECRET"),
+      MP_TOKENS_ENCRYPTION_KEY: isSet("MP_TOKENS_ENCRYPTION_KEY"),
+    };
+  }),
 });
+
 

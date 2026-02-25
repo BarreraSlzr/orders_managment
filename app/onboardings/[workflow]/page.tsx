@@ -1,26 +1,30 @@
 "use client";
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useAdminStatus } from "@/hooks/useAdminStatus";
-import { useTRPC } from "@/lib/trpc/react";
-import { useQueryState } from "nuqs";
-import {
-  getAvailableWorkflows,
-  getWorkflowDefinition,
-  WorkflowDefinition,
-} from "@/lib/workflows/definitions";
 import { WorkflowRunner } from "@/components/Workflows/WorkflowRunner";
 import {
   CsvImportStep,
   ManagerInfoStep,
+  MpEnvReviewStep,
+  MpOAuthStep,
+  MpTokensStep,
+  MpWebhooksStep,
   PermissionsStep,
   ReviewStep,
   StaffInfoStep,
   TenantInfoStep,
 } from "@/components/Workflows/steps";
+import { useAdminStatus } from "@/hooks/useAdminStatus";
+import { useTRPC } from "@/lib/trpc/react";
+import {
+  getAvailableWorkflows,
+  getWorkflowDefinition,
+  WorkflowDefinition,
+} from "@/lib/workflows/definitions";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useQueryState } from "nuqs";
+import { useMemo, useState } from "react";
 import { z } from "zod";
 
 interface CompletionState {
@@ -59,6 +63,11 @@ export default function OnboardingRunnerPage() {
   const onboardStaffMutation = useMutation(
     trpc.users.onboardStaff.mutationOptions(),
   );
+
+  const mpEnvStatusQuery = useQuery({
+    ...trpc.admin.mpEnvStatus.queryOptions(),
+    enabled: !isLoading,
+  });
   const onboardTenantStaffMutation = useMutation(
     trpc.users.onboardTenantStaff.mutationOptions(),
   );
@@ -358,6 +367,22 @@ export default function OnboardingRunnerPage() {
             ],
       });
     }
+
+    if (workflowDefinition.id === "configure-mp-env") {
+      // No server-side call needed — the admin copies the generated .env block
+      // to their hosting environment settings.
+      setCompletion({
+        title: "Configuración lista",
+        subtitle:
+          "Copia el bloque .env del paso de revisión en Vercel / tu hosting y redesplegado.",
+        details: [
+          { label: "MP_CLIENT_ID", value: String(data.MP_CLIENT_ID || "") || "—" },
+          { label: "MP_WEBHOOK_SECRET", value: data.MP_WEBHOOK_SECRET ? "✓ provisto" : "—" },
+          { label: "MP_BILLING_WEBHOOK_SECRET", value: data.MP_BILLING_WEBHOOK_SECRET ? "✓ provisto" : "—" },
+          { label: "MP_TOKENS_ENCRYPTION_KEY", value: data.MP_TOKENS_ENCRYPTION_KEY ? "✓ provisto" : "—" },
+        ],
+      });
+    }
   };
 
   if (completion) {
@@ -420,6 +445,20 @@ export default function OnboardingRunnerPage() {
         return <StaffInfoStep data={data} onChange={onChange} />;
       case "permissions":
         return <PermissionsStep data={data} onChange={onChange} />;
+      case "mp-oauth":
+        return <MpOAuthStep data={data} onChange={onChange} />;
+      case "mp-webhooks":
+        return <MpWebhooksStep data={data} onChange={onChange} />;
+      case "mp-tokens":
+        return <MpTokensStep data={data} onChange={onChange} />;
+      case "env-review":
+        return (
+          <MpEnvReviewStep
+            data={data}
+            envStatus={mpEnvStatusQuery.data ?? null}
+            onChange={onChange}
+          />
+        );
       case "review": {
         const details =
           workflowDefinition.id === "onboard-manager"
