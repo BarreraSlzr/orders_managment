@@ -1,12 +1,13 @@
 "use client";
-import { PropsWithChildren } from "react";
-import { useProducts } from "@/context/useProducts";
-import { formatPrice } from "@/lib/utils/formatPrice";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
-import { Product } from "@/lib/types";
+import { useProducts } from "@/context/useProducts";
 import { useProductsFilter } from "@/context/useProductsFilter";
-import { Badge } from "../ui/badge";
 import { useOnLongPress } from "@/hooks/useOnLongPress";
+import { TEST_IDS, tid } from "@/lib/testIds";
+import { Product } from "@/lib/types";
+import { formatPrice } from "@/lib/utils/formatPrice";
+import { PropsWithChildren } from "react";
+import { Badge } from "../ui/badge";
 
 interface Props {
   product: Product;
@@ -21,7 +22,10 @@ export function ProductCard({
   const { endPress, movePress, startPress } = useOnLongPress();
 
   return (
-    <Card className="min-w-60 flex-grow cursor-pointer touch-auto hover:shadow-md transition-shadow">
+    <Card
+      className="min-w-60 flex-grow cursor-pointer touch-auto hover:shadow-md transition-shadow"
+      data-testid={tid(TEST_IDS.PRODUCT_CARD.ROOT, product.id)}
+    >
       <CardContent
         className="p-4 select-none flex flex-row flex-wrap gap-2"
         onMouseDown={startPress(() => {

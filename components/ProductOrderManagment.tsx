@@ -8,6 +8,7 @@ import { TEST_IDS } from "@/lib/testIds";
 import { useTRPC } from "@/lib/trpc/react";
 import { Product } from "@/lib/types";
 import { useQuery } from "@tanstack/react-query";
+import { parseAsString, useQueryState } from "nuqs";
 import { useEffect, useRef, useState } from "react";
 import { SettingsModal } from "./Admin/SettingsPanel";
 import EmptyState from "./Products/EmptyState";
@@ -20,9 +21,21 @@ import TagList from "./Tag/List";
 export default function ProductOrderManagment() {
   const { visibleProducts, visibleTags } = useProductsFilter();
   const { isAdmin, role, tenantName, username, session } = useAdminStatus();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [initialTab, setInitialTab] = useState<string | undefined>();
+  
+  // Use nuqs for settings modal state
+  // Accepts: false (closed), true (open default tab), or "<tabName>" (open specific tab)
+  const [settingsParam, setSettingsParam] = useQueryState(
+    "settings",
+    parseAsString.withDefault(""),
+  );
+  
   const canOpenSettings = isAdmin || role === "manager";
+  
+  // Derive state from param
+  const settingsOpen = settingsParam !== "" && settingsParam !== "false";
+  const settingsTab = settingsParam === "true" || settingsParam === "false" || settingsParam === "" 
+    ? undefined 
+    : settingsParam;
 
   const trpc = useTRPC();
   const alertsQuery = useQuery({
@@ -36,15 +49,15 @@ export default function ProductOrderManagment() {
     const handleOpenSettings = (event: Event) => {
       const customEvent = event as CustomEvent<{ tab?: string }>;
       if (canOpenSettings) {
-        setInitialTab(customEvent.detail?.tab);
-        setSettingsOpen(true);
+        const tab = customEvent.detail?.tab;
+        setSettingsParam(tab || "true");
       }
     };
     window.addEventListener("openSettings", handleOpenSettings);
     return () => {
       window.removeEventListener("openSettings", handleOpenSettings);
     };
-  }, [canOpenSettings]);
+  }, [canOpenSettings, setSettingsParam]);
 
   return (
     <main className="min-h-screen bg-slate-100 flex flex-col justify-between py-3 gap-3">
@@ -54,15 +67,14 @@ export default function ProductOrderManagment() {
           <AlertFABPrefix
             alerts={alertsQuery.data?.alerts ?? []}
             onOpen={() => {
-              setInitialTab("notifications");
-              setSettingsOpen(true);
+              setSettingsParam("notifications");
             }}
           />
         )}
         <button
           type="button"
           className="rounded-full bg-white/80 p-2 text-slate-500 shadow hover:bg-white hover:text-slate-800 transition"
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => setSettingsParam("true")}
           aria-label="Settings"
           data-testid={TEST_IDS.SETTINGS.FAB}
         >
@@ -85,10 +97,9 @@ export default function ProductOrderManagment() {
       {settingsOpen && (
         <SettingsModal
           onCloseAction={() => {
-            setSettingsOpen(false);
-            setInitialTab(undefined);
+            setSettingsParam("");
           }}
-          initialTab={initialTab}
+          initialTab={settingsTab}
           tenantName={tenantName ?? "ACME"}
           userName={
             username ??

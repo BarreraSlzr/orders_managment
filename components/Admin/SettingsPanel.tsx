@@ -4,11 +4,11 @@ import { EntitlementBanner } from "@/components/MercadoPago/EntitlementBanner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,26 +19,26 @@ import { useTRPC } from "@/lib/trpc/react";
 import { formatUnixSecondsToReadable, getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowLeft,
-  ArrowRight,
-  Bell,
-  BellOff,
-  BookOpen,
-  Building2,
-  CheckCircle,
-  CreditCard,
-  Download,
-  FileText,
-  Info,
-  LogOut,
-  Package,
-  RefreshCw,
-  Trash2,
-  Upload,
-  User,
-  XCircle
+    AlertCircle,
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    Bell,
+    BellOff,
+    BookOpen,
+    Building2,
+    CheckCircle,
+    CreditCard,
+    Download,
+    FileText,
+    Info,
+    LogOut,
+    Package,
+    RefreshCw,
+    Trash2,
+    Upload,
+    User,
+    XCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -80,7 +80,7 @@ function AlertCard({
   const handleOrderLink = () => {
     if (orderId) {
       onClose();
-      router.push(`/?orderId=${orderId}`);
+      router.push(`/?sheet=true&selected=${encodeURIComponent(orderId)}`);
     }
   };
 

@@ -422,7 +422,7 @@ export async function handleClaimEvent(params: {
   const titleSuffix = action === "created" ? "" : ` (${action})`;
 
   // Resolve linked order first — so we can embed order_id in alert metadata
-  // for the deep-link in the Notifications tab (/?orderId=<orderId>).
+  // for the deep-link in the Notifications tab (/?sheet=true&selected=<orderId>).
   // MP populates data.id with the real payment_id for claim events.
   const attempt = await getDb()
     .selectFrom("payment_sync_attempts")
