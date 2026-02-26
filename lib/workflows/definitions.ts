@@ -136,8 +136,8 @@ export const configureMpEnvWorkflow: WorkflowDefinition = {
   steps: [
     {
       id: "mp-oauth",
-      title: "Credenciales de la app",
-      description: "Client ID y Client Secret de tu aplicación en MP Developers",
+      title: "App de pagos (Point)",
+      description: "Client ID y Client Secret de la app de pagos presenciales en MP Developers",
       schema: z.object({
         MP_CLIENT_ID: z.string().min(1, "Client ID es requerido"),
         MP_CLIENT_SECRET: z.string().min(1, "Client Secret es requerido"),
@@ -146,15 +146,15 @@ export const configureMpEnvWorkflow: WorkflowDefinition = {
     {
       id: "mp-webhooks",
       title: "Webhook de pagos",
-      description: "Clave secreta generada por MP al configurar la URL del webhook",
+      description: "Clave secreta del webhook de la app de pagos (Point, Order, OAuth)",
       schema: z.object({
         MP_WEBHOOK_SECRET: z.string().min(1, "La clave secreta del webhook es requerida"),
       }),
     },
     {
       id: "mp-tokens",
-      title: "Facturación y cifrado",
-      description: "Secreto del webhook de facturación y clave opcional de cifrado de tokens",
+      title: "App de facturación",
+      description: "Webhook de la app de suscripciones y clave de cifrado de tokens OAuth",
       schema: z.object({
         MP_BILLING_WEBHOOK_SECRET: z.string().optional(),
         MP_TOKENS_ENCRYPTION_KEY: z.string().optional(),

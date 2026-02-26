@@ -15,6 +15,47 @@ export function MpOAuthStep({ data, onChange }: MpOAuthStepProps) {
 
   return (
     <div className="space-y-5">
+      {/* Architecture overview */}
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
+        <p className="font-semibold text-slate-700">Arquitectura de dos aplicaciones</p>
+        <p className="mt-1 text-slate-600">
+          Esta plataforma usa <strong>dos aplicaciones de Mercado Pago</strong> independientes,
+          cada una con sus propias credenciales y webhooks en el{" "}
+          <a
+            href="https://www.mercadopago.com.mx/developers/panel/app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-0.5 font-medium underline decoration-slate-400"
+          >
+            Panel de Desarrolladores
+            <ExternalLink className="h-3 w-3" />
+          </a>:
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-md border border-amber-200 bg-amber-50/60 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">App 1 — Pagos presenciales</p>
+            <p className="mt-1 text-xs text-amber-800">
+              Integración Point para cobrar a los clientes del tenant.
+              Webhook: <span className="font-mono">/api/mercadopago/webhook</span>
+            </p>
+            <p className="mt-1 text-[10px] text-amber-600">
+              Al completar OAuth, se crean automáticamente una sucursal y punto de venta.
+            </p>
+          </div>
+          <div className="rounded-md border border-violet-200 bg-violet-50/60 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-violet-700">App 2 — Facturación</p>
+            <p className="mt-1 text-xs text-violet-800">
+              Suscripciones para cobrar a los tenants por el uso de la plataforma.
+              Webhook: <span className="font-mono">/api/billing/mercadopago/webhook</span>
+            </p>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-slate-500">
+          En este paso configuras las credenciales de la <strong>App de pagos presenciales</strong>.
+          La app de facturación se configura en el paso &quot;Facturación y cifrado&quot;.
+        </p>
+      </div>
+
       {/* Instruction card */}
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">
         <div className="flex items-start gap-2">
@@ -34,7 +75,7 @@ export function MpOAuthStep({ data, onChange }: MpOAuthStepProps) {
                   <ExternalLink className="h-3 w-3" />
                 </a>
               </li>
-              <li>Haz clic en tu aplicación (p.ej. <strong>Orders Management MP-Point</strong>)</li>
+              <li>Haz clic en tu aplicación de <strong>pagos presenciales / Point</strong></li>
               <li>
                 En el menú lateral izquierdo, bajo{" "}
                 <strong>PRODUCCIÓN</strong>, haz clic en{" "}

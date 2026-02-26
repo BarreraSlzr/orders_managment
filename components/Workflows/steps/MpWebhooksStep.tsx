@@ -48,6 +48,12 @@ export function MpWebhooksStep({ data, onChange }: MpWebhooksStepProps) {
 
   return (
     <div className="space-y-5">
+      {/* Context: which MP app */}
+      <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-4 py-3 text-xs text-amber-800">
+        <strong>App de pagos presenciales (Point)</strong> — Este webhook recibe
+        notificaciones de cobros, terminales y vinculación OAuth de tus tenants.
+      </div>
+
       {/* Instruction card */}
       <div className="rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm">
         <div className="flex items-start gap-2">

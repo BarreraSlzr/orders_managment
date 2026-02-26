@@ -34,6 +34,13 @@ export function MpTokensStep({ data, onChange }: MpTokensStepProps) {
 
   return (
     <div className="space-y-5">
+      {/* Context: which MP app */}
+      <div className="rounded-lg border border-violet-100 bg-violet-50/60 px-4 py-3 text-xs text-violet-800">
+        <strong>App de facturación (suscripciones)</strong> — Esta es una
+        aplicación MP <em>diferente</em> a la de pagos. Cobra a los tenants por
+        el uso de la plataforma. Tiene sus propias credenciales y webhook.
+      </div>
+
       {/* Billing webhook instruction */}
       <div className="rounded-lg border border-violet-200 bg-violet-50 p-4 text-sm">
         <div className="flex items-start gap-2">
