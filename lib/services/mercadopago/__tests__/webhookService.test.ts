@@ -9,24 +9,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-vi.mock("@/lib/sql/database", () => ({
-  db: {
-    selectFrom: vi.fn(() => ({
-      selectAll: vi.fn().mockReturnThis(),
-      select: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      executeTakeFirst: vi.fn().mockResolvedValue(undefined),
+vi.mock("@/lib/sql/database", () => {
+  const mockExecuteTakeFirst = vi.fn().mockResolvedValue(undefined);
+  const mockExecute = vi.fn().mockResolvedValue([]);
+  const chainable = () => ({
+    selectAll: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
+    executeTakeFirst: mockExecuteTakeFirst,
+    execute: mockExecute,
+  });
+  return {
+    db: {
+      selectFrom: vi.fn(chainable),
+      updateTable: vi.fn(chainable),
+    },
+    getDb: vi.fn(() => ({
+      selectFrom: vi.fn(chainable),
+      updateTable: vi.fn(chainable),
     })),
-    updateTable: vi.fn(() => ({
-      set: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      execute: vi.fn().mockResolvedValue([]),
-    })),
-  },
-  sql: vi.fn(),
-}));
+    sql: vi.fn(),
+    __mockExecuteTakeFirst: mockExecuteTakeFirst,
+  };
+});
 
 vi.mock("@/lib/services/mercadopago/credentialsService", () => ({
   getCredentials: vi.fn().mockResolvedValue({
@@ -43,9 +51,16 @@ vi.mock("@/lib/services/mercadopago/statusService", () => ({
   updateAttempt: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/services/alerts/alertsService", () => ({
+  createPlatformAlert: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { createPlatformAlert } from "@/lib/services/alerts/alertsService";
 import {
     fetchPaymentDetails,
+    handleMpConnectEvent,
     handlePaymentEvent,
+    handlePointIntegrationEvent,
     validateWebhookSignature,
     type MpWebhookNotification,
 } from "../webhookService";
@@ -240,5 +255,307 @@ describe("handlePaymentEvent (A5 — fetch resilience)", () => {
     expect(result.handled).toBe(false);
     expect(result.detail).toContain("Failed to fetch payment pay-111");
     expect(result.detail).toContain("Network failure");
+  });
+});
+
+// ─── Payment alert with order deep-link ─────────────────────────────────────
+
+describe("handlePaymentEvent — alert with order deep-link", () => {
+  const originalFetch = globalThis.fetch;
+
+  const baseNotification: MpWebhookNotification = {
+    id: 200,
+    live_mode: false,
+    type: "payment",
+    date_created: "2025-01-01T00:00:00.000Z",
+    user_id: 12345,
+    api_version: "v1",
+    action: "payment.updated",
+    data: { id: "pay-200" },
+  };
+
+  const mockPayment = {
+    id: 200,
+    status: "approved",
+    status_detail: "accredited",
+    external_reference: "order-abc-123",
+    transaction_amount: 500,
+    currency_id: "MXN",
+    payment_method_id: "debit_card",
+    date_approved: "2025-01-01T00:00:00.000Z",
+    date_created: "2025-01-01T00:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(mockPayment),
+    });
+
+    // Mock getDb to return an attempt with terminal_id (PDV flow)
+    const { getDb } = require("@/lib/sql/database");
+    getDb.mockReturnValue({
+      selectFrom: vi.fn().mockReturnValue({
+        selectAll: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        executeTakeFirst: vi.fn().mockResolvedValue({
+          id: "attempt-1",
+          tenant_id: "t-1",
+          order_id: "order-abc-123",
+          status: "pending",
+          terminal_id: "TERM-001",
+          last_mp_notification_id: null,
+        }),
+      }),
+    });
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it("creates an alert with metadata.order_id for deep-linking", async () => {
+    const result = await handlePaymentEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(createPlatformAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "t-1",
+        type: "payment",
+        sourceType: "mp_payment",
+        severity: "info",
+        metadata: expect.objectContaining({
+          order_id: "order-abc-123",
+          payment_id: 200,
+          mp_status: "approved",
+          flow: "pdv",
+        }),
+      }),
+    );
+  });
+
+  it("maps rejected status to warning severity", async () => {
+    const rejectedPayment = { ...mockPayment, status: "rejected", status_detail: "cc_rejected_other_reason" };
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(rejectedPayment),
+    });
+
+    await handlePaymentEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(createPlatformAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: "warning",
+        title: expect.stringContaining("Pago rechazado"),
+        metadata: expect.objectContaining({ order_id: "order-abc-123" }),
+      }),
+    );
+  });
+
+  it("infers qr flow when terminal_id is null", async () => {
+    const { getDb } = require("@/lib/sql/database");
+    getDb.mockReturnValue({
+      selectFrom: vi.fn().mockReturnValue({
+        selectAll: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        executeTakeFirst: vi.fn().mockResolvedValue({
+          id: "attempt-2",
+          tenant_id: "t-1",
+          order_id: "order-abc-123",
+          status: "pending",
+          terminal_id: null,
+          last_mp_notification_id: null,
+        }),
+      }),
+    });
+
+    await handlePaymentEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(createPlatformAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ flow: "qr" }),
+      }),
+    );
+  });
+});
+
+// ─── Point integration alert with order deep-link ───────────────────────────
+
+describe("handlePointIntegrationEvent — alert with order deep-link", () => {
+  const baseNotification: MpWebhookNotification = {
+    id: 300,
+    live_mode: false,
+    type: "point_integration_wh",
+    date_created: "2025-01-01T00:00:00.000Z",
+    user_id: 12345,
+    api_version: "v1",
+    action: "state_FINISHED",
+    data: { id: "intent-555" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    const { getDb } = require("@/lib/sql/database");
+    getDb.mockReturnValue({
+      selectFrom: vi.fn().mockReturnValue({
+        selectAll: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        executeTakeFirst: vi.fn().mockResolvedValue({
+          id: "attempt-3",
+          tenant_id: "t-1",
+          order_id: "order-xyz-789",
+          status: "processing",
+          mp_transaction_id: "intent-555",
+          last_mp_notification_id: null,
+        }),
+      }),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("creates alert with order_id deep-link and pdv flow", async () => {
+    const result = await handlePointIntegrationEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(createPlatformAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "t-1",
+        type: "payment",
+        sourceType: "mp_point",
+        severity: "info",
+        title: expect.stringContaining("Pago aprobado"),
+        metadata: expect.objectContaining({
+          order_id: "order-xyz-789",
+          mp_intent_id: "intent-555",
+          flow: "pdv",
+        }),
+      }),
+    );
+  });
+
+  it("maps state_ERROR to critical severity", async () => {
+    const errorNotification = {
+      ...baseNotification,
+      action: "state_ERROR",
+    };
+
+    await handlePointIntegrationEvent({
+      notification: errorNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(createPlatformAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: "critical",
+        title: expect.stringContaining("Error en pago"),
+      }),
+    );
+  });
+});
+
+// ─── MP Connect deauth alert ────────────────────────────────────────────────
+
+describe("handleMpConnectEvent — deauth alert", () => {
+  const deauthNotification: MpWebhookNotification = {
+    id: 400,
+    live_mode: false,
+    type: "mp-connect",
+    date_created: "2025-01-01T00:00:00.000Z",
+    user_id: 12345,
+    api_version: "v1",
+    action: "application.deauthorized",
+    data: { id: "12345" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    const { getDb } = require("@/lib/sql/database");
+    getDb.mockReturnValue({
+      updateTable: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        execute: vi.fn().mockResolvedValue([]),
+      }),
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("creates critical alert without order_id (account-level)", async () => {
+    const result = await handleMpConnectEvent({
+      notification: deauthNotification,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.detail).toBe("Credentials deauthorized");
+    expect(createPlatformAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenantId: "t-1",
+        type: "mp_connect",
+        severity: "critical",
+        title: "Mercado Pago desconectado",
+        sourceType: "mp_connect",
+        metadata: expect.objectContaining({
+          notification_id: 400,
+          action: "application.deauthorized",
+          user_id: 12345,
+        }),
+      }),
+    );
+    // No order_id in metadata
+    const mockedAlert = createPlatformAlert as ReturnType<typeof vi.fn>;
+    const call = mockedAlert.mock.calls[0][0];
+    expect(call.metadata).not.toHaveProperty("order_id");
+  });
+
+  it("does not create alert for non-deauth actions", async () => {
+    const otherNotification = {
+      ...deauthNotification,
+      action: "application.authorized",
+    };
+
+    const result = await handleMpConnectEvent({
+      notification: otherNotification,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(createPlatformAlert).not.toHaveBeenCalled();
   });
 });
