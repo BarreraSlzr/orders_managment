@@ -149,7 +149,7 @@ export async function checkMpEntitlement({
 | Event handler `order.payment.mercadopago.start` | Hard block | Return `{ success: false, reason: "entitlement_inactive" }` |
 | tRPC `mercadopago.payment.startQR` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
 | tRPC `mercadopago.payment.startPDV` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
-| tRPC `mercadopago.store.*` / `pos.*` / `refund.*` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
+| tRPC `mercadopago.store.*` / `pos.*` / `refund.*` / `device.*` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
 | tRPC `mercadopago.credentials.get` | Soft — always allow | Show "subscription required" copy in UI |
 
 ### Implementation pattern

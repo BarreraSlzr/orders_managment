@@ -106,9 +106,10 @@ to include `store_id`, `external_pos_id`.
 | **Status** | ⚠️ See notes |
 
 **Notes:**
-1. Our code hardcodes `external_pos_id = "orders_pdv"`. This POS must be
-   **pre-registered** via the Stores/POS API (`POST /pos`) or the call returns
-   404. Currently we do not create POS records.
+1. `external_pos_id` is tenant-scoped: `orders_pdv_{tenantId}`. This POS is
+   **auto-provisioned** via get-or-create on OAuth connect — no manual
+   registration needed. Re-connecting OAuth is safe; existing resources are
+   reused (no duplicates).
 2. `total_amount` is sent as `amountCents / 100` (float) — correct per MP docs
    (they expect amount in units, e.g., 10.50).
 3. The QR dynamic endpoint path uses `/qrs` suffix which differs from the
@@ -199,7 +200,7 @@ Body: {
 | **Official ref** | <https://www.mercadopago.com.mx/developers/en/reference/stores/_users_user_id_stores/post> |
 | **Status** | ✅ **Implemented** — auto-provisioned on OAuth connect |
 
-**Auto-provisioning:** The `mercadopago.credentials.upserted` event handler calls `createStore()` automatically after successful OAuth connect. Store name defaults to `"Sucursal {tenant_id}"`.
+**Auto-provisioning:** The `mercadopago.credentials.upserted` event handler uses **get-or-create** logic (`listStores()` → find by `external_id` → create if missing) so re-connecting OAuth never produces duplicate stores. Store `external_id` = `tenant_{tenantId}`.
 
 ---
 
@@ -217,7 +218,7 @@ Body: {
 | **Official ref** | <https://www.mercadopago.com.mx/developers/en/reference/pos/_pos/post> |
 | **Status** | ✅ **Implemented** — auto-provisioned on OAuth connect |
 
-**Auto-provisioning:** Created immediately after Store, linked via `store_id`. The QR flow now has a valid `external_pos_id` without manual POS registration.
+**Auto-provisioning:** Created immediately after Store using **get-or-create** logic (`listPos({ storeId })` → skip if `external_id = orders_pdv_{tenantId}` already exists). POS `external_id` is tenant-scoped (`orders_pdv_{tenantId}`) to support future multi-POS per tenant.
 
 ---
 
