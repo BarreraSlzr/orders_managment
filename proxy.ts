@@ -19,6 +19,7 @@ const PUBLIC_PATHS = [
   "/api/auth",
   "/api/admin/verify",
   "/api/mercadopago",
+  "/api/billing/mercadopago/webhook",
   "/api/trpc",
   "/api/sse",
   "/login",

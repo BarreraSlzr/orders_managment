@@ -61,6 +61,26 @@ function buildSignature(params: {
   return `ts=${ts},v1=${hex}`;
 }
 
+/**
+ * Builds an MP-style signature header using id + request-id + ts.
+ * Manifest: id:{dataId};request-id:{id};ts:{ts};
+ */
+function buildIdSignature(params: {
+  dataId: string;
+  xRequestId: string;
+  ts: string;
+  secret: string;
+}): string {
+  const { dataId, xRequestId, ts, secret } = params;
+  const segments: string[] = [];
+  if (dataId) segments.push(`id:${dataId}`);
+  if (xRequestId) segments.push(`request-id:${xRequestId}`);
+  if (ts) segments.push(`ts:${ts}`);
+  const manifest = segments.join(";") + ";";
+  const hex = createHmac("sha256", secret).update(manifest).digest("hex");
+  return `ts=${ts},v1=${hex}`;
+}
+
 function makeRequest(params: {
   body: string;
   xSignature?: string;
@@ -105,6 +125,25 @@ describe("/api/billing/mercadopago/webhook", () => {
       const ts = String(Date.now());
       const xSignature = buildSignature({
         rawBody: payload,
+        xRequestId: TEST_REQUEST_ID,
+        ts,
+        secret: TEST_SECRET,
+      });
+
+      const { POST } = await import("../route");
+      const response = await POST(makeRequest({ body: payload, xSignature, xRequestId: TEST_REQUEST_ID }));
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json).toEqual({ received: true });
+      expect(mockProcessBillingEvent).toHaveBeenCalledOnce();
+    });
+
+    it("accepts a valid MercadoPago id-based HMAC signature", async () => {
+      const payload = JSON.stringify({ type: "subscription_preapproval", action: "updated", data: { id: "204005478" } });
+      const ts = String(Date.now());
+      const xSignature = buildIdSignature({
+        dataId: "204005478",
         xRequestId: TEST_REQUEST_ID,
         ts,
         secret: TEST_SECRET,
