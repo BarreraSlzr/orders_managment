@@ -222,6 +222,53 @@ const TERMINAL_STATUSES: SyncAttemptStatus[] = [
   "error",
 ];
 
+// ─── Payment Alert Copy ──────────────────────────────────────────────────────
+
+/**
+ * Returns severity, title and body for a payment status alert.
+ * The alert copy is in Spanish (matching the rest of the tenant-facing UI).
+ * `orderId` is embedded in the title so the notification is scannable even
+ * without opening the detail panel.
+ */
+function paymentAlertCopy(params: {
+  status: SyncAttemptStatus;
+  orderId: string;
+}): { severity: "info" | "warning" | "critical"; title: string; body: string } {
+  const short = params.orderId.slice(0, 8);
+  switch (params.status) {
+    case "approved":
+      return {
+        severity: "info",
+        title: `Pago aprobado — orden ${short}`,
+        body: "El cobro fue procesado exitosamente por Mercado Pago.",
+      };
+    case "rejected":
+      return {
+        severity: "warning",
+        title: `Pago rechazado — orden ${short}`,
+        body: "Mercado Pago rechazó el cobro. Puedes reintentar desde la orden.",
+      };
+    case "canceled":
+      return {
+        severity: "warning",
+        title: `Pago cancelado — orden ${short}`,
+        body: "El cobro fue cancelado. Si fue un error, puedes iniciar un nuevo cobro.",
+      };
+    case "error":
+      return {
+        severity: "critical",
+        title: `Error en pago — orden ${short}`,
+        body: "Ocurrió un error al procesar el cobro. Revisa la orden para más detalles.",
+      };
+    default:
+      return {
+        severity: "info",
+        title: `Pago actualizado — orden ${short}`,
+        body: `Estado del pago: ${params.status}.`,
+      };
+  }
+}
+
 // ─── Event Handlers ──────────────────────────────────────────────────────────
 
 export interface WebhookHandlerResult {
@@ -302,6 +349,32 @@ export async function handlePaymentEvent(params: {
     lastProcessedAt: new Date(),
   });
 
+  // ── Create alert with order deep-link ───────────────────────────────────
+  const alertMeta: Record<string, unknown> = {
+    order_id: orderId,
+    payment_id: payment.id,
+    mp_status: payment.status,
+    notification_id: notification.id,
+    flow: attempt.terminal_id ? "pdv" : "qr",
+  };
+
+  const { severity, title, body } = paymentAlertCopy({ status: newStatus, orderId });
+
+  // Fire-and-forget — alert creation must not block webhook acknowledgement
+  createPlatformAlert({
+    tenantId,
+    scope: "tenant",
+    type: "payment",
+    severity,
+    title,
+    body,
+    sourceType: "mp_payment",
+    sourceId: payment.id.toString(),
+    metadata: alertMeta,
+  }).catch((err) =>
+    console.error("[webhook] Failed to create payment alert:", err),
+  );
+
   return { handled: true, detail: `Payment ${payment.id} → ${newStatus}` };
 }
 
@@ -366,6 +439,32 @@ export async function handlePointIntegrationEvent(params: {
     lastProcessedAt: new Date(),
   });
 
+  // ── Create alert with order deep-link ───────────────────────────────────
+  const orderId = attempt.order_id;
+  const alertMeta: Record<string, unknown> = {
+    order_id: orderId,
+    mp_intent_id: intentId,
+    action,
+    notification_id: notification.id,
+    flow: "pdv",
+  };
+
+  const { severity, title, body } = paymentAlertCopy({ status: newStatus, orderId });
+
+  createPlatformAlert({
+    tenantId,
+    scope: "tenant",
+    type: "payment",
+    severity,
+    title,
+    body,
+    sourceType: "mp_point",
+    sourceId: intentId,
+    metadata: alertMeta,
+  }).catch((err) =>
+    console.error("[webhook] Failed to create point alert:", err),
+  );
+
   return { handled: true, detail: `Point intent ${intentId} → ${newStatus}` };
 }
 
@@ -387,6 +486,27 @@ export async function handleMpConnectEvent(params: {
       .where("tenant_id", "=", tenantId)
       .where("status", "=", "active")
       .execute();
+
+    // Alert tenant — their MP connection was revoked
+    createPlatformAlert({
+      tenantId,
+      scope: "tenant",
+      type: "mp_connect",
+      severity: "critical",
+      title: "Mercado Pago desconectado",
+      body:
+        "Tu cuenta de Mercado Pago fue desvinculada. " +
+        "Los pagos con MP no funcionarán hasta que vuelvas a conectar desde Configuración.",
+      sourceType: "mp_connect",
+      sourceId: notification.id.toString(),
+      metadata: {
+        notification_id: notification.id,
+        action: notification.action,
+        user_id: notification.user_id,
+      },
+    }).catch((err) =>
+      console.error("[webhook] Failed to create deauth alert:", err),
+    );
 
     return { handled: true, detail: "Credentials deauthorized" };
   }

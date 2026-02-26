@@ -28,6 +28,10 @@ export type DomainEventType =
   | "admin.audit.logged"
   | "order.payment.mercadopago.start"
   | "mercadopago.credentials.upserted"
+  | "mercadopago.store.upserted"
+  | "mercadopago.pos.upserted"
+  | "mercadopago.payment.refunded"
+  | "mercadopago.device.mode.switched"
   | "product.consumption.added"
   | "product.consumption.removed"
   | "order.batch.closed"
@@ -169,6 +173,28 @@ export interface DomainEventPayloadMap {
     appId: string;
     userId: string;
   };
+  "mercadopago.store.upserted": {
+    tenantId: string;
+    mpUserId: string;
+    name: string;
+    externalId: string;
+  };
+  "mercadopago.pos.upserted": {
+    tenantId: string;
+    name: string;
+    externalId: string;
+    storeId: string;
+  };
+  "mercadopago.payment.refunded": {
+    tenantId: string;
+    paymentId: number;
+    amount?: number;
+  };
+  "mercadopago.device.mode.switched": {
+    tenantId: string;
+    deviceId: string;
+    operatingMode: "PDV" | "STANDALONE";
+  };
   "product.consumption.added": {
     tenantId: string;
     productId: string;
@@ -251,6 +277,21 @@ export interface DomainEventResultMap {
   };
   "mercadopago.credentials.upserted": {
     credentialsId: string;
+  };
+  "mercadopago.store.upserted": {
+    storeId: string;
+  };
+  "mercadopago.pos.upserted": {
+    posId: number;
+    externalId: string;
+  };
+  "mercadopago.payment.refunded": {
+    refundId: number;
+    status: string;
+  };
+  "mercadopago.device.mode.switched": {
+    deviceId: string;
+    operatingMode: string;
   };
   "product.consumption.added": unknown;
   "product.consumption.removed": unknown;

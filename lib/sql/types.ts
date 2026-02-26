@@ -269,7 +269,7 @@ export interface TenantBillingEventsTable {
 
 // ─── Platform alerts ─────────────────────────────────────────────────────────
 
-export type AlertType = "claim" | "subscription" | "changelog" | "system";
+export type AlertType = "claim" | "payment" | "mp_connect" | "subscription" | "changelog" | "system";
 export type AlertSeverity = "info" | "warning" | "critical";
 export type AlertScope = "tenant" | "admin";
 
