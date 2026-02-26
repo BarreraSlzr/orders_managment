@@ -6,6 +6,8 @@ See also:
 
 - [Mercado Pago Platform + Tenant Architecture](./MERCADOPAGO_PLATFORM_TENANT_ARCHITECTURE.md)
 - [MercadoPago OAuth Integration](./MERCADOPAGO_OAUTH.md)
+- [Entitlement Architecture](./MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md)
+- [Approach — Payment & Billing](./MERCADOPAGO_APPROACH.md)
 
 ## Mercado Pago Docs Retrieval Convention
 
@@ -18,6 +20,61 @@ Examples:
 
 - `https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/create-application.md`
 - `https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-integration.md`
+
+---
+
+## 0. Two-App Architecture Overview
+
+The platform uses **two independent MercadoPago applications** with separate credentials, webhook URLs, and purposes. Tenant payments (App 1) are gated by an active billing subscription (App 2).
+
+```mermaid
+flowchart TB
+    subgraph app1["App 1 — MP-Point (2318642168506769)"]
+        direction TB
+        A1_PURPOSE["Purpose: Tenant collects<br/>in-person payments from<br/>their customers"]
+        A1_CREDS["Credentials:<br/>MP_CLIENT_ID<br/>MP_CLIENT_SECRET"]
+        A1_WH["Webhook URL:<br/>/api/mercadopago/webhook"]
+        A1_EVENTS["Events: payment,<br/>point_integration_wh,<br/>mp-connect, order"]
+        A1_OAUTH["OAuth per tenant → per-tenant<br/>access_token + user_id"]
+    end
+
+    subgraph app2["App 2 — Billing (6186158011206269)"]
+        direction TB
+        A2_PURPOSE["Purpose: Platform charges<br/>tenants a subscription fee<br/>to unlock MP features"]
+        A2_CREDS["Credentials:<br/>MP_BILLING_CLIENT_ID<br/>MP_BILLING_CLIENT_SECRET"]
+        A2_WH["Webhook URL:<br/>/api/billing/mercadopago/webhook"]
+        A2_EVENTS["Events: subscription_preapproval,<br/>subscription_authorized_payment,<br/>payment, mp-connect"]
+    end
+
+    subgraph chain["Dependency Chain"]
+        direction LR
+        SUB["Tenant subscribes<br/>(App 2)"]
+        ENT["Entitlement<br/>becomes active"]
+        OAUTH["Tenant connects<br/>OAuth (App 1)"]
+        PROV["Store + POS<br/>auto-provisioned"]
+        PAY["Tenant can charge<br/>customers (QR/PDV)"]
+        SUB --> ENT --> OAUTH --> PROV --> PAY
+    end
+
+    app2 -.->|"subscription webhook<br/>activates entitlement"| chain
+    app1 -.->|"OAuth callback<br/>triggers auto-provision"| chain
+
+    style app1 fill:#eff6ff,stroke:#3b82f6
+    style app2 fill:#faf5ff,stroke:#8b5cf6
+    style chain fill:#f0fdf4,stroke:#22c55e
+```
+
+### Credential Isolation
+
+| | App 1 (Point — Payments) | App 2 (Billing — Subscriptions) |
+|---|---|---|
+| **MP App ID** | `2318642168506769` | `6186158011206269` |
+| **Purpose** | Tenant charges their customers | Platform charges tenants |
+| **Credential type** | OAuth per-tenant (`access_token`) | Platform-level (`MP_BILLING_*`) |
+| **Webhook URL** | `/api/mercadopago/webhook` | `/api/billing/mercadopago/webhook` |
+| **Webhook secret** | `MP_WEBHOOK_SECRET` | `MP_BILLING_WEBHOOK_SECRET` |
+| **Key events** | `payment`, `point_integration_wh`, `mp-connect` | `subscription_preapproval`, `subscription_authorized_payment` |
+| **Auto-provisioning** | Store + POS created on OAuth connect | N/A |
 
 ---
 
@@ -262,6 +319,75 @@ stateDiagram-v2
 
 ---
 
+## 6. Auto-Provisioning — Store + POS on OAuth Connect
+
+When a tenant completes OAuth, the `mercadopago.credentials.upserted` event handler
+automatically creates a Store and POS for the tenant on the MP API. This is a
+homologation requirement — QR flow depends on a pre-registered POS with a valid
+`external_pos_id`.
+
+```mermaid
+sequenceDiagram
+    participant T as Tenant
+    participant App as OAuth Callback
+    participant H as Event Handler
+    participant MP as MercadoPago API
+    participant DB as Database
+
+    T->>App: Complete OAuth authorization
+    App->>DB: upsertCredentials(tenant, token, user_id)
+    App->>H: emit(mercadopago.credentials.upserted)
+    activate H
+
+    Note over H: Auto-provision (best-effort)
+
+    H->>MP: POST /users/{user_id}/stores
+    MP-->>H: { id: store_id }
+    H->>MP: POST /pos { store_id, external_id }
+    MP-->>H: { id: pos_id }
+    H-->>App: ✅ Store + POS created
+    deactivate H
+
+    Note over H: If either call fails:<br/>logged as warning,<br/>does not block OAuth
+
+    App-->>T: 302 → /?mp_oauth=success
+```
+
+---
+
+## 7. Billing Webhook Pipeline
+
+Platform subscription events from App 2 (Billing) are handled on a separate
+endpoint with independent HMAC validation.
+
+```mermaid
+flowchart TD
+    MP2["MercadoPago Billing App\n(6186158011206269)"] --> BWH["POST /api/billing/mercadopago/webhook"]
+
+    BWH --> BSIG{"MP_BILLING_WEBHOOK_SECRET\nset in env?"}
+    BSIG -->|Yes| BVAL["Validate x-signature\nHMAC-SHA256"]
+    BSIG -->|"No (dev only)"| BSKIP["Skip validation"]
+    BVAL -->|Invalid| BR401["❌ 401 Invalid signature"]
+    BVAL -->|Valid| BROUTE
+    BSKIP --> BROUTE
+
+    BROUTE{"Route by\nevent type"} -->|subscription_preapproval| BSUB["processBillingEvent()"]
+    BROUTE -->|subscription_authorized_payment| BPAY["processBillingEvent()"]
+    BROUTE -->|payment| BPMT["processBillingEvent()"]
+    BROUTE -->|other| BACK["✅ 200 OK acknowledged"]
+
+    BSUB --> BENT["Update tenant_subscriptions\n→ recompute tenant_entitlements"]
+    BPAY --> BENT
+    BPMT --> BENT
+    BENT --> BAUD["Write tenant_billing_events\n(audit)"]
+    BAUD --> BR200["✅ 200 OK"]
+
+    style MP2 fill:#faf5ff,stroke:#8b5cf6
+    style BWH fill:#faf5ff,stroke:#8b5cf6
+```
+
+---
+
 ## File Map
 
 ```
@@ -273,11 +399,25 @@ app/api/mercadopago/
 │   ├── route.ts             ← Production webhooks (uses MP_WEBHOOK_SECRET)
 │   └── test/route.ts        ← Sandbox webhooks (no signature check)
 
+app/api/billing/mercadopago/
+└── webhook/
+    ├── route.ts             ← Billing webhooks (uses MP_BILLING_WEBHOOK_SECRET)
+    └── test/route.ts        ← Billing sandbox webhooks
+
 lib/services/mercadopago/
+├── mpFetch.ts               ← Shared HTTP helper (Bearer auth, B4 headers)
 ├── oauthService.ts          ← OAuth helpers (authorize URL, token exchange)
 ├── credentialsService.ts    ← CRUD mercadopago_credentials table
 ├── accessRequestsService.ts ← Track pending OAuth access requests
-├── paymentService.ts        ← MP API: QR + PDV payment intents
+├── paymentService.ts        ← MP API: QR + PDV payment intents + device mode
+├── storeService.ts          ← Store/Branch CRUD (homologation A1)
+├── posService.ts            ← POS CRUD (homologation A2)
+├── refundService.ts         ← Full + partial refund API
 ├── statusService.ts         ← CRUD payment_sync_attempts table
-└── webhookService.ts        ← Webhook: signature, tenant resolver, handlers
+├── webhookService.ts        ← Webhook: signature, tenant resolver, handlers
+└── tokenCrypto.ts           ← AES-256-GCM token encryption at rest
+
+lib/events/
+├── contracts.ts             ← Domain event types (incl. store, pos, refund, device)
+└── handlers.ts              ← Event handlers (incl. auto-provision Store+POS)
 ```

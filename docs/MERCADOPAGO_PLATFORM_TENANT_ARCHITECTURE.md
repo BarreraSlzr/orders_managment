@@ -25,19 +25,26 @@ See also:
 
 **Purpose**: control whether tenant can use paid features.
 
+- **MP App**: Billing (`6186158011206269`)
 - Payer: tenant (business owner) pays our platform subscription.
 - Merchant of record: our own company account.
-- Recommended integration: Mercado Pago **Subscriptions/Recurring** (separate app/account from tenant payment processing if possible).
+- Integration: Mercado Pago **Subscriptions/Recurring** via dedicated billing app.
+- Credentials: `MP_BILLING_CLIENT_ID`, `MP_BILLING_CLIENT_SECRET`
+- Webhook: `/api/billing/mercadopago/webhook` (secret: `MP_BILLING_WEBHOOK_SECRET`)
 - Output in our system: tenant entitlement state (`active`, `past_due`, `canceled`, `grace_period`).
 
 ## B) Tenant payment processing (Tenant → Their Customer)
 
 **Purpose**: allow tenant to collect in-person payments from their customers.
 
+- **MP App**: MP-Point (`2318642168506769`)
 - Payer: final customer of tenant.
-- Merchant of record: tenant’s own Mercado Pago account.
+- Merchant of record: tenant's own Mercado Pago account.
+- Credentials: `MP_CLIENT_ID`, `MP_CLIENT_SECRET` (OAuth per-tenant tokens)
+- Webhook: `/api/mercadopago/webhook` (secret: `MP_WEBHOOK_SECRET`)
 - Integration mode: tenant connects via OAuth and receives per-tenant credentials.
 - Runtime payment flows: `qr` and `pdv`.
+- **Auto-provisioning**: Store + POS are created automatically on OAuth connect via the `mercadopago.credentials.upserted` event handler.
 
 ---
 
@@ -66,18 +73,28 @@ These two flows **must stay decoupled** at data, credentials, and webhook routin
 
 ### Current technical gaps
 
-- Platform subscription entitlement model is not yet implemented as first-class domain.
-  See [MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md](./MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md).
+- ~~Platform subscription entitlement model is not yet implemented as first-class domain.~~ → ✅ DB tables (`tenant_subscriptions`, `tenant_entitlements`), `checkEntitlement()`, and billing webhook route exist. See [MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md](./MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md).
 - Disconnect UX may not fully deactivate server-side credentials in all paths.
-- Platform billing webhook route not yet implemented.
+- ~~Platform billing webhook route not yet implemented.~~ → ✅ `/api/billing/mercadopago/webhook` implemented + configured on MP dashboard.
+- Subscription creation API (`POST /preapproval_plan`, `POST /preapproval`) not yet implemented.
+- Tenant subscription checkout UI not yet built.
 
-### Completed in this branch
+### Completed
 
 - ✅ Access token and refresh token encrypted at rest (AES-256-GCM, `enc:v1:` format).
 - ✅ Refresh token lifecycle implemented with proactive auto-renewal 60 s before expiry.
 - ✅ Opportunistic re-encryption of legacy plaintext rows.
 - ✅ DB schema extended (migration v12): `refresh_token`, `token_expires_at`, `refreshed_at`.
 - ✅ Critical API bugs fixed: terminal schema, PDV amount format, OAuth email cookie.
+- ✅ Store/Branch CRUD service (`storeService.ts`) — homologation A1.
+- ✅ POS CRUD service (`posService.ts`) — homologation A2.
+- ✅ Auto-provisioning Store + POS on OAuth connect (`credentials.upserted` handler).
+- ✅ Refund API service (`refundService.ts`) — full + partial refunds.
+- ✅ Device mode switch (`switchDeviceMode()` in `paymentService.ts`).
+- ✅ Shared `mpFetch()` helper with `X-Integrator-Id` / `X-Platform-Id` B4 headers.
+- ✅ Webhooks configured on both MP apps (Point + Billing) via MP dashboard.
+- ✅ 4 new domain events: `store.upserted`, `pos.upserted`, `payment.refunded`, `device.mode.switched`.
+- ✅ 4 new tRPC sub-routers: `store`, `pos`, `refund`, `device`.
 
 ## Target Architecture
 
@@ -212,30 +229,32 @@ Failure behavior:
 
 ## Delivery Plan (phased)
 
-## Phase 1 (stabilize current flow)
+## Phase 1 (stabilize current flow) — ✅ Complete
 
-- Add entitlement preconditions around MP operations.
-- Harden OAuth validation and user-facing error states.
-- Ensure production app settings are complete in Mercado Pago panel.
-- Verify webhook signatures and idempotency behavior.
+- ✅ Entitlement preconditions in place (`checkEntitlement()`, `ENTITLEMENT_ENABLED`).
+- ✅ OAuth validation hardened (CSRF state, cookies, email).
+- ✅ Production app settings complete in MP panel for both apps.
+- ✅ Webhook signatures validated; webhooks configured on both apps.
 
-## Phase 2 (subscription domain)
+## Phase 2 (subscription domain) — ✅ Partial (DB + webhook ready)
 
-- Implement `tenant_subscriptions` + `tenant_entitlements`.
-- Add billing webhook and status transitions.
-- Wire soft-gate checks in UI + API middleware/procedures.
+- ✅ `tenant_subscriptions` + `tenant_entitlements` DB tables exist.
+- ✅ Billing webhook route + `processBillingEvent()` handler.
+- ✅ Soft-gate check via `checkMpEntitlement()` (default: allow all until `ENTITLEMENT_ENABLED=true`).
+- ❌ Subscription creation service (`POST /preapproval_plan`, `POST /preapproval`) not yet built.
+- ❌ Tenant checkout UI for subscription not yet built.
 
-## Phase 3 (credentials hardening)
+## Phase 3 (credentials hardening) — ✅ Complete
 
-- Encrypt token fields.
-- Add refresh-token lifecycle and retry policy.
-- Complete server-side disconnect semantics.
+- ✅ Token fields encrypted (AES-256-GCM).
+- ✅ Refresh-token lifecycle with auto-renewal 60 s before expiry.
+- Server-side disconnect semantics still need hardening.
 
-## Phase 4 (operational maturity)
+## Phase 4 (operational maturity) — In Progress
 
 - Metrics and alerting dashboard.
 - Reconciliation tools for stuck attempts.
-- Runbooks for OAuth failures, webhook drift, and provider outages.
+- ✅ Runbooks created: Token Lifecycle, Webhook Observability.
 
 ## Go-Live Readiness
 

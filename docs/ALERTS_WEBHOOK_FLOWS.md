@@ -53,10 +53,17 @@ sequenceDiagram
         MP-->>WS: PaymentDetail
         WS->>DB: update attempt (status=approved|rejected|…)
         WS->>DB: update order payment_status
+        WS->>AL: createPlatformAlert (type=payment, metadata.order_id)
+        Note over WS,AL: severity: approved→info, rejected/canceled→warning, error→critical
     else type = "point_integration"
         WS->>DB: lookup attempt by mp_intent_id
         WS->>DB: update status
         WS->>DB: update order payment_status
+        WS->>AL: createPlatformAlert (type=payment, sourceType=mp_point, metadata.order_id)
+    else type = "mp-connect" (deauth)
+        WS->>DB: mark credentials inactive
+        WS->>AL: createPlatformAlert (type=mp_connect, severity=critical)
+        Note over WS,AL: No order_id — deauth is account-level
     else type = "claim"
         WS->>MP: GET /v1/claims/{claimId}
         MP-->>WS: ClaimDetail + payment_id
@@ -110,6 +117,42 @@ sequenceDiagram
     BW-->>API: {handled: true}
     API-->>MP: 200 OK
 ```
+
+---
+
+## 3b — Alert Type Coverage Matrix
+
+Every webhook event type that creates a platform alert, the alert `type`
+used, and whether `metadata.order_id` is present (enabling the "Ver orden →"
+deep-link button in the Notifications tab).
+
+| Webhook type | Handler | Alert `type` | `sourceType` | `metadata.order_id` | Deep-link? |
+|---|---|---|---|---|---|
+| `payment` | `handlePaymentEvent` | `payment` | `mp_payment` | ✅ from `external_reference` | ✅ |
+| `point_integration_wh` / `order` | `handlePointIntegrationEvent` | `payment` | `mp_point` | ✅ from `attempt.order_id` | ✅ |
+| `mp-connect` (deauth) | `handleMpConnectEvent` | `mp_connect` | `mp_connect` | ❌ account-level | ❌ |
+| `claim` | `handleClaimEvent` | `claim` | `mp_claim` | ✅ if attempt found | ✅ conditional |
+| `subscription_*` | `handleSubscriptionEvent` | `subscription` | `mp_subscription` | ❌ | ❌ |
+| billing webhook | `billingWebhookService` | `subscription` | `mp_billing` | ❌ | ❌ |
+
+### Multiple payments per order
+
+A single order can have **many** payment attempts (retry after rejection,
+split payments, etc.). Each webhook creates its own alert row. The alert
+title includes the first 8 characters of the `orderId` for scannability:
+`"Pago aprobado — orden a1b2c3d4"`. All alerts for the same order share
+`metadata.order_id`, so the "Ver orden →" button always opens the correct
+order detail panel.
+
+### Alert severity mapping (payment events)
+
+| Sync status | Severity | Rationale |
+|---|---|---|
+| `approved` | `info` | Normal — payment succeeded |
+| `rejected` | `warning` | Actionable — tenant can retry |
+| `canceled` | `warning` | Actionable — tenant can start new payment |
+| `error` | `critical` | Requires investigation |
+| _other_ | `info` | Default — intermediate states |
 
 ---
 
