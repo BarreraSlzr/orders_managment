@@ -16,7 +16,7 @@ import type { AlertType } from "@/lib/sql/types";
 import { z } from "zod";
 import { adminProcedure, router, tenantProcedure } from "../init";
 
-const AlertTypeSchema = z.enum(["claim", "subscription", "changelog", "system"]);
+const AlertTypeSchema = z.enum(["claim", "payment", "mp_connect", "subscription", "changelog", "system"]);
 
 export const alertsRouter = router({
   /**

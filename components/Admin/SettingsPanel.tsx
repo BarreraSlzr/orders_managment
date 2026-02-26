@@ -4,41 +4,42 @@ import { EntitlementBanner } from "@/components/MercadoPago/EntitlementBanner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useAdminStatus } from "@/hooks/useAdminStatus";
 import type { PlatformAlert } from "@/lib/sql/types";
 import { TEST_IDS, tid } from "@/lib/testIds";
 import { useTRPC } from "@/lib/trpc/react";
 import { formatUnixSecondsToReadable, getIsoTimestamp } from "@/utils/stamp";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    AlertCircle,
-    AlertTriangle,
-    ArrowLeft,
-    ArrowRight,
-    Bell,
-    BellOff,
-    BookOpen,
-    Building2,
-    CheckCircle,
-    CreditCard,
-    Download,
-    FileText,
-    Info,
-    LogOut,
-    Package,
-    RefreshCw,
-    Trash2,
-    Upload,
-    User,
-    XCircle
+  AlertCircle,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  Bell,
+  BellOff,
+  BookOpen,
+  Building2,
+  CheckCircle,
+  CreditCard,
+  Download,
+  FileText,
+  Info,
+  LogOut,
+  Package,
+  RefreshCw,
+  Trash2,
+  Upload,
+  User,
+  XCircle
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -50,6 +51,8 @@ type Tab = "settings" | "csv" | "export" | "notifications";
 
 // ── Notifications Tab ────────────────────────────────────────────────────────
 
+import type { AlertType } from "@/lib/sql/types";
+
 function AlertSeverityIcon({ severity }: { severity: string }) {
   if (severity === "critical")
     return <AlertTriangle className="size-4 text-red-500 shrink-0" />;
@@ -58,23 +61,135 @@ function AlertSeverityIcon({ severity }: { severity: string }) {
   return <Info className="size-4 text-blue-500 shrink-0" />;
 }
 
+/** Icon per alert type for filter chips and cards. */
+function AlertTypeIcon({ type }: { type: string }) {
+  if (type === "payment") return <CreditCard className="size-3" />;
+  if (type === "claim") return <AlertTriangle className="size-3" />;
+  if (type === "mp_connect") return <LogOut className="size-3" />;
+  if (type === "subscription") return <RefreshCw className="size-3" />;
+  if (type === "changelog") return <FileText className="size-3" />;
+  return <Bell className="size-3" />;
+}
+
+const ALERT_TYPE_LABELS: Record<AlertType, string> = {
+  payment: "Pagos",
+  claim: "Reclamos",
+  mp_connect: "Conexión",
+  subscription: "Suscripciones",
+  changelog: "Cambios",
+  system: "Sistema",
+};
+
+const ALL_ALERT_TYPES: AlertType[] = ["payment", "claim", "mp_connect", "subscription", "changelog", "system"];
+
+/** Extract metadata helpers */
+function alertMeta(alert: PlatformAlert): Record<string, unknown> | null {
+  return alert.metadata != null && typeof alert.metadata === "object"
+    ? (alert.metadata as Record<string, unknown>)
+    : null;
+}
+function alertOrderId(alert: PlatformAlert): string | null {
+  const meta = alertMeta(alert);
+  return meta && typeof meta.order_id === "string" ? meta.order_id : null;
+}
+
+/** Relative time label (minutes/hours/days). */
+function relativeTimeLabel(date: Date | string): string {
+  const diffMs = new Date(date).getTime() - Date.now();
+  const diffMin = Math.round(diffMs / 1000 / 60);
+  const diffHours = Math.round(diffMs / 1000 / 3600);
+  const diffDays = Math.round(diffMs / 1000 / 86400);
+
+  const rtf = new Intl.RelativeTimeFormat("es", { numeric: "auto" });
+  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, "minute");
+  if (Math.abs(diffHours) < 24) return rtf.format(diffHours, "hour");
+  return rtf.format(diffDays, "day");
+}
+
+/**
+ * Group payment alerts by order_id. Non-payment alerts stay ungrouped.
+ * Returns a flat array of render items: either a single alert or a group header.
+ */
+interface AlertGroup {
+  kind: "group";
+  orderId: string;
+  alerts: PlatformAlert[];
+  latestSeverity: string;
+  unreadCount: number;
+}
+interface AlertSingle {
+  kind: "single";
+  alert: PlatformAlert;
+}
+type AlertRenderItem = AlertGroup | AlertSingle;
+
+function groupAlertsByIntent(alerts: PlatformAlert[]): AlertRenderItem[] {
+  const items: AlertRenderItem[] = [];
+  const paymentsByOrder = new Map<string, PlatformAlert[]>();
+  const ungrouped: PlatformAlert[] = [];
+
+  for (const alert of alerts) {
+    const orderId = alertOrderId(alert);
+    if (alert.type === "payment" && orderId) {
+      const existing = paymentsByOrder.get(orderId);
+      if (existing) {
+        existing.push(alert);
+      } else {
+        paymentsByOrder.set(orderId, [alert]);
+      }
+    } else {
+      ungrouped.push(alert);
+    }
+  }
+
+  // Merge into a single timeline sorted by most recent event
+  const groupEntries: Array<{ sortDate: Date; item: AlertRenderItem }> = [];
+  const severityPriority: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+
+  for (const [orderId, groupAlerts] of Array.from(paymentsByOrder.entries())) {
+    const latest = groupAlerts[0]; // already sorted desc by created_at
+    const latestSeverity = groupAlerts.reduce(
+      (best: string, a: PlatformAlert) => ((severityPriority[a.severity] ?? 2) < (severityPriority[best] ?? 2) ? a.severity : best),
+      "info" as string,
+    );
+    if (groupAlerts.length === 1) {
+      groupEntries.push({ sortDate: new Date(latest.created_at), item: { kind: "single", alert: latest } });
+    } else {
+      groupEntries.push({
+        sortDate: new Date(latest.created_at),
+        item: {
+          kind: "group",
+          orderId,
+          alerts: groupAlerts,
+          latestSeverity,
+          unreadCount: groupAlerts.filter((a: PlatformAlert) => a.read_at == null).length,
+        },
+      });
+    }
+  }
+
+  for (const alert of ungrouped) {
+    groupEntries.push({ sortDate: new Date(alert.created_at), item: { kind: "single", alert } });
+  }
+
+  groupEntries.sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+  return groupEntries.map((e) => e.item);
+}
+
 function AlertCard({
   alert,
   onRead,
   onClose,
+  compact = false,
 }: {
   alert: PlatformAlert;
   onRead: (id: string) => void;
   onClose: () => void;
+  /** When true, render a compact row inside a group (no order link, smaller padding). */
+  compact?: boolean;
 }) {
   const router = useRouter();
-  const meta =
-    alert.metadata != null && typeof alert.metadata === "object"
-      ? (alert.metadata as Record<string, unknown>)
-      : null;
-  const orderId: string | null =
-    meta && typeof meta.order_id === "string" ? meta.order_id : null;
-
+  const orderId = alertOrderId(alert);
   const isRead = alert.read_at != null;
 
   const handleOrderLink = () => {
@@ -86,7 +201,7 @@ function AlertCard({
 
   return (
     <div
-      className={`rounded-lg border p-3 text-sm space-y-1.5 ${
+      className={`rounded-lg border text-sm space-y-1.5 ${compact ? "p-2 ml-4 border-dashed" : "p-3"} ${
         isRead ? "opacity-60" : "bg-muted/30"
       }`}
       data-testid={tid(TEST_IDS.ALERTS.CARD, alert.id)}
@@ -95,22 +210,15 @@ function AlertCard({
         <AlertSeverityIcon severity={alert.severity} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium truncate">{alert.title}</span>
+            <span className={`font-medium truncate ${compact ? "text-xs" : ""}`}>{alert.title}</span>
             <span className="text-[10px] text-muted-foreground shrink-0">
-              {new Intl.RelativeTimeFormat("es", { numeric: "auto" }).format(
-                Math.round(
-                  (new Date(alert.created_at).getTime() - Date.now()) /
-                    1000 /
-                    60,
-                ),
-                "minute",
-              )}
+              {relativeTimeLabel(alert.created_at)}
             </span>
           </div>
           {alert.body && (
             <p className="text-muted-foreground text-xs mt-0.5">{alert.body}</p>
           )}
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center gap-2 mt-1.5">
             {!isRead && (
               <Button
                 size="sm"
@@ -122,7 +230,7 @@ function AlertCard({
                 Marcar leído
               </Button>
             )}
-            {orderId && (
+            {orderId && !compact && (
               <Button
                 size="sm"
                 variant="link"
@@ -140,6 +248,133 @@ function AlertCard({
   );
 }
 
+/** Collapsed group card for multiple payment alerts on the same order. */
+function AlertGroupCard({
+  group,
+  onRead,
+  onClose,
+}: {
+  group: AlertGroup;
+  onRead: (id: string) => void;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [expanded, setExpanded] = useState(false);
+  const latest = group.alerts[0];
+
+  const handleOrderLink = () => {
+    onClose();
+    router.push(`/?sheet=true&selected=${encodeURIComponent(group.orderId)}`);
+  };
+
+  return (
+    <div className="rounded-lg border p-3 text-sm space-y-2 bg-muted/20" data-testid={`alert-group:${group.orderId}`}>
+      {/* Group header */}
+      <div className="flex items-start gap-2">
+        <AlertSeverityIcon severity={group.latestSeverity} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              className="font-medium truncate text-left hover:underline cursor-pointer"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              <CreditCard className="size-3 inline mr-1 opacity-60" />
+              Orden · {group.alerts.length} pagos
+            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {group.unreadCount > 0 && (
+                <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                  {group.unreadCount}
+                </Badge>
+              )}
+              <span className="text-[10px] text-muted-foreground">
+                {relativeTimeLabel(latest.created_at)}
+              </span>
+            </div>
+          </div>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            Último: {latest.title}
+          </p>
+          <div className="flex items-center gap-2 mt-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-xs px-2"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Colapsar" : `Ver ${group.alerts.length} eventos`}
+            </Button>
+            <Button
+              size="sm"
+              variant="link"
+              className="h-6 text-xs px-2 text-primary"
+              onClick={handleOrderLink}
+            >
+              Ver orden →
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expanded children */}
+      {expanded && (
+        <div className="space-y-1.5 pt-1 border-t border-dashed">
+          {group.alerts.map((alert) => (
+            <AlertCard
+              key={alert.id}
+              alert={alert}
+              onRead={onRead}
+              onClose={onClose}
+              compact
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Horizontal scrollable type filter chip bar. */
+function TypeFilterBar({
+  activeType,
+  onChange,
+}: {
+  activeType: AlertType | null;
+  onChange: (type: AlertType | null) => void;
+}) {
+  return (
+    <div
+      className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none"
+      data-testid={TEST_IDS.SETTINGS.TYPE_FILTER_BAR}
+    >
+      <Button
+        size="sm"
+        variant={activeType === null ? "secondary" : "outline"}
+        className="h-6 text-[11px] px-2 shrink-0 rounded-full"
+        onClick={() => onChange(null)}
+      >
+        Todas
+      </Button>
+      {ALL_ALERT_TYPES.map((type) => (
+        <Button
+          key={type}
+          size="sm"
+          variant={activeType === type ? "secondary" : "outline"}
+          className="h-6 text-[11px] px-2 shrink-0 rounded-full gap-1"
+          onClick={() => onChange(activeType === type ? null : type)}
+          data-testid={`alert-type-filter:${type}`}
+        >
+          <AlertTypeIcon type={type} />
+          {ALERT_TYPE_LABELS[type]}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+const PAGE_SIZE = 20;
+
 function NotificationsTab({
   onBackToSettings,
   onClose,
@@ -149,31 +384,71 @@ function NotificationsTab({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const { isAdmin } = useAdminStatus();
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<AlertType | null>(null);
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
-  const alertsQuery = useQuery(
-    trpc.alerts.list.queryOptions({ unreadOnly }),
-  );
+  // Tenant alerts (requires session with tenant_id)
+  // staleTime: Infinity → query only refetches when SSE invalidation marks it
+  // stale (via SSEInvalidationListener → platform_alerts handler), NOT on
+  // mount / window-focus / tab-switch. Mutations manually invalidate below.
+  const tenantAlertsQuery = useQuery({
+    ...trpc.alerts.list.queryOptions({
+      unreadOnly,
+      type: typeFilter ?? undefined,
+      limit,
+    }),
+    enabled: !isAdmin,
+    staleTime: Infinity,
+  });
+
+  // Admin alerts — same SSE-driven refresh strategy
+  const adminAlertsQuery = useQuery({
+    ...trpc.alerts.adminList.queryOptions({
+      unreadOnly,
+      type: typeFilter ?? undefined,
+      limit,
+    }),
+    enabled: isAdmin,
+    staleTime: Infinity,
+  });
+
+  const activeQuery = isAdmin ? adminAlertsQuery : tenantAlertsQuery;
+  const alerts = activeQuery.data?.alerts ?? [];
+  const unreadCount = activeQuery.data?.unreadCount ?? 0;
+  const hasMore = alerts.length >= limit;
 
   const markReadMutation = useMutation(
-    trpc.alerts.markRead.mutationOptions({
-      onSuccess: () =>
-        queryClient.invalidateQueries({ queryKey: trpc.alerts.list.queryKey() }),
-    }),
+    isAdmin
+      ? trpc.alerts.adminMarkRead.mutationOptions({
+          onSuccess: () =>
+            queryClient.invalidateQueries({ queryKey: trpc.alerts.adminList.queryKey() }),
+        })
+      : trpc.alerts.markRead.mutationOptions({
+          onSuccess: () =>
+            queryClient.invalidateQueries({ queryKey: trpc.alerts.list.queryKey() }),
+        }),
   );
 
   const markAllMutation = useMutation(
-    trpc.alerts.markAllRead.mutationOptions({
-      onSuccess: () =>
-        queryClient.invalidateQueries({ queryKey: trpc.alerts.list.queryKey() }),
-    }),
+    isAdmin
+      ? trpc.alerts.adminMarkAllRead.mutationOptions({
+          onSuccess: () =>
+            queryClient.invalidateQueries({ queryKey: trpc.alerts.adminList.queryKey() }),
+        })
+      : trpc.alerts.markAllRead.mutationOptions({
+          onSuccess: () =>
+            queryClient.invalidateQueries({ queryKey: trpc.alerts.list.queryKey() }),
+        }),
   );
 
-  const alerts = alertsQuery.data?.alerts ?? [];
-  const unreadCount = alertsQuery.data?.unreadCount ?? 0;
+  // Group payment alerts by order_id for the current view
+  const renderItems = groupAlertsByIntent(alerts);
 
   return (
-    <div className="space-y-4" data-testid={TEST_IDS.SETTINGS.NOTIFICATIONS_TAB}>
+    <div className="space-y-3" data-testid={TEST_IDS.SETTINGS.NOTIFICATIONS_TAB}>
+      {/* Header */}
       <div className="flex items-center gap-2">
         <Button
           size="icon"
@@ -186,6 +461,11 @@ function NotificationsTab({
         <div className="flex items-center gap-1.5">
           <Bell className="size-4" />
           <h3 className="font-semibold text-sm">Notificaciones</h3>
+          {isAdmin && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+              Admin
+            </Badge>
+          )}
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
@@ -198,6 +478,10 @@ function NotificationsTab({
         </div>
       </div>
 
+      {/* Type filter chips */}
+      <TypeFilterBar activeType={typeFilter} onChange={setTypeFilter} />
+
+      {/* Read / Mark-all controls */}
       <div className="flex items-center justify-between">
         <Button
           size="sm"
@@ -231,29 +515,56 @@ function NotificationsTab({
         )}
       </div>
 
-      {alertsQuery.isLoading && (
+      {/* Loading state */}
+      {activeQuery.isLoading && (
         <div className="text-xs text-muted-foreground text-center py-6">
           Cargando...
         </div>
       )}
 
-      {!alertsQuery.isLoading && alerts.length === 0 && (
+      {/* Empty state */}
+      {!activeQuery.isLoading && alerts.length === 0 && (
         <div className="text-xs text-muted-foreground text-center py-8 space-y-2">
           <BellOff className="size-6 mx-auto opacity-40" />
-          <p>Sin notificaciones</p>
+          <p>{typeFilter ? `Sin notificaciones de ${ALERT_TYPE_LABELS[typeFilter].toLowerCase()}` : "Sin notificaciones"}</p>
         </div>
       )}
 
+      {/* Alert list — grouped by payment intent */}
       <div className="space-y-2">
-        {alerts.map((alert) => (
-          <AlertCard
-            key={alert.id}
-            alert={alert}
-            onRead={(id) => markReadMutation.mutate({ id })}
-            onClose={onClose}
-          />
-        ))}
+        {renderItems.map((item) =>
+          item.kind === "group" ? (
+            <AlertGroupCard
+              key={`g:${item.orderId}`}
+              group={item}
+              onRead={(id) => markReadMutation.mutate({ id })}
+              onClose={onClose}
+            />
+          ) : (
+            <AlertCard
+              key={item.alert.id}
+              alert={item.alert}
+              onRead={(id) => markReadMutation.mutate({ id })}
+              onClose={onClose}
+            />
+          ),
+        )}
       </div>
+
+      {/* Load more */}
+      {hasMore && (
+        <div className="text-center pt-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 text-xs"
+            onClick={() => setLimit((v) => v + PAGE_SIZE)}
+            disabled={activeQuery.isFetching}
+          >
+            {activeQuery.isFetching ? "Cargando..." : "Cargar más"}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
