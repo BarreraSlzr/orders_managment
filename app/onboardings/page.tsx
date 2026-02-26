@@ -147,9 +147,13 @@ export default function OnboardingsPage() {
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <MpEnvWorkflowCard
-              envStatus={mpEnvStatusQuery.data ?? null}
+              envStatus={
+                mpEnvStatusQuery.data?.ok
+                  ? mpEnvStatusQuery.data.vars
+                  : null
+              }
               isLoading={mpEnvStatusQuery.isLoading}
-              isError={mpEnvStatusQuery.isError}
+              isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
               onRetry={() => void mpEnvStatusQuery.refetch()}
             />
           </div>

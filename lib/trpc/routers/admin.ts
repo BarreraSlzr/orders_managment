@@ -509,19 +509,31 @@ export const adminRouter = router({
    * Admin-only (requires admin API key cookie / header).
    */
   mpEnvStatus: adminProcedure.query(() => {
-    const isSet = (key: string) => {
-      const val = process.env[key];
-      return typeof val === "string" && val.trim().length > 0;
-    };
+    try {
+      const isSet = (key: string) => {
+        const val = process.env[key];
+        return typeof val === "string" && val.trim().length > 0;
+      };
 
-    return {
-      MP_CLIENT_ID: isSet("MP_CLIENT_ID"),
-      MP_CLIENT_SECRET: isSet("MP_CLIENT_SECRET"),
-      MP_REDIRECT_URI: isSet("MP_REDIRECT_URI"),
-      MP_WEBHOOK_SECRET: isSet("MP_WEBHOOK_SECRET"),
-      MP_BILLING_WEBHOOK_SECRET: isSet("MP_BILLING_WEBHOOK_SECRET"),
-      MP_TOKENS_ENCRYPTION_KEY: isSet("MP_TOKENS_ENCRYPTION_KEY"),
-    };
+      return {
+        ok: true as const,
+        vars: {
+          MP_CLIENT_ID: isSet("MP_CLIENT_ID"),
+          MP_CLIENT_SECRET: isSet("MP_CLIENT_SECRET"),
+          MP_REDIRECT_URI: isSet("MP_REDIRECT_URI"),
+          MP_WEBHOOK_SECRET: isSet("MP_WEBHOOK_SECRET"),
+          MP_BILLING_WEBHOOK_SECRET: isSet("MP_BILLING_WEBHOOK_SECRET"),
+          MP_TOKENS_ENCRYPTION_KEY: isSet("MP_TOKENS_ENCRYPTION_KEY"),
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: "internal" as const,
+        message: err instanceof Error ? err.message : "unknown",
+        vars: null,
+      };
+    }
   }),
 
   /**
@@ -593,6 +605,80 @@ export const adminRouter = router({
       },
     };
   }),
+
+  /**
+   * Upsert a mercadopago_credentials row by tenant_id.
+   * Intended for admin reconciliation — insert or patch a credential row
+   * without requiring the full OAuth flow (e.g. to map a known MP user_id
+   * to an existing tenant so webhook tenant resolution succeeds).
+   *
+   * NOTE: access_token is stored as provided. In production the token must
+   * already be encrypted before submission (or encryption happens here if
+   * MP_TOKENS_ENCRYPTION_KEY is set — extend as needed).
+   */
+  mpCredentialUpsert: adminProcedure
+    .input(
+      z.object({
+        tenantId: z.string().uuid(),
+        userId: z.string().min(1),
+        appId: z.string().min(1),
+        accessToken: z.string().min(1),
+        contactEmail: z.string().email().optional(),
+        status: z.enum(["active", "inactive", "error"]).default("active"),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await logAdminAccess({
+        action: "mpCredentialUpsert",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        targetTenantId: input.tenantId,
+        metadata: { userId: input.userId, appId: input.appId },
+      });
+
+      const row = await getDb()
+        .insertInto("mercadopago_credentials")
+        .values({
+          tenant_id: input.tenantId,
+          user_id: input.userId,
+          app_id: input.appId,
+          access_token: input.accessToken,
+          contact_email: input.contactEmail ?? null,
+          status: input.status,
+          deleted: null,
+        })
+        .onConflict((oc) =>
+          oc.column("tenant_id").doUpdateSet({
+            user_id: input.userId,
+            app_id: input.appId,
+            access_token: input.accessToken,
+            contact_email: input.contactEmail ?? null,
+            status: input.status,
+            deleted: null,
+          }),
+        )
+        .returning([
+          "id",
+          "tenant_id",
+          "user_id",
+          "app_id",
+          "contact_email",
+          "status",
+          "created",
+        ])
+        .executeTakeFirstOrThrow();
+
+      return {
+        id: row.id,
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        appId: row.app_id,
+        contactEmail: row.contact_email,
+        status: row.status,
+        created: row.created,
+      };
+    }),
 });
 
 

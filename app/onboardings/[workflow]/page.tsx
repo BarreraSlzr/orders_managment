@@ -1,5 +1,6 @@
 "use client";
 
+import { MpCredentialsPanel } from "@/components/Admin/MpCredentialsPanel";
 import { WorkflowRunner } from "@/components/Workflows/WorkflowRunner";
 import {
   CsvImportStep,
@@ -451,12 +452,18 @@ export default function OnboardingRunnerPage() {
         return <MpWebhooksStep data={data} onChange={onChange} />;
       case "mp-tokens":
         return <MpTokensStep data={data} onChange={onChange} />;
+      case "mp-credentials":
+        return <MpCredentialsPanel />;
       case "env-review":
         return (
           <MpEnvReviewStep
             data={data}
-            envStatus={mpEnvStatusQuery.data ?? null}
-            isError={mpEnvStatusQuery.isError}
+            envStatus={
+              mpEnvStatusQuery.data?.ok
+                ? mpEnvStatusQuery.data.vars
+                : null
+            }
+            isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
             onRetry={() => void mpEnvStatusQuery.refetch()}
             onChange={onChange}
           />

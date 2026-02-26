@@ -1,11 +1,12 @@
 /**
- * Unit tests for admin tRPC router — mpEnvStatus + mpCredentialHealth
+ * Unit tests for admin tRPC router — mpEnvStatus + mpCredentialHealth + mpCredentialUpsert
  *
  * Coverage targets:
- *  - mpEnvStatus returns deterministic boolean flags from process.env
+ *  - mpEnvStatus returns deterministic { ok, vars } from process.env
  *  - mpEnvStatus never throws for any env configuration
  *  - adminProcedure rejects unauthenticated callers with UNAUTHORIZED
  *  - mpCredentialHealth returns correct summary and inactiveUserIds
+ *  - mpCredentialUpsert inserts/updates and returns non-sensitive row
  */
 import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ── DB mock ──────────────────────────────────────────────────────────────────
 
 const mockRows: unknown[] = [];
+let mockUpsertResult: unknown = null;
 
 vi.mock("@/lib/sql/database", () => {
   const chainable = () => ({
@@ -23,8 +25,12 @@ vi.mock("@/lib/sql/database", () => {
     orderBy: vi.fn().mockReturnThis(),
     limit: vi.fn().mockReturnThis(),
     offset: vi.fn().mockReturnThis(),
+    values: vi.fn().mockReturnThis(),
+    onConflict: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockReturnThis(),
     execute: vi.fn(() => Promise.resolve(mockRows)),
     executeTakeFirst: vi.fn(() => Promise.resolve(mockRows[0])),
+    executeTakeFirstOrThrow: vi.fn(() => Promise.resolve(mockUpsertResult)),
   });
   return {
     getDb: vi.fn(() => ({
@@ -49,7 +55,7 @@ const createCaller = createCallerFactory(adminRouter);
 
 function adminCtx() {
   return {
-    session: { sub: "admin-user", iat: 0, exp: 9_999_999_999, role: "admin", tenant_id: "t-admin" },
+    session: { sub: "admin-user", iat: 0, exp: 9_999_999_999, role: "admin" as const, tenant_id: "t-admin" },
     isAdmin: true,
   };
 }
@@ -86,12 +92,14 @@ describe("admin.mpEnvStatus", () => {
     const caller = createCaller(adminCtx());
     const result = await caller.mpEnvStatus();
 
-    expect(result.MP_CLIENT_ID).toBe(true);
-    expect(result.MP_CLIENT_SECRET).toBe(true);
-    expect(result.MP_REDIRECT_URI).toBe(false);
-    expect(result.MP_WEBHOOK_SECRET).toBe(false);
-    expect(result.MP_BILLING_WEBHOOK_SECRET).toBe(false);
-    expect(result.MP_TOKENS_ENCRYPTION_KEY).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.vars.MP_CLIENT_ID).toBe(true);
+    expect(result.vars.MP_CLIENT_SECRET).toBe(true);
+    expect(result.vars.MP_REDIRECT_URI).toBe(false);
+    expect(result.vars.MP_WEBHOOK_SECRET).toBe(false);
+    expect(result.vars.MP_BILLING_WEBHOOK_SECRET).toBe(false);
+    expect(result.vars.MP_TOKENS_ENCRYPTION_KEY).toBe(false);
   });
 
   it("returns all true when all keys are set", async () => {
@@ -105,7 +113,9 @@ describe("admin.mpEnvStatus", () => {
     const caller = createCaller(adminCtx());
     const result = await caller.mpEnvStatus();
 
-    expect(Object.values(result).every(Boolean)).toBe(true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(Object.values(result.vars).every(Boolean)).toBe(true);
   });
 
   it("returns all false when no MP env vars are set", async () => {
@@ -123,7 +133,9 @@ describe("admin.mpEnvStatus", () => {
     const caller = createCaller(adminCtx());
     const result = await caller.mpEnvStatus();
 
-    expect(Object.values(result).every((v) => v === false)).toBe(true);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(Object.values(result.vars).every((v) => v === false)).toBe(true);
   });
 
   it("returns false for whitespace-only values", async () => {
@@ -133,8 +145,10 @@ describe("admin.mpEnvStatus", () => {
     const caller = createCaller(adminCtx());
     const result = await caller.mpEnvStatus();
 
-    expect(result.MP_CLIENT_ID).toBe(false);
-    expect(result.MP_CLIENT_SECRET).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.vars.MP_CLIENT_ID).toBe(false);
+    expect(result.vars.MP_CLIENT_SECRET).toBe(false);
   });
 
   it("throws UNAUTHORIZED for non-admin caller", async () => {
@@ -275,6 +289,76 @@ describe("admin.mpCredentialHealth", () => {
     const caller = createCaller(guestCtx());
 
     await expect(caller.mpCredentialHealth()).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    } satisfies Partial<TRPCError>);
+  });
+});
+
+// ── mpCredentialUpsert ───────────────────────────────────────────────────────
+
+describe("admin.mpCredentialUpsert", () => {
+  afterEach(() => {
+    vi.resetAllMocks();
+    mockUpsertResult = null;
+  });
+
+  const validInput = {
+    tenantId: "550e8400-e29b-41d4-a716-446655440000",
+    userId: "204005478",
+    appId: "2318642168506769",
+    accessToken: "APP_USR-test-token",
+    contactEmail: "mp@test.com",
+    status: "active" as const,
+  };
+
+  it("returns the upserted row without token fields", async () => {
+    const now = new Date();
+    mockUpsertResult = {
+      id: "row-id",
+      tenant_id: "550e8400-e29b-41d4-a716-446655440000",
+      user_id: validInput.userId,
+      app_id: validInput.appId,
+      contact_email: validInput.contactEmail,
+      status: "active",
+      created: now,
+      updated: now,
+    };
+
+    const caller = createCaller(adminCtx());
+    const result = await caller.mpCredentialUpsert(validInput);
+
+    expect(result.tenantId).toBe("550e8400-e29b-41d4-a716-446655440000");
+    expect(result.userId).toBe(validInput.userId);
+    expect(result.appId).toBe(validInput.appId);
+    expect(result.status).toBe("active");
+    expect(result).not.toHaveProperty("accessToken");
+    expect(result).not.toHaveProperty("access_token");
+  });
+
+  it("accepts optional contactEmail being absent", async () => {
+    const now = new Date();
+    mockUpsertResult = {
+      id: "row-2",
+      tenant_id: "550e8400-e29b-41d4-a716-446655440000",
+      user_id: validInput.userId,
+      app_id: validInput.appId,
+      contact_email: null,
+      status: "active",
+      created: now,
+      updated: now,
+    };
+
+    const caller = createCaller(adminCtx());
+    const { contactEmail: _omit, ...inputWithoutEmail } = validInput;
+    const result = await caller.mpCredentialUpsert(inputWithoutEmail);
+
+    expect(result.contactEmail).toBeNull();
+  });
+
+  it("throws UNAUTHORIZED for non-admin caller", async () => {
+    const caller = createCaller(guestCtx());
+
+    await expect(caller.mpCredentialUpsert(validInput)).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     } satisfies Partial<TRPCError>);
   });

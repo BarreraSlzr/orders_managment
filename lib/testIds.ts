@@ -154,6 +154,18 @@ export const TEST_IDS = {
     TYPE_FILTER_BAR: "settings-notifications-type-filter-bar",
   },
 
+  // ─── MP Credentials Admin Panel ──────────────────────────────────────────
+  MP_CREDENTIALS: {
+    /** Panel root inside SettingsModal "Credenciales" tab */
+    PANEL: "mp-credentials-panel",
+    /** Individual credential row — append `:${row.id}` */
+    ROW: "mp-credentials-row",
+    /** Upsert form */
+    UPSERT_FORM: "mp-credentials-upsert-form",
+    /** Submit button on upsert form */
+    SUBMIT_BTN: "mp-credentials-submit",
+  },
+
   // ─── Platform Alerts (cards inside Notifications tab) ────────────────────
   ALERTS: {
     /** Alert card root — append `:${alert.id}` */

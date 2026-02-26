@@ -162,6 +162,15 @@ export const configureMpEnvWorkflow: WorkflowDefinition = {
       optional: true,
     },
     {
+      id: "mp-credentials",
+      title: "Credenciales de tenant",
+      description: "Vincula el MP user_id de producción con el tenant para que los webhooks resuelvan correctamente",
+      schema: z.object({
+        credentialsSaved: z.boolean().optional(),
+      }),
+      optional: true,
+    },
+    {
       id: "env-review",
       title: "Revisar y desplegar",
       description: "Copia el bloque .env generado en la configuración de tu hosting",
