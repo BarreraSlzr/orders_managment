@@ -1207,6 +1207,74 @@ CREATE INDEX IF NOT EXISTS platform_alerts_unread_idx
   },
 };
 
+// ── v17: mercadopago_credentials UNIQUE(tenant_id) for upsert support ────────
+
+const migration017: Migration = {
+  version: 17,
+  description:
+    "Add UNIQUE constraint on mercadopago_credentials(tenant_id) to enable ON CONFLICT upsert",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+-- Deduplicate: keep only the most-recently created row per tenant_id
+DELETE FROM mercadopago_credentials
+WHERE id NOT IN (
+  SELECT DISTINCT ON (tenant_id) id
+  FROM mercadopago_credentials
+  ORDER BY tenant_id, created DESC
+);
+
+-- Add the unique constraint (idempotent)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'mercadopago_credentials_tenant_id_unique'
+  ) THEN
+    ALTER TABLE mercadopago_credentials
+      ADD CONSTRAINT mercadopago_credentials_tenant_id_unique UNIQUE (tenant_id);
+  END IF;
+END $$;
+`
+      )
+    );
+
+    console.info("[v17] mercadopago_credentials UNIQUE(tenant_id) constraint applied.");
+  },
+};
+
+// ── v18: mp_platform_config singleton table ──────────────────────────────────
+
+const migration018: Migration = {
+  version: 18,
+  description: "Create mp_platform_config singleton table for DB-first MP platform credentials",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+CREATE TABLE IF NOT EXISTS mp_platform_config (
+  id                      TEXT PRIMARY KEY DEFAULT 'singleton',
+  client_id               TEXT,
+  client_secret           TEXT,
+  redirect_uri            TEXT,
+  webhook_secret          TEXT,
+  billing_webhook_secret  TEXT,
+  tokens_encryption_key   TEXT,
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by              TEXT
+);
+
+-- Ensure the singleton row exists so UPDATE always has a target
+INSERT INTO mp_platform_config (id) VALUES ('singleton') ON CONFLICT DO NOTHING;
+`
+      )
+    );
+
+    console.info("[v18] mp_platform_config singleton table created.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1226,4 +1294,6 @@ export const allMigrations: Migration[] = [
   migration014,
   migration015,
   migration016,
+  migration017,
+  migration018,
 ];

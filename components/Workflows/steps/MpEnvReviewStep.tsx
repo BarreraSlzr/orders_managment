@@ -1,7 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, CheckCircle2, ClipboardCopy, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCopy, Database, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { useState } from "react";
 
 interface EnvStatus {
@@ -19,6 +19,9 @@ interface MpEnvReviewStepProps {
   isError?: boolean;
   onRetry?: () => void;
   onChange: (params: { data: Record<string, unknown> }) => void;
+  /** Called when the admin clicks "Guardar en la plataforma". Throws on error. */
+  onSaveToDb?: () => Promise<void>;
+  isSaving?: boolean;
 }
 
 function StatusBadge({ configured }: { configured: boolean }) {
@@ -41,8 +44,10 @@ function mask(val: string): string {
   return val.slice(0, 4) + "•".repeat(Math.min(val.length - 4, 20));
 }
 
-export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onChange }: MpEnvReviewStepProps) {
+export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onChange, onSaveToDb, isSaving = false }: MpEnvReviewStepProps) {
   const [copied, setCopied] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const confirmed = data.confirmed === true;
 
   const clientId = typeof data.MP_CLIENT_ID === "string" ? data.MP_CLIENT_ID : "";
@@ -69,6 +74,17 @@ export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onC
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
+  }
+
+  async function handleSaveToDb() {
+    if (!onSaveToDb) return;
+    setSaveError(null);
+    try {
+      await onSaveToDb();
+      setSaveSuccess(true);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Error al guardar");
+    }
   }
 
   const rows: Array<{ key: keyof EnvStatus; label: string; value: string }> = [
@@ -176,39 +192,83 @@ export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onC
         </table>
       </div>
 
-      {/* .env block with copy button */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-medium text-slate-700">
-            Bloque .env — pega en Vercel / panel de hosting
-          </p>
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
-          >
-            <ClipboardCopy className="h-3.5 w-3.5" />
-            {copied ? "¡Copiado!" : "Copiar"}
-          </button>
-        </div>
-        <pre className="overflow-x-auto rounded-lg border bg-slate-950 p-4 font-mono text-xs text-slate-100 leading-relaxed select-all">
-          {envLines}
-        </pre>
-        <p className="text-xs text-slate-500">
-          En Vercel: Project → Settings → Environment Variables → pega o
-          agrega cada clave de forma individual.
-        </p>
+      {/* Save to DB / .env actions */}
+      <div className="space-y-3">
+        {onSaveToDb && (
+          <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+            <div>
+              <p className="text-sm font-medium text-slate-700">Guardar en la plataforma</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Persiste la configuración directamente en la base de datos. No se
+                requieren variables de entorno adicionales.
+              </p>
+            </div>
+
+            {saveSuccess ? (
+              <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Configuración guardada correctamente.
+              </div>
+            ) : (
+              <>
+                {saveError && (
+                  <div className="flex items-center gap-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {saveError}
+                  </div>
+                )}
+                <button
+                  type="button"
+                  disabled={isSaving}
+                  onClick={() => void handleSaveToDb()}
+                  className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:opacity-60"
+                >
+                  {isSaving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Database className="h-4 w-4" />
+                  )}
+                  {isSaving ? "Guardando…" : "Guardar en la plataforma"}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Fallback copy block */}
+        <details className="group">
+          <summary className="cursor-pointer list-none flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-100">
+            <span>Copia manual (.env)</span>
+            <span className="text-slate-400 group-open:hidden">▼</span>
+            <span className="text-slate-400 hidden group-open:inline">▲</span>
+          </summary>
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <ClipboardCopy className="h-3.5 w-3.5" />
+                {copied ? "¡Copiado!" : "Copiar"}
+              </button>
+            </div>
+            <pre className="overflow-x-auto rounded-lg border bg-slate-950 p-4 font-mono text-xs text-slate-100 leading-relaxed select-all">
+              {envLines}
+            </pre>
+          </div>
+        </details>
       </div>
 
       {/* Confirm checkbox */}
       <label className="flex items-center gap-2 text-sm cursor-pointer">
         <Checkbox
-          checked={confirmed}
+          checked={confirmed || saveSuccess}
           onCheckedChange={(checked) =>
             onChange({ data: { confirmed: Boolean(checked) } })
           }
         />
-        He copiado las variables en la configuración de entorno de mi hosting.
+        Configuración aplicada en la plataforma.
       </label>
     </div>
   );

@@ -11,6 +11,9 @@
 import { TRPCError } from "@trpc/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Must import and call invalidate so env-var changes are picked up between tests
+import { invalidateMpPlatformConfigCache } from "@/lib/services/mercadopago/platformConfig";
+
 // ── DB mock ──────────────────────────────────────────────────────────────────
 
 const mockRows: unknown[] = [];
@@ -73,8 +76,9 @@ describe("admin.mpEnvStatus", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
-    // Isolate env mutations per test
+    // Isolate env mutations per test and bust the 60s platformConfig cache
     process.env = { ...originalEnv };
+    invalidateMpPlatformConfigCache();
   });
 
   afterEach(() => {

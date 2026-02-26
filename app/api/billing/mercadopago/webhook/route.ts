@@ -24,6 +24,7 @@
  */
 
 import { processBillingEvent } from "@/lib/services/entitlements/billingWebhookService";
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Signature validation ──────────────────────────────────────────────────
-  const billingSecret = process.env.MP_BILLING_WEBHOOK_SECRET;
+  const { billingWebhookSecret: billingSecret } = await getMpPlatformConfig();
   if (billingSecret) {
     const xSignature = request.headers.get("x-signature") ?? "";
     const xRequestId = request.headers.get("x-request-id") ?? "";

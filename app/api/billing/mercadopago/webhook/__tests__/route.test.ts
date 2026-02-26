@@ -19,6 +19,23 @@ vi.mock("@/lib/services/entitlements/billingWebhookService", () => ({
   processBillingEvent: (...args: unknown[]) => mockProcessBillingEvent(...args),
 }));
 
+// Mock platformConfig so tests are not affected by the 60s in-memory cache
+// and can control billingWebhookSecret via process.env directly.
+vi.mock("@/lib/services/mercadopago/platformConfig", () => ({
+  getMpPlatformConfig: vi.fn(async () => ({
+    clientId: process.env.MP_CLIENT_ID?.trim() || null,
+    clientSecret: process.env.MP_CLIENT_SECRET?.trim() || null,
+    redirectUri: process.env.MP_REDIRECT_URI?.trim() || null,
+    webhookSecret: process.env.MP_WEBHOOK_SECRET?.trim() || null,
+    billingWebhookSecret: process.env.MP_BILLING_WEBHOOK_SECRET?.trim() || null,
+    tokensEncryptionKey:
+      process.env.MP_TOKENS_ENCRYPTION_KEY?.trim() ||
+      process.env.AUTH_SECRET?.trim() ||
+      null,
+  })),
+  invalidateMpPlatformConfigCache: vi.fn(),
+}));
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const TEST_SECRET = "test-billing-secret-xyz-1234";

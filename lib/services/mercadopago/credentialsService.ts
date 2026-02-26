@@ -9,13 +9,13 @@
  * MP_TOKENS_ENCRYPTION_KEY (or AUTH_SECRET fallback) is configured.
  */
 import {
-  getOAuthConfig,
-  refreshAccessToken,
+    getOAuthConfig,
+    refreshAccessToken,
 } from "@/lib/services/mercadopago/oauthService";
 import {
-  decryptMpToken,
-  encryptMpToken,
-  isMpTokenEncrypted,
+    decryptMpToken,
+    encryptMpToken,
+    isMpTokenEncrypted,
 } from "@/lib/services/mercadopago/tokenCrypto";
 import { getDb, sql } from "@/lib/sql/database";
 import { MercadopagoCredentialsTable } from "@/lib/sql/types";
@@ -151,7 +151,7 @@ async function refreshCredentialsIfNeeded(
   }
 
   try {
-    const config = getOAuthConfig();
+    const config = await getOAuthConfig();
     const refreshed = await refreshAccessToken({
       config,
       refreshToken: creds.refresh_token,

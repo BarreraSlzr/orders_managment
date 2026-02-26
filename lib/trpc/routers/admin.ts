@@ -1,5 +1,6 @@
 import { generateTempPassword, hashPassword } from "@/lib/auth/passwords";
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
+import { getMpPlatformConfig, invalidateMpPlatformConfigCache } from "@/lib/services/mercadopago/platformConfig";
 import { exportAllData, getTableCounts, validateSnapshot } from "@/lib/sql/backup";
 import { getDb } from "@/lib/sql/database";
 import { listAdminAuditLogs } from "@/lib/sql/functions/adminAudit";
@@ -504,26 +505,23 @@ export const adminRouter = router({
     }),
 
   /**
-   * Returns which Mercado Pago environment variables are currently configured
-   * in the running server.  Never exposes the actual values — only boolean flags.
-   * Admin-only (requires admin API key cookie / header).
+   * Returns which Mercado Pago platform variables are currently configured.
+   * Checks DB (`mp_platform_config`) first, then env vars as fallback.
+   * Never exposes actual values — only boolean presence flags.
    */
-  mpEnvStatus: adminProcedure.query(() => {
+  mpEnvStatus: adminProcedure.query(async () => {
     try {
-      const isSet = (key: string) => {
-        const val = process.env[key];
-        return typeof val === "string" && val.trim().length > 0;
-      };
+      const cfg = await getMpPlatformConfig();
 
       return {
         ok: true as const,
         vars: {
-          MP_CLIENT_ID: isSet("MP_CLIENT_ID"),
-          MP_CLIENT_SECRET: isSet("MP_CLIENT_SECRET"),
-          MP_REDIRECT_URI: isSet("MP_REDIRECT_URI"),
-          MP_WEBHOOK_SECRET: isSet("MP_WEBHOOK_SECRET"),
-          MP_BILLING_WEBHOOK_SECRET: isSet("MP_BILLING_WEBHOOK_SECRET"),
-          MP_TOKENS_ENCRYPTION_KEY: isSet("MP_TOKENS_ENCRYPTION_KEY"),
+          MP_CLIENT_ID: Boolean(cfg.clientId),
+          MP_CLIENT_SECRET: Boolean(cfg.clientSecret),
+          MP_REDIRECT_URI: Boolean(cfg.redirectUri),
+          MP_WEBHOOK_SECRET: Boolean(cfg.webhookSecret),
+          MP_BILLING_WEBHOOK_SECRET: Boolean(cfg.billingWebhookSecret),
+          MP_TOKENS_ENCRYPTION_KEY: Boolean(cfg.tokensEncryptionKey),
         },
       };
     } catch (err) {
@@ -679,6 +677,53 @@ export const adminRouter = router({
         created: row.created,
       };
     }),
-});
 
+  /**
+   * Upserts the platform-level MP config (client_id, secrets, etc.) into
+   * the `mp_platform_config` singleton row in the DB.
+   *
+   * This replaces the previous "copy .env to Vercel" flow — the app reads
+   * from the DB first (with env vars as last-resort fallback) so there's
+   * no manual env var management needed after the first deploy.
+   */
+  mpPlatformConfigUpsert: adminProcedure
+    .input(
+      z.object({
+        clientId: z.string().min(1),
+        clientSecret: z.string().min(1),
+        redirectUri: z.string().min(1),
+        webhookSecret: z.string().min(1),
+        billingWebhookSecret: z.string().optional(),
+        tokensEncryptionKey: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await logAdminAccess({
+        action: "mpPlatformConfigUpsert",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        metadata: { clientId: input.clientId, redirectUri: input.redirectUri },
+      });
+
+      await getDb()
+        .updateTable("mp_platform_config")
+        .set({
+          client_id: input.clientId,
+          client_secret: input.clientSecret,
+          redirect_uri: input.redirectUri,
+          webhook_secret: input.webhookSecret,
+          billing_webhook_secret: input.billingWebhookSecret ?? null,
+          tokens_encryption_key: input.tokensEncryptionKey ?? null,
+          updated_at: new Date().toISOString(),
+          updated_by: ctx.session?.sub ?? null,
+        })
+        .where("id", "=", "singleton")
+        .execute();
+
+      invalidateMpPlatformConfigCache();
+
+      return { ok: true as const };
+    }),
+});
 

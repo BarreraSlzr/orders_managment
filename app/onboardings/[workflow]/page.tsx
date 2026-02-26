@@ -3,23 +3,23 @@
 import { MpCredentialsPanel } from "@/components/Admin/MpCredentialsPanel";
 import { WorkflowRunner } from "@/components/Workflows/WorkflowRunner";
 import {
-  CsvImportStep,
-  ManagerInfoStep,
-  MpEnvReviewStep,
-  MpOAuthStep,
-  MpTokensStep,
-  MpWebhooksStep,
-  PermissionsStep,
-  ReviewStep,
-  StaffInfoStep,
-  TenantInfoStep,
+    CsvImportStep,
+    ManagerInfoStep,
+    MpEnvReviewStep,
+    MpOAuthStep,
+    MpTokensStep,
+    MpWebhooksStep,
+    PermissionsStep,
+    ReviewStep,
+    StaffInfoStep,
+    TenantInfoStep,
 } from "@/components/Workflows/steps";
 import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
 import {
-  getAvailableWorkflows,
-  getWorkflowDefinition,
-  WorkflowDefinition,
+    getAvailableWorkflows,
+    getWorkflowDefinition,
+    WorkflowDefinition,
 } from "@/lib/workflows/definitions";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -69,6 +69,9 @@ export default function OnboardingRunnerPage() {
     ...trpc.admin.mpEnvStatus.queryOptions(),
     enabled: !isLoading,
   });
+  const mpPlatformConfigUpsertMutation = useMutation(
+    trpc.admin.mpPlatformConfigUpsert.mutationOptions(),
+  );
   const onboardTenantStaffMutation = useMutation(
     trpc.users.onboardTenantStaff.mutationOptions(),
   );
@@ -466,6 +469,24 @@ export default function OnboardingRunnerPage() {
             isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
             onRetry={() => void mpEnvStatusQuery.refetch()}
             onChange={onChange}
+            isSaving={mpPlatformConfigUpsertMutation.isPending}
+            onSaveToDb={async () => {
+              const origin = typeof window !== "undefined" ? window.location.origin : "";
+              await mpPlatformConfigUpsertMutation.mutateAsync({
+                clientId: String(data.MP_CLIENT_ID ?? ""),
+                clientSecret: String(data.MP_CLIENT_SECRET ?? ""),
+                redirectUri: `${origin}/api/mercadopago/webhook`,
+                webhookSecret: String(data.MP_WEBHOOK_SECRET ?? ""),
+                billingWebhookSecret: data.MP_BILLING_WEBHOOK_SECRET
+                  ? String(data.MP_BILLING_WEBHOOK_SECRET)
+                  : undefined,
+                tokensEncryptionKey: data.MP_TOKENS_ENCRYPTION_KEY
+                  ? String(data.MP_TOKENS_ENCRYPTION_KEY)
+                  : undefined,
+              });
+              onChange({ data: { confirmed: true } });
+              void mpEnvStatusQuery.refetch();
+            }}
           />
         );
       case "review": {

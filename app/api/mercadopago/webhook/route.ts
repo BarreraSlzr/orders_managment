@@ -14,12 +14,12 @@
  * MercadoPago retries on non-2xx every 15 min for up to 3 days.
  * It expects a response within 22 seconds.
  */
-import {
-  processWebhook,
-  validateWebhookSignature,
-  type MpWebhookNotification,
-} from "@/lib/services/mercadopago/webhookService";
 import { handleOAuthCallback } from "@/lib/services/mercadopago/oauthCallbackHandler";
+import {
+    processWebhook,
+    validateWebhookSignature,
+    type MpWebhookNotification,
+} from "@/lib/services/mercadopago/webhookService";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
