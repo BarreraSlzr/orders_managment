@@ -523,6 +523,76 @@ export const adminRouter = router({
       MP_TOKENS_ENCRYPTION_KEY: isSet("MP_TOKENS_ENCRYPTION_KEY"),
     };
   }),
+
+  /**
+   * Returns a diagnostic summary of all mercadopago_credentials rows.
+   *
+   * Used to diagnose the P0 production blocker where incoming webhook
+   * `user_id` values cannot be resolved to an active tenant credential.
+   *
+   * Returns:
+   *  - rows: all credential rows (non-sensitive fields only — no tokens)
+   *  - activeCount: rows with status='active' and deleted IS NULL
+   *  - unmappedUserIds: user_ids that appear in inactive/deleted rows but
+   *    have no corresponding active row (likely the cause of 'No tenant found')
+   */
+  mpCredentialHealth: adminProcedure.query(async ({ ctx }) => {
+    await logAdminAccess({
+      action: "mpCredentialHealth",
+      adminId: ctx.session?.sub,
+      role: ctx.session?.role,
+      tenantId: ctx.session?.tenant_id,
+    });
+
+    const rows = await getDb()
+      .selectFrom("mercadopago_credentials")
+      .select([
+        "id",
+        "tenant_id",
+        "user_id",
+        "app_id",
+        "contact_email",
+        "status",
+        "deleted",
+        "created",
+        "error_message",
+      ])
+      .orderBy("created", "desc")
+      .execute();
+
+    const activeRows = rows.filter((r) => r.status === "active" && r.deleted == null);
+    const activeUserIds = new Set(activeRows.map((r) => r.user_id));
+
+    // user_ids that exist in the table but have no active mapping
+    const inactiveUserIds = rows
+      .filter((r) => r.user_id && !activeUserIds.has(r.user_id))
+      .map((r) => r.user_id)
+      .filter((id, i, arr) => arr.indexOf(id) === i); // deduplicate
+
+    return {
+      rows: rows.map((r) => ({
+        id: r.id,
+        tenantId: r.tenant_id,
+        userId: r.user_id,
+        appId: r.app_id,
+        contactEmail: r.contact_email,
+        status: r.status,
+        deleted: r.deleted,
+        created: r.created,
+        errorMessage: r.error_message ?? null,
+        isActive: r.status === "active" && r.deleted == null,
+      })),
+      activeCount: activeRows.length,
+      inactiveUserIds,
+      summary: {
+        total: rows.length,
+        active: activeRows.length,
+        inactive: rows.filter((r) => r.status === "inactive").length,
+        error: rows.filter((r) => r.status === "error").length,
+        deleted: rows.filter((r) => r.deleted != null).length,
+      },
+    };
+  }),
 });
 
 

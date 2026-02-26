@@ -708,6 +708,41 @@ export async function processWebhook(params: {
   // Resolve tenant
   const resolved = await resolveWebhookTenant({ mpUserId });
   if (!resolved) {
+    // ── Structured telemetry for unresolvable MP user_id ─────────────────
+    // This is the P0 blocker: a webhook arrived from an MP account whose
+    // user_id has no corresponding active row in `mercadopago_credentials`.
+    // Fire an admin-scoped alert so the platform operator can diagnose
+    // the missing OAuth onboarding or credential deactivation in production.
+    //
+    // We use after() so the alert creation doesn't block the 200 response
+    // and doesn't risk causing an unhandled rejection visible to MP.
+    after(
+      createPlatformAlert({
+        tenantId: null,
+        scope: "admin",
+        type: "system",
+        severity: "critical",
+        title: `Webhook sin tenant — MP user_id ${mpUserId}`,
+        body:
+          `Se recibió un webhook de tipo "${notification.type}" del MP user_id ${mpUserId} ` +
+          `pero no existe credencial activa vinculada a este usuario en la base de datos. ` +
+          `Es probable que el onboarding de OAuth no se haya completado en producción, ` +
+          `o que las credenciales hayan sido desactivadas. ` +
+          `Revisa la tabla mercadopago_credentials y revincula la cuenta desde Configuración.`,
+        sourceType: "mp_webhook",
+        sourceId: notification.id.toString(),
+        metadata: {
+          mp_user_id: mpUserId,
+          notification_type: notification.type,
+          notification_action: notification.action ?? null,
+          data_id: notification.data?.id ?? null,
+          live_mode: notification.live_mode,
+        },
+      }).catch((err) =>
+        console.error("[webhook] Failed to create unknown-tenant admin alert:", err),
+      ),
+    );
+
     return {
       ok: false,
       type: notification.type,
