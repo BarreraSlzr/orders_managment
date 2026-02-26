@@ -456,6 +456,8 @@ export default function OnboardingRunnerPage() {
           <MpEnvReviewStep
             data={data}
             envStatus={mpEnvStatusQuery.data ?? null}
+            isError={mpEnvStatusQuery.isError}
+            onRetry={() => void mpEnvStatusQuery.refetch()}
             onChange={onChange}
           />
         );

@@ -1,7 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
-import { CheckCircle2, ClipboardCopy, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ClipboardCopy, RefreshCw, XCircle } from "lucide-react";
 import { useState } from "react";
 
 interface EnvStatus {
@@ -16,6 +16,8 @@ interface EnvStatus {
 interface MpEnvReviewStepProps {
   data: Record<string, unknown>;
   envStatus?: EnvStatus | null;
+  isError?: boolean;
+  onRetry?: () => void;
   onChange: (params: { data: Record<string, unknown> }) => void;
 }
 
@@ -39,7 +41,7 @@ function mask(val: string): string {
   return val.slice(0, 4) + "•".repeat(Math.min(val.length - 4, 20));
 }
 
-export function MpEnvReviewStep({ data, envStatus, onChange }: MpEnvReviewStepProps) {
+export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onChange }: MpEnvReviewStepProps) {
   const [copied, setCopied] = useState(false);
   const confirmed = data.confirmed === true;
 
@@ -129,6 +131,22 @@ export function MpEnvReviewStep({ data, envStatus, onChange }: MpEnvReviewStepPr
             La columna <em>Servidor</em> muestra si la variable ya está activa en
             el despliegue actual.
           </p>
+          {isError && (
+            <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-700">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              <span>No se pudo verificar el estado del servidor.</span>
+              {onRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="inline-flex items-center gap-1 font-medium underline-offset-2 hover:underline"
+                >
+                  <RefreshCw className="h-2.5 w-2.5" />
+                  Reintentar
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <table className="w-full text-xs">
           <thead>

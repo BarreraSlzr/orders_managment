@@ -11,7 +11,7 @@ import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
 import { getAvailableWorkflows } from "@/lib/workflows/definitions";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CheckCircle2, CreditCard, Pencil, Plus, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Loader2, Pencil, Plus, RefreshCw, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -146,7 +146,12 @@ export default function OnboardingsPage() {
             Configura las integraciones de la plataforma antes de habilitar cobros.
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <MpEnvWorkflowCard envStatus={mpEnvStatusQuery.data ?? null} />
+            <MpEnvWorkflowCard
+              envStatus={mpEnvStatusQuery.data ?? null}
+              isLoading={mpEnvStatusQuery.isLoading}
+              isError={mpEnvStatusQuery.isError}
+              onRetry={() => void mpEnvStatusQuery.refetch()}
+            />
           </div>
         </section>
       )}
@@ -485,7 +490,17 @@ interface MpEnvStatus {
   MP_TOKENS_ENCRYPTION_KEY: boolean;
 }
 
-function MpEnvWorkflowCard({ envStatus }: { envStatus: MpEnvStatus | null }) {
+function MpEnvWorkflowCard({
+  envStatus,
+  isLoading = false,
+  isError = false,
+  onRetry,
+}: {
+  envStatus: MpEnvStatus | null;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
+}) {
   // Count configured required keys
   const requiredKeys: (keyof MpEnvStatus)[] = [
     "MP_CLIENT_ID",
@@ -521,8 +536,42 @@ function MpEnvWorkflowCard({ envStatus }: { envStatus: MpEnvStatus | null }) {
         Client ID, secretos de webhook y claves de cifrado para habilitar cobros.
       </p>
 
+      {/* Loading state */}
+      {isLoading && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Cargando estado del servidor...
+        </div>
+      )}
+
+      {/* Error state */}
+      {!isLoading && isError && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-amber-800">
+                No se pudo cargar el estado de las variables
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-700">
+                Verifica que la clave de administrador esté configurada correctamente.
+              </p>
+            </div>
+          </div>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 hover:text-amber-900"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Live env status */}
-      {envStatus && (
+      {!isLoading && !isError && envStatus && (
         <div className="mt-3 space-y-1.5">
           <p className="text-[10px] uppercase tracking-widest text-slate-400">
             Estado del servidor
