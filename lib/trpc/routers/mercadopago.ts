@@ -311,6 +311,13 @@ const storeRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
       const creds = await getCredentials({ tenantId: ctx.tenantId });
       if (!creds) {
         throw new TRPCError({
@@ -346,6 +353,13 @@ const posRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
       const creds = await getCredentials({ tenantId: ctx.tenantId });
       if (!creds) {
         throw new TRPCError({
@@ -380,6 +394,13 @@ const refundRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
       const creds = await getCredentials({ tenantId: ctx.tenantId });
       if (!creds) {
         throw new TRPCError({
@@ -413,6 +434,13 @@ const deviceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
       const creds = await getCredentials({ tenantId: ctx.tenantId });
       if (!creds) {
         throw new TRPCError({

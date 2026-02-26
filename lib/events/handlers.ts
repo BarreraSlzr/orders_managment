@@ -9,13 +9,13 @@ import {
     listTerminals,
     switchDeviceMode,
 } from "@/lib/services/mercadopago/paymentService";
-import { createPos } from "@/lib/services/mercadopago/posService";
+import { createPos, listPos } from "@/lib/services/mercadopago/posService";
 import { createRefund } from "@/lib/services/mercadopago/refundService";
 import {
     createAttempt,
     updateAttempt,
 } from "@/lib/services/mercadopago/statusService";
-import { createStore } from "@/lib/services/mercadopago/storeService";
+import { createStore, listStores } from "@/lib/services/mercadopago/storeService";
 import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
 import { batchCloseOrders } from "@/lib/sql/functions/batchCloseOrders";
 import {
@@ -328,28 +328,52 @@ export const domainEventHandlers: {
   },
 
   "mercadopago.credentials.upserted": async ({ payload }) => {
-    // Auto-provision a default Store + POS after OAuth so the QR
-    // payment flow works immediately (A1 + A2 quality checklist).
+    // Get-or-create Store + POS so re-OAuth does not create duplicates.
+    // list* first — MP returns 400 for duplicate external_id otherwise.
     const creds = await getCredentials({ tenantId: payload.tenantId });
     if (creds) {
+      const externalStoreId = `tenant_${payload.tenantId}`;
+      const externalPosId = `orders_pdv_${payload.tenantId}`;
+
       try {
-        const store = await createStore({
+        const existingStores = await listStores({
           accessToken: creds.access_token,
           mpUserId: payload.userId,
-          name: `Tenant ${payload.tenantId}`,
-          externalId: `tenant_${payload.tenantId}`,
         });
 
-        await createPos({
+        const store =
+          existingStores.find((s) => s.external_id === externalStoreId) ??
+          (await createStore({
+            accessToken: creds.access_token,
+            mpUserId: payload.userId,
+            name: `Tenant ${payload.tenantId}`,
+            externalId: externalStoreId,
+          }));
+
+        const existingPos = await listPos({
           accessToken: creds.access_token,
-          name: "Caja principal",
-          externalId: "orders_pdv",
           storeId: store.id,
         });
 
-        console.info(
-          `[mp-onboard] Auto-provisioned Store ${store.id} + POS orders_pdv for tenant ${payload.tenantId}`,
+        const posAlreadyExists = existingPos.some(
+          (p) => p.external_id === externalPosId,
         );
+
+        if (!posAlreadyExists) {
+          await createPos({
+            accessToken: creds.access_token,
+            name: "Caja principal",
+            externalId: externalPosId,
+            storeId: store.id,
+          });
+          console.info(
+            `[mp-onboard] Provisioned Store ${store.id} + POS ${externalPosId} for tenant ${payload.tenantId}`,
+          );
+        } else {
+          console.info(
+            `[mp-onboard] Store ${store.id} + POS ${externalPosId} already exist for tenant ${payload.tenantId} — skipping`,
+          );
+        }
       } catch (err) {
         // Best-effort: do not block the OAuth flow on provision failure
         console.warn("[mp-onboard] Auto-provision Store+POS failed:", err);

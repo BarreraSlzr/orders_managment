@@ -18,6 +18,7 @@ import { createPlatformAlert } from "@/lib/services/alerts/alertsService";
 import { getDb } from "@/lib/sql/database";
 import type { PaymentSyncAttemptsTable } from "@/lib/sql/types";
 import { createHmac, timingSafeEqual } from "crypto";
+import { after } from "next/server";
 import { getCredentials, MpCredentials } from "./credentialsService";
 import { updateAttempt } from "./statusService";
 
@@ -360,19 +361,23 @@ export async function handlePaymentEvent(params: {
 
   const { severity, title, body } = paymentAlertCopy({ status: newStatus, orderId });
 
-  // Fire-and-forget — alert creation must not block webhook acknowledgement
-  createPlatformAlert({
-    tenantId,
-    scope: "tenant",
-    type: "payment",
-    severity,
-    title,
-    body,
-    sourceType: "mp_payment",
-    sourceId: payment.id.toString(),
-    metadata: alertMeta,
-  }).catch((err) =>
-    console.error("[webhook] Failed to create payment alert:", err),
+  // Fire-and-forget — alert must not block webhook acknowledgement.
+  // after() ensures the promise is tracked by the Vercel runtime so it
+  // completes even if the function context would otherwise be torn down.
+  after(
+    createPlatformAlert({
+      tenantId,
+      scope: "tenant",
+      type: "payment",
+      severity,
+      title,
+      body,
+      sourceType: "mp_payment",
+      sourceId: payment.id.toString(),
+      metadata: alertMeta,
+    }).catch((err) =>
+      console.error("[webhook] Failed to create payment alert:", err),
+    ),
   );
 
   return { handled: true, detail: `Payment ${payment.id} → ${newStatus}` };
@@ -451,18 +456,20 @@ export async function handlePointIntegrationEvent(params: {
 
   const { severity, title, body } = paymentAlertCopy({ status: newStatus, orderId });
 
-  createPlatformAlert({
-    tenantId,
-    scope: "tenant",
-    type: "payment",
-    severity,
-    title,
-    body,
-    sourceType: "mp_point",
-    sourceId: intentId,
-    metadata: alertMeta,
-  }).catch((err) =>
-    console.error("[webhook] Failed to create point alert:", err),
+  after(
+    createPlatformAlert({
+      tenantId,
+      scope: "tenant",
+      type: "payment",
+      severity,
+      title,
+      body,
+      sourceType: "mp_point",
+      sourceId: intentId,
+      metadata: alertMeta,
+    }).catch((err) =>
+      console.error("[webhook] Failed to create point alert:", err),
+    ),
   );
 
   return { handled: true, detail: `Point intent ${intentId} → ${newStatus}` };
@@ -488,24 +495,26 @@ export async function handleMpConnectEvent(params: {
       .execute();
 
     // Alert tenant — their MP connection was revoked
-    createPlatformAlert({
-      tenantId,
-      scope: "tenant",
-      type: "mp_connect",
-      severity: "critical",
-      title: "Mercado Pago desconectado",
-      body:
-        "Tu cuenta de Mercado Pago fue desvinculada. " +
-        "Los pagos con MP no funcionarán hasta que vuelvas a conectar desde Configuración.",
-      sourceType: "mp_connect",
-      sourceId: notification.id.toString(),
-      metadata: {
-        notification_id: notification.id,
-        action: notification.action,
-        user_id: notification.user_id,
-      },
-    }).catch((err) =>
-      console.error("[webhook] Failed to create deauth alert:", err),
+    after(
+      createPlatformAlert({
+        tenantId,
+        scope: "tenant",
+        type: "mp_connect",
+        severity: "critical",
+        title: "Mercado Pago desconectado",
+        body:
+          "Tu cuenta de Mercado Pago fue desvinculada. " +
+          "Los pagos con MP no funcionarán hasta que vuelvas a conectar desde Configuración.",
+        sourceType: "mp_connect",
+        sourceId: notification.id.toString(),
+        metadata: {
+          notification_id: notification.id,
+          action: notification.action,
+          user_id: notification.user_id,
+        },
+      }).catch((err) =>
+        console.error("[webhook] Failed to create deauth alert:", err),
+      ),
     );
 
     return { handled: true, detail: "Credentials deauthorized" };
