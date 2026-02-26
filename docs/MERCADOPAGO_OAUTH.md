@@ -21,7 +21,17 @@ Examples:
 
 ## Overview
 
+> **Two-App Context**: This document covers the OAuth flow for **App 1 (MP-Point, `2318642168506769`)** — the tenant payment app. OAuth connects individual tenants so they can charge their customers. This is separate from App 2 (Billing, `6186158011206269`) which handles platform subscriptions. See [MERCADOPAGO_DIAGRAMS.md §0](./MERCADOPAGO_DIAGRAMS.md) for the full two-app architecture.
+
 Tenants connect their MercadoPago account exclusively through the **OAuth 2.0 authorization flow**.  No manual credential entry is needed — the system obtains and stores `access_token`, `user_id`, and `app_id` automatically during the OAuth callback.
+
+### What Happens After OAuth Connect
+
+When a tenant completes OAuth, the `mercadopago.credentials.upserted` event fires and automatically:
+1. **Creates a Store** via `POST /users/{user_id}/stores` (homologation requirement A1)
+2. **Creates a POS** via `POST /pos` with the Store ID (homologation requirement A2)
+
+This auto-provisioning ensures the QR flow has a valid `external_pos_id` registered with MercadoPago. If either API call fails, it is logged as a warning but does **not** block the OAuth success flow.
 
 ## OAuth Setup
 
@@ -40,7 +50,7 @@ Tenants connect their MercadoPago account exclusively through the **OAuth 2.0 au
 Add the following to your `.env.local` file:
 
 ```bash
-# MercadoPago OAuth
+# MercadoPago OAuth (App 1 — MP-Point)
 MP_CLIENT_ID=your_client_id_here
 MP_CLIENT_SECRET=your_client_secret_here
 MP_REDIRECT_URI=/api/mercadopago/webhook
@@ -53,6 +63,17 @@ MP_WEBHOOK_SECRET=your_webhook_secret_here
 # Generate with: openssl rand -hex 32
 # Falls back to AUTH_SECRET when not set.
 MP_TOKENS_ENCRYPTION_KEY=your_32_byte_hex_key_here
+
+# Optional — Integrator/Platform ID for good practices (B4 headers)
+# Only needed for certified MP partners
+MP_INTEGRATOR_ID=your_integrator_id
+MP_PLATFORM_ID=your_platform_id
+
+# Billing App (App 2 — Subscriptions) — separate MP application
+# MP_BILLING_CLIENT_ID=your_billing_app_id
+# MP_BILLING_CLIENT_SECRET=your_billing_app_secret
+# MP_BILLING_WEBHOOK_SECRET=your_billing_webhook_secret
+# See MERCADOPAGO_APPROACH.md §6 for full billing env vars
 ```
 
 > Recommended: use the same path (`/api/mercadopago/webhook`) for both
@@ -256,6 +277,9 @@ Manually saves credentials (fallback method).
 - [x] Webhook endpoints for payment/point/mp-connect events
 - [x] Refresh token support for long-lived sessions (auto-refresh 60 s before expiry)
 - [x] Token encryption at rest (AES-256-GCM via `tokenCrypto.ts`)
+- [x] Auto-provisioning Store + POS on OAuth connect (via `credentials.upserted` event handler)
+- [x] Shared `mpFetch()` helper with `X-Integrator-Id` / `X-Platform-Id` headers
+- [x] Webhooks configured on MP dashboard for both apps (Point + Billing)
 
 ## Planned Enhancements
 
@@ -263,3 +287,4 @@ Manually saves credentials (fallback method).
 - [ ] OAuth scope management for permission control
 - [ ] Webhook setup automation during OAuth
 - [ ] Entitlement soft-gate guard on `/authorize` route (see `MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md`)
+- [ ] Billing subscription checkout UI for tenants

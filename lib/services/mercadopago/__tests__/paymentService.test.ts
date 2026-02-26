@@ -142,7 +142,7 @@ describe("paymentService", () => {
       const callArgs =
         (globalThis.fetch as unknown as { mock?: { calls: unknown[][] } }).mock
           ?.calls?.[0] ?? [];
-      const sentBody = JSON.parse(callArgs[1]?.body as string);
+      const sentBody = JSON.parse((callArgs[1] as Record<string, unknown>)?.body as string);
       expect(sentBody.transactions.payments[0].amount).toBe("15.00");
       expect(sentBody.config.point.terminal_id).toBe("DEVICE-1");
       expect(sentBody.type).toBe("point");
@@ -172,7 +172,7 @@ describe("paymentService", () => {
       const callArgs =
         (globalThis.fetch as unknown as { mock?: { calls: unknown[][] } }).mock
           ?.calls?.[0] ?? [];
-      const sentHeaders = callArgs[1]?.headers as Record<string, string>;
+      const sentHeaders = (callArgs[1] as Record<string, unknown>)?.headers as Record<string, string>;
       expect(sentHeaders["X-Idempotency-Key"]).toBeDefined();
       // Should be a non-empty string (UUID)
       expect(typeof sentHeaders["X-Idempotency-Key"]).toBe("string");

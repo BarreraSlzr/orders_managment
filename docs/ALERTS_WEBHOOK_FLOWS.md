@@ -53,10 +53,17 @@ sequenceDiagram
         MP-->>WS: PaymentDetail
         WS->>DB: update attempt (status=approved|rejected|…)
         WS->>DB: update order payment_status
+        WS->>AL: createPlatformAlert (type=payment, metadata.order_id)
+        Note over WS,AL: severity: approved→info, rejected/canceled→warning, error→critical
     else type = "point_integration"
         WS->>DB: lookup attempt by mp_intent_id
         WS->>DB: update status
         WS->>DB: update order payment_status
+        WS->>AL: createPlatformAlert (type=payment, sourceType=mp_point, metadata.order_id)
+    else type = "mp-connect" (deauth)
+        WS->>DB: mark credentials inactive
+        WS->>AL: createPlatformAlert (type=mp_connect, severity=critical)
+        Note over WS,AL: No order_id — deauth is account-level
     else type = "claim"
         WS->>MP: GET /v1/claims/{claimId}
         MP-->>WS: ClaimDetail + payment_id
@@ -113,6 +120,42 @@ sequenceDiagram
 
 ---
 
+## 3b — Alert Type Coverage Matrix
+
+Every webhook event type that creates a platform alert, the alert `type`
+used, and whether `metadata.order_id` is present (enabling the "Ver orden →"
+deep-link button in the Notifications tab).
+
+| Webhook type | Handler | Alert `type` | `sourceType` | `metadata.order_id` | Deep-link? |
+|---|---|---|---|---|---|
+| `payment` | `handlePaymentEvent` | `payment` | `mp_payment` | ✅ from `external_reference` | ✅ |
+| `point_integration_wh` / `order` | `handlePointIntegrationEvent` | `payment` | `mp_point` | ✅ from `attempt.order_id` | ✅ |
+| `mp-connect` (deauth) | `handleMpConnectEvent` | `mp_connect` | `mp_connect` | ❌ account-level | ❌ |
+| `claim` | `handleClaimEvent` | `claim` | `mp_claim` | ✅ if attempt found | ✅ conditional |
+| `subscription_*` | `handleSubscriptionEvent` | `subscription` | `mp_subscription` | ❌ | ❌ |
+| billing webhook | `billingWebhookService` | `subscription` | `mp_billing` | ❌ | ❌ |
+
+### Multiple payments per order
+
+A single order can have **many** payment attempts (retry after rejection,
+split payments, etc.). Each webhook creates its own alert row. The alert
+title includes the first 8 characters of the `orderId` for scannability:
+`"Pago aprobado — orden a1b2c3d4"`. All alerts for the same order share
+`metadata.order_id`, so the "Ver orden →" button always opens the correct
+order detail panel.
+
+### Alert severity mapping (payment events)
+
+| Sync status | Severity | Rationale |
+|---|---|---|
+| `approved` | `info` | Normal — payment succeeded |
+| `rejected` | `warning` | Actionable — tenant can retry |
+| `canceled` | `warning` | Actionable — tenant can start new payment |
+| `error` | `critical` | Requires investigation |
+| _other_ | `info` | Default — intermediate states |
+
+---
+
 ## 4 — Platform Alert Lifecycle
 
 ```mermaid
@@ -128,7 +171,8 @@ stateDiagram-v2
     note right of Visible
         Bell badge shows
         unreadCount > 0
-        Refetches every 60 s
+        Refreshed via SSE
+        (staleTime: Infinity)
     end note
 
     note right of Read
@@ -165,27 +209,48 @@ sequenceDiagram
 
 ---
 
-## 6 — Unread Badge Polling
+## 6 — Unread Badge & Cache Refresh (SSE-Only)
 
-> **Note:** The 60-second polling is now a **fallback only**.  
-> Real-time invalidation is handled via SSE (see section 7 below).  
-> The `refetchInterval: 60_000` acts as a safety net in case the SSE
-> connection drops or the browser tab was backgrounded.
+Alert queries use `staleTime: Infinity` — they **never** refetch on
+mount / window-focus / tab-switch.  Data only refreshes when:
+
+1. **SSE invalidation** — `SSEInvalidationListener` receives a
+   `platform_alerts` event and calls `invalidateQueries` for both
+   `alerts.list` and `alerts.adminList`.
+2. **Mutation success** — `markRead` / `markAllRead` mutations
+   manually invalidate the relevant query key on `onSuccess`.
+
+This eliminates the previous 60-second polling cycle and ensures
+alerts update in near real-time (≤ 3 s SSE poll) with zero wasted
+HTTP requests.
 
 ```mermaid
 sequenceDiagram
-    participant POM as ProductOrderManagment
-    participant TRPC as tRPC alerts.list
-    participant DB as platform_alerts
+    autonumber
+    participant WH as Webhook / Mutation
+    participant DE as domain_events
+    participant SSE as /api/sse (3s poll)
+    participant Listener as SSEInvalidationListener
+    participant QC as QueryClient
+    participant UI as NotificationsTab
 
-    loop every 60 s (fallback)
-        POM->>TRPC: query {unreadOnly: true}
-        TRPC->>DB: SELECT count(*) WHERE read_at IS NULL AND tenant_id = :t
-        DB-->>TRPC: {alerts: [], unreadCount: N}
-        TRPC-->>POM: unreadCount
-        POM->>POM: render badge (N > 0 → red circle with count)
-    end
+    WH->>DE: INSERT {event_type: 'platform_alert.created'}
+    Note over SSE: next poll cycle (≤3s)
+    SSE->>Listener: event: invalidate {table: 'platform_alerts'}
+    Listener->>QC: invalidateQueries(trpc.alerts.list.queryKey())
+    Listener->>QC: invalidateQueries(trpc.alerts.adminList.queryKey())
+    QC->>QC: active observer mounted? → refetch
+    QC-->>UI: fresh alerts + unreadCount
+    UI->>UI: re-render badge + notification list
 ```
+
+### Why `staleTime: Infinity`?
+
+| Without (default `staleTime: 0`) | With `staleTime: Infinity` |
+|---|---|
+| Query refetches on every mount, tab-switch, window-focus | Query only refetches when invalidated (SSE or mutation) |
+| N modal opens → N duplicate HTTP requests | N modal opens → 0 extra requests (served from cache) |
+| SSE invalidation also triggers refetch → double fetching | Single source of truth for freshness |
 
 ---
 
@@ -341,6 +406,75 @@ orders: (_, event) => {
 | `inventory.category.deleted` | `categories` | |
 | `inventory.category.item.toggled` | `categories`, `inventory_items` | |
 | `platform_alert.created` | `platform_alerts` | |
+
+---
+
+## 8 — Notification UI Features
+
+The Notifications tab (inside `SettingsModal`) includes:
+
+### Type Filter Chips
+
+A horizontal scrollable chip bar lets the user filter by alert type.
+The active chip sends `type` as a tRPC query input parameter, so filtering
+happens server-side (no client-side post-filter on large lists).
+
+| Chip | Alert `type` | Icon |
+|------|-------------|------|
+| Todas | _(none)_ | — |
+| Pagos | `payment` | CreditCard |
+| Reclamos | `claim` | AlertTriangle |
+| Conexión | `mp_connect` | LogOut |
+| Suscripciones | `subscription` | RefreshCw |
+| Cambios | `changelog` | FileText |
+| Sistema | `system` | Bell |
+
+### Payment Grouping by Order
+
+`groupAlertsByIntent()` groups payment alerts that share the same
+`metadata.order_id` into a collapsible `AlertGroupCard`. This prevents
+the list from being flooded when an order has multiple payment attempts
+(retry, split, QR + terminal, etc.).
+
+- Single payment → renders as a normal `AlertCard`
+- 2+ payments on the same order → collapsed group: "Orden · N pagos"
+- Group severity = highest severity among children
+- Unread badge shows count of unread alerts within the group
+- "Ver orden →" button navigates to the order detail sheet
+
+### Load-More Pagination
+
+`PAGE_SIZE = 20`. A "Cargar más" button appends the next page by
+increasing the `limit` query parameter. The button is hidden when
+`alerts.length < limit` (all alerts loaded).
+
+### Admin / Tenant Mode
+
+The `NotificationsTab` auto-detects admin role via `useAdminStatus()`:
+
+| Role | Query used | Mark-read mutation | Badge |
+|------|-----------|-------------------|-------|
+| Tenant | `alerts.list` | `alerts.markRead` | — |
+| Admin | `alerts.adminList` | `alerts.adminMarkRead` | "Admin" badge in header |
+
+There is no separate `/settings` page — all notification features live
+exclusively in the `SettingsPanel.tsx` modal.
+
+### Seed Script for Manual Testing
+
+```bash
+# Seed 15 realistic alerts for the test-agent tenant
+bun run scripts/seed-test-alerts.ts
+
+# Clear existing + re-seed
+bun run scripts/seed-test-alerts.ts --reset
+```
+
+Covers: payment (grouped + solo), claim, mp_connect, subscription,
+changelog, system — across all 3 severities, with a mix of read/unread
+and timestamps spread over minutes/hours/days.
+
+---
 
 ### Intentionally excluded from SSE
 

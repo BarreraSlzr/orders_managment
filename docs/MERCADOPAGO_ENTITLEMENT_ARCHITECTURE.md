@@ -7,8 +7,11 @@ See also:
 - [Platform + Tenant Architecture](./MERCADOPAGO_PLATFORM_TENANT_ARCHITECTURE.md)
 - [Issue 24 Context](./MERCADOPAGO_ISSUE_24_CONTEXT.md)
 
-> **Status: Design document — not yet implemented.**  
-> This doc defines the schema, guard strategy, and UI copy needed for PR 1 (Entitlement soft-gate).
+> **Status: Partially implemented.**  
+> DB tables (`tenant_subscriptions`, `tenant_entitlements`, `tenant_billing_events`) exist.
+> `checkMpEntitlement()` helper and billing webhook route (`/api/billing/mercadopago/webhook`) are wired.
+> Default behavior: all tenants allowed until `ENTITLEMENT_ENABLED=true` is set.
+> Remaining: subscription creation service + tenant checkout UI.
 
 ---
 
@@ -16,10 +19,10 @@ See also:
 
 Two independent financial flows must stay decoupled:
 
-| Flow | Payer | Who receives |
-|------|-------|--------------|
-| Platform subscription | Tenant pays us | Our platform subscription account |
-| Tenant customer payments | Customer pays tenant | Tenant's own MP account |
+| Flow | Payer | Who receives | MP App |
+|------|-------|--------------|--------|
+| Platform subscription | Tenant pays us | Our platform subscription account | **Billing** (`6186158011206269`) |
+| Tenant customer payments | Customer pays tenant | Tenant’s own MP account | **MP-Point** (`2318642168506769`) |
 
 Entitlements express the _output_ of the platform subscription — whether the tenant
 is authorized to use paid Mercado Pago features — without coupling to a specific
@@ -146,6 +149,7 @@ export async function checkMpEntitlement({
 | Event handler `order.payment.mercadopago.start` | Hard block | Return `{ success: false, reason: "entitlement_inactive" }` |
 | tRPC `mercadopago.payment.startQR` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
 | tRPC `mercadopago.payment.startPDV` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
+| tRPC `mercadopago.store.*` / `pos.*` / `refund.*` / `device.*` | Hard block | Throw `TRPCError({ code: "FORBIDDEN" })` |
 | tRPC `mercadopago.credentials.get` | Soft — always allow | Show "subscription required" copy in UI |
 
 ### Implementation pattern

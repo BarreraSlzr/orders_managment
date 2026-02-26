@@ -40,6 +40,10 @@ const sel = {
     `[data-testid="${tid(TEST_IDS.ALERTS.ORDER_LINK_BTN, id)}"]`,
 };
 
+// ─── Per-test seeded alert tracking ─────────────────────────────────────────
+// Populated by seedAlert(); flushed in afterEach via adminDeleteByIds.
+let _seededIds: string[] = [];
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 async function login(page: Page) {
@@ -121,6 +125,7 @@ async function seedAlert(
   const alertId: string =
     body?.result?.data?.json?.id ?? body?.result?.data?.id ?? "";
   expect(alertId).toBeTruthy();
+  _seededIds.push(alertId);
   return alertId;
 }
 
@@ -138,6 +143,7 @@ async function openNotificationsTab(page: Page) {
 // ─── Setup ────────────────────────────────────────────────────────────────────
 
 test.beforeEach(async ({ page }) => {
+  _seededIds = [];
   await login(page);
 
   // Mark all existing alerts as read so each test starts with a clean badge
@@ -160,6 +166,22 @@ test.beforeEach(async ({ page }) => {
     },
     data: { json: {} },
   });
+});
+
+test.afterEach(async ({ request }) => {
+  if (!_seededIds.length) return;
+  const adminKey =
+    process.env.ADMIN_SHARED_API_KEY ??
+    process.env.ADMIN_SECRET;
+  if (!adminKey) return;
+  await request.post("/api/trpc/alerts.adminDeleteByIds", {
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${adminKey}`,
+    },
+    data: { json: { ids: _seededIds } },
+  });
+  _seededIds = [];
 });
 
 // ─── Smoke: SSE ──────────────────────────────────────────────────────────────

@@ -11,22 +11,22 @@
  */
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import {
-  checkMpEntitlement,
-  mpEntitlementMessage,
+    checkMpEntitlement,
+    mpEntitlementMessage,
 } from "@/lib/services/entitlements/checkEntitlement";
 import {
-  completeAccessRequest,
-  getLatestAccessRequest,
-  upsertAccessRequest,
+    completeAccessRequest,
+    getLatestAccessRequest,
+    upsertAccessRequest,
 } from "@/lib/services/mercadopago/accessRequestsService";
 import {
-  getCredentials,
-  upsertCredentials,
+    getCredentials,
+    upsertCredentials,
 } from "@/lib/services/mercadopago/credentialsService";
 import {
-  cancelActiveAttempt,
-  getAttempt,
-  getLatestAttempt,
+    cancelActiveAttempt,
+    getAttempt,
+    getLatestAttempt,
 } from "@/lib/services/mercadopago/statusService";
 import { getDb } from "@/lib/sql/database";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
@@ -296,9 +296,176 @@ const paymentRouter = router({
     }),
 });
 
+// ─── Store sub-router ─────────────────────────────────────────────────────────
+
+const storeRouter = router({
+  /**
+   * Creates or updates a Store / Branch in Mercado Pago.
+   * Required for Point integration homologation (A1).
+   */
+  upsert: managerProcedure
+    .input(
+      z.object({
+        name: z.string().min(1, "Store name is required"),
+        externalId: z.string().min(1, "External ID is required"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
+      const creds = await getCredentials({ tenantId: ctx.tenantId });
+      if (!creds) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Mercado Pago not configured.",
+        });
+      }
+      return dispatchDomainEvent({
+        type: "mercadopago.store.upserted",
+        payload: {
+          tenantId: ctx.tenantId,
+          mpUserId: creds.user_id,
+          name: input.name,
+          externalId: input.externalId,
+        },
+      });
+    }),
+});
+
+// ─── POS sub-router ───────────────────────────────────────────────────────────
+
+const posRouter = router({
+  /**
+   * Creates or updates a Point-of-Sale in Mercado Pago.
+   * Required for Point integration homologation (A2).
+   */
+  upsert: managerProcedure
+    .input(
+      z.object({
+        name: z.string().min(1, "POS name is required"),
+        externalId: z.string().min(1, "External ID is required"),
+        storeId: z.string().min(1, "Store ID is required"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
+      const creds = await getCredentials({ tenantId: ctx.tenantId });
+      if (!creds) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Mercado Pago not configured.",
+        });
+      }
+      return dispatchDomainEvent({
+        type: "mercadopago.pos.upserted",
+        payload: {
+          tenantId: ctx.tenantId,
+          name: input.name,
+          externalId: input.externalId,
+          storeId: input.storeId,
+        },
+      });
+    }),
+});
+
+// ─── Refund sub-router ────────────────────────────────────────────────────────
+
+const refundRouter = router({
+  /**
+   * Issues a full or partial refund for a completed payment.
+   * Good practice for Point integration (B1).
+   */
+  create: managerProcedure
+    .input(
+      z.object({
+        paymentId: z.number().int().positive(),
+        amount: z.number().positive().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
+      const creds = await getCredentials({ tenantId: ctx.tenantId });
+      if (!creds) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Mercado Pago not configured.",
+        });
+      }
+      return dispatchDomainEvent({
+        type: "mercadopago.payment.refunded",
+        payload: {
+          tenantId: ctx.tenantId,
+          paymentId: input.paymentId,
+          amount: input.amount,
+        },
+      });
+    }),
+});
+
+// ─── Device sub-router ────────────────────────────────────────────────────────
+
+const deviceRouter = router({
+  /**
+   * Switches the operating mode of a Point terminal (PDV ↔ STANDALONE).
+   * Good practice for merchant UX (B2).
+   */
+  switchMode: managerProcedure
+    .input(
+      z.object({
+        deviceId: z.string().min(1, "Device ID is required"),
+        operatingMode: z.enum(["PDV", "STANDALONE"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
+      if (!ent.allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: mpEntitlementMessage(ent.reason ?? "none"),
+        });
+      }
+      const creds = await getCredentials({ tenantId: ctx.tenantId });
+      if (!creds) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Mercado Pago not configured.",
+        });
+      }
+      return dispatchDomainEvent({
+        type: "mercadopago.device.mode.switched",
+        payload: {
+          tenantId: ctx.tenantId,
+          deviceId: input.deviceId,
+          operatingMode: input.operatingMode,
+        },
+      });
+    }),
+});
+
 // ─── Combined router ──────────────────────────────────────────────────────────
 
 export const mercadopagoRouter = router({
   credentials: credentialsRouter,
   payment: paymentRouter,
+  store: storeRouter,
+  pos: posRouter,
+  refund: refundRouter,
+  device: deviceRouter,
 });

@@ -80,6 +80,47 @@ export function MpEnvReviewStep({ data, envStatus, onChange }: MpEnvReviewStepPr
 
   return (
     <div className="space-y-5">
+      {/* Wiring diagram */}
+      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs text-slate-600">
+        <p className="font-semibold text-sm text-slate-700 mb-2">Resumen de integración</p>
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b">
+              <th className="py-1 text-left font-medium text-slate-500">Concepto</th>
+              <th className="py-1 text-left font-medium text-slate-500">App Pagos (Point)</th>
+              <th className="py-1 text-left font-medium text-slate-500">App Facturación</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            <tr>
+              <td className="py-1">Propósito</td>
+              <td className="py-1">Cobrar a clientes del tenant</td>
+              <td className="py-1">Cobrar al tenant por la plataforma</td>
+            </tr>
+            <tr>
+              <td className="py-1">Credencial</td>
+              <td className="py-1 font-mono">MP_CLIENT_ID / SECRET</td>
+              <td className="py-1 font-mono">MP_BILLING_*</td>
+            </tr>
+            <tr>
+              <td className="py-1">Webhook</td>
+              <td className="py-1 font-mono">/api/mercadopago/webhook</td>
+              <td className="py-1 font-mono">/api/billing/mercadopago/webhook</td>
+            </tr>
+            <tr>
+              <td className="py-1">Eventos</td>
+              <td className="py-1">Point, Order, OAuth</td>
+              <td className="py-1">Suscripciones, Pagos</td>
+            </tr>
+            <tr>
+              <td className="py-1">Auto-provisión</td>
+              <td className="py-1">Sucursal + POS al conectar OAuth</td>
+              <td className="py-1">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       {/* Summary table */}
       <div className="rounded-lg border bg-white text-sm overflow-hidden">
         <div className="px-4 py-3 bg-slate-50 border-b">

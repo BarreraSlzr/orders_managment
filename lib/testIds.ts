@@ -150,6 +150,8 @@ export const TEST_IDS = {
     UNREAD_FILTER_BTN: "settings-notifications-unread-filter",
     /** "Marcar todas como leídas" button */
     MARK_ALL_READ_BTN: "settings-notifications-mark-all-read",
+    /** Horizontal type-filter chip bar */
+    TYPE_FILTER_BAR: "settings-notifications-type-filter-bar",
   },
 
   // ─── Platform Alerts (cards inside Notifications tab) ────────────────────

@@ -106,9 +106,10 @@ to include `store_id`, `external_pos_id`.
 | **Status** | ⚠️ See notes |
 
 **Notes:**
-1. Our code hardcodes `external_pos_id = "orders_pdv"`. This POS must be
-   **pre-registered** via the Stores/POS API (`POST /pos`) or the call returns
-   404. Currently we do not create POS records.
+1. `external_pos_id` is tenant-scoped: `orders_pdv_{tenantId}`. This POS is
+   **auto-provisioned** via get-or-create on OAuth connect — no manual
+   registration needed. Re-connecting OAuth is safe; existing resources are
+   reused (no duplicates).
 2. `total_amount` is sent as `amountCents / 100` (float) — correct per MP docs
    (they expect amount in units, e.g., 10.50).
 3. The QR dynamic endpoint path uses `/qrs` suffix which differs from the
@@ -187,6 +188,72 @@ Body: {
 
 ---
 
+### 1.9 Store Management (Homologation A1)
+
+| Field | Value |
+|-------|-------|
+| **Service** | `storeService.ts` → `createStore()`, `listStores()`, `updateStore()`, `deleteStore()` |
+| **Methods** | `POST`, `GET`, `PUT`, `DELETE` |
+| **URLs** | `https://api.mercadopago.com/users/{user_id}/stores[/{store_id}]` |
+| **Auth** | `Bearer {access_token}` |
+| **Create body** | `{ name, external_id, location: { street_number, street_name, city_name, state_name, latitude, longitude, reference } }` |
+| **Official ref** | <https://www.mercadopago.com.mx/developers/en/reference/stores/_users_user_id_stores/post> |
+| **Status** | ✅ **Implemented** — auto-provisioned on OAuth connect |
+
+**Auto-provisioning:** The `mercadopago.credentials.upserted` event handler uses **get-or-create** logic (`listStores()` → find by `external_id` → create if missing) so re-connecting OAuth never produces duplicate stores. Store `external_id` = `tenant_{tenantId}`.
+
+---
+
+### 1.10 POS Management (Homologation A2)
+
+| Field | Value |
+|-------|-------|
+| **Service** | `posService.ts` → `createPos()`, `listPos()`, `updatePos()`, `deletePos()` |
+| **Methods** | `POST`, `GET`, `PUT`, `DELETE` |
+| **URLs** | `https://api.mercadopago.com/pos[/{pos_id}]` |
+| **Auth** | `Bearer {access_token}` |
+| **Create body** | `{ name, external_id, store_id, fixed_amount: false, category }` |
+| **Key field** | `external_id` = `external_pos_id` used in the QR dynamic endpoint URL |
+| **Default category** | `621102` (SIC for retail) |
+| **Official ref** | <https://www.mercadopago.com.mx/developers/en/reference/pos/_pos/post> |
+| **Status** | ✅ **Implemented** — auto-provisioned on OAuth connect |
+
+**Auto-provisioning:** Created immediately after Store using **get-or-create** logic (`listPos({ storeId })` → skip if `external_id = orders_pdv_{tenantId}` already exists). POS `external_id` is tenant-scoped (`orders_pdv_{tenantId}`) to support future multi-POS per tenant.
+
+---
+
+### 1.11 Refunds
+
+| Field | Value |
+|-------|-------|
+| **Service** | `refundService.ts` → `createRefund()`, `listRefunds()`, `getRefund()` |
+| **Create method** | `POST` |
+| **Create URL** | `https://api.mercadopago.com/v1/payments/{payment_id}/refunds` |
+| **Auth** | `Bearer {access_token}` |
+| **Headers** | `X-Idempotency-Key: {uuid}` (required by MP for refunds) |
+| **Body (full refund)** | `{}` (empty — refunds full amount) |
+| **Body (partial refund)** | `{ amount: 10.50 }` (refund specific amount) |
+| **List URL** | `GET /v1/payments/{payment_id}/refunds` |
+| **Get URL** | `GET /v1/payments/{payment_id}/refunds/{refund_id}` |
+| **Official ref** | <https://www.mercadopago.com.mx/developers/en/reference/chargebacks/_payments_id_refunds/post> |
+| **Status** | ✅ **Implemented** |
+
+---
+
+### 1.12 Device Mode Switch
+
+| Field | Value |
+|-------|-------|
+| **Service** | `paymentService.ts` → `switchDeviceMode()` |
+| **Method** | `PATCH` |
+| **URL** | `https://api.mercadopago.com/point/integration-api/devices/{device_id}` |
+| **Auth** | `Bearer {access_token}` |
+| **Body** | `{ operating_mode: "PDV" \| "STANDALONE" }` |
+| **Official ref** | <https://www.mercadopago.com.mx/developers/en/reference/integrations_api/_point_integration-api_devices_device-id/patch> |
+| **Status** | ✅ **Implemented** |
+
+---
+
 ## 2. Inbound Endpoints (MP → Our App)
 
 ### 2.1 OAuth Callback
@@ -242,6 +309,29 @@ The callback handler reads all three and proceeds normally.
 
 ---
 
+### 2.5 Billing Webhook (App 2)
+
+| Field | Value |
+|-------|-------|
+| **Route** | `POST /api/billing/mercadopago/webhook` |
+| **MP App** | Billing (`6186158011206269`) — separate from tenant payment app |
+| **Handler** | `billingWebhookService.processBillingEvent()` |
+| **HMAC validation** | `x-signature` header via HMAC-SHA256 (when `MP_BILLING_WEBHOOK_SECRET` is set) |
+| **Handled event types** | `subscription_preapproval`, `subscription_authorized_payment`, `payment`, `mp-connect` |
+| **Side effects** | Upsert `tenant_subscriptions` → recompute `tenant_entitlements` → write `tenant_billing_events` |
+| **Always returns 200** | Same retry-storm prevention as tenant webhook |
+| **Status** | ✅ Implemented — webhook configured on MP Billing app dashboard |
+
+### 2.6 Billing Test Webhook
+
+| Field | Value |
+|-------|-------|
+| **Route** | `POST /api/billing/mercadopago/webhook/test` |
+| **Handler** | Same `processBillingEvent()`, no signature validation |
+| **Status** | ✅ Available for development |
+
+---
+
 ## 3. Summary of Issues Found
 
 ### Critical (all resolved)
@@ -258,7 +348,7 @@ The callback handler reads all three and proceeds normally.
 |---|-------|--------|-------|
 | H1 | No `refresh_token` exchange | ✅ Fixed | Auto-refresh implemented; see §1.8 + `MERCADOPAGO_TOKEN_LIFECYCLE_RUNBOOK.md` |
 | H2 | Using LEGACY Point Payment Intent API | ⚠️ Open | Decision deferred; see `MERCADOPAGO_PDV_MIGRATION.md` |
-| H3 | QR flow requires pre-registered POS (`orders_pdv`) | ⚠️ Open | POS must be created in MP dashboard before first use |
+| H3 | QR flow requires pre-registered POS (`orders_pdv`) | ✅ Fixed | POS auto-provisioned on OAuth connect via `posService.ts` |
 | H4 | Legacy PDV body includes undocumented `payment.type` field | ✅ Fixed | `payment.type` field removed from request body |
 | H5 | Missing `x-test-scope: sandbox` header for test mode | ⚠️ Open | Add when sandbox testing is active |
 
@@ -290,6 +380,8 @@ correctly country-specific and should stay separate.
 
 ## 5. Environment Variables Required
 
+### App 1 — MP-Point (Tenant Payments)
+
 | Variable | Service | Required | Purpose |
 |----------|---------|----------|---------|
 | `MP_CLIENT_ID` | oauthService | ✅ | OAuth app client ID |
@@ -301,7 +393,19 @@ correctly country-specific and should stay separate.
 | `MP_REDIRECT_TEST_URI` | webhook test | Dev only | Test webhook routing |
 | `AUTH_COOKIE_NAME` | authorize route | Optional | Session cookie name (default: `__session`) |
 | `MP_TOKENS_ENCRYPTION_KEY` | credentialsService / tokenCrypto | Recommended | AES-256-GCM key for token encryption at rest. Falls back to `AUTH_SECRET` if unset. Generate with: `openssl rand -hex 32` |
+| `MP_INTEGRATOR_ID` | mpFetch | Optional | `X-Integrator-Id` header (certified partners only) |
+| `MP_PLATFORM_ID` | mpFetch | Optional | `X-Platform-Id` header (certified partners only) |
 | `VERCEL_URL` | oauthService | Auto | Used for redirect URI resolution |
+
+### App 2 — Billing (Platform Subscriptions)
+
+| Variable | Service | Required | Purpose |
+|----------|---------|----------|---------|
+| `MP_BILLING_CLIENT_ID` | billing service | ✅ | Billing app client ID (`6186158011206269`) |
+| `MP_BILLING_CLIENT_SECRET` | billing service | ✅ | Billing app client secret |
+| `MP_BILLING_WEBHOOK_SECRET` | billing webhook | Recommended | HMAC validation for billing webhooks |
+| `MP_BILLING_PLAN_ID` | subscription service | Future | Preapproval plan ID (after plan creation) |
+| `ENTITLEMENT_ENABLED` | checkEntitlement | Optional | Set `true` to enforce billing gate (default: allow all) |
 
 ---
 

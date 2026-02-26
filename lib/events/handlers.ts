@@ -7,11 +7,15 @@ import {
     createPDVPaymentIntent,
     createQRPayment,
     listTerminals,
+    switchDeviceMode,
 } from "@/lib/services/mercadopago/paymentService";
+import { createPos, listPos } from "@/lib/services/mercadopago/posService";
+import { createRefund } from "@/lib/services/mercadopago/refundService";
 import {
     createAttempt,
     updateAttempt,
 } from "@/lib/services/mercadopago/statusService";
+import { createStore, listStores } from "@/lib/services/mercadopago/storeService";
 import { createAdminAuditLog } from "@/lib/sql/functions/adminAudit";
 import { batchCloseOrders } from "@/lib/sql/functions/batchCloseOrders";
 import {
@@ -324,8 +328,58 @@ export const domainEventHandlers: {
   },
 
   "mercadopago.credentials.upserted": async ({ payload }) => {
-    // Audit-only event: the actual upsert is performed by the tRPC caller
-    // before dispatching. We just return the identifier for the audit trail.
+    // Get-or-create Store + POS so re-OAuth does not create duplicates.
+    // list* first — MP returns 400 for duplicate external_id otherwise.
+    const creds = await getCredentials({ tenantId: payload.tenantId });
+    if (creds) {
+      const externalStoreId = `tenant_${payload.tenantId}`;
+      const externalPosId = `orders_pdv_${payload.tenantId}`;
+
+      try {
+        const existingStores = await listStores({
+          accessToken: creds.access_token,
+          mpUserId: payload.userId,
+        });
+
+        const store =
+          existingStores.find((s) => s.external_id === externalStoreId) ??
+          (await createStore({
+            accessToken: creds.access_token,
+            mpUserId: payload.userId,
+            name: `Tenant ${payload.tenantId}`,
+            externalId: externalStoreId,
+          }));
+
+        const existingPos = await listPos({
+          accessToken: creds.access_token,
+          storeId: store.id,
+        });
+
+        const posAlreadyExists = existingPos.some(
+          (p) => p.external_id === externalPosId,
+        );
+
+        if (!posAlreadyExists) {
+          await createPos({
+            accessToken: creds.access_token,
+            name: "Caja principal",
+            externalId: externalPosId,
+            storeId: store.id,
+          });
+          console.info(
+            `[mp-onboard] Provisioned Store ${store.id} + POS ${externalPosId} for tenant ${payload.tenantId}`,
+          );
+        } else {
+          console.info(
+            `[mp-onboard] Store ${store.id} + POS ${externalPosId} already exist for tenant ${payload.tenantId} — skipping`,
+          );
+        }
+      } catch (err) {
+        // Best-effort: do not block the OAuth flow on provision failure
+        console.warn("[mp-onboard] Auto-provision Store+POS failed:", err);
+      }
+    }
+
     return { credentialsId: `${payload.tenantId}:${payload.appId}` };
   },
 
@@ -365,5 +419,55 @@ export const domainEventHandlers: {
       date: payload.date,
     });
     return { deductedItems };
+  },
+
+  "mercadopago.store.upserted": async ({ payload }) => {
+    const creds = await getCredentials({ tenantId: payload.tenantId });
+    if (!creds) throw new Error("MP credentials not configured");
+
+    const store = await createStore({
+      accessToken: creds.access_token,
+      mpUserId: payload.mpUserId,
+      name: payload.name,
+      externalId: payload.externalId,
+    });
+    return { storeId: store.id };
+  },
+
+  "mercadopago.pos.upserted": async ({ payload }) => {
+    const creds = await getCredentials({ tenantId: payload.tenantId });
+    if (!creds) throw new Error("MP credentials not configured");
+
+    const pos = await createPos({
+      accessToken: creds.access_token,
+      name: payload.name,
+      externalId: payload.externalId,
+      storeId: payload.storeId,
+    });
+    return { posId: pos.id, externalId: pos.external_id };
+  },
+
+  "mercadopago.payment.refunded": async ({ payload }) => {
+    const creds = await getCredentials({ tenantId: payload.tenantId });
+    if (!creds) throw new Error("MP credentials not configured");
+
+    const refund = await createRefund({
+      accessToken: creds.access_token,
+      paymentId: String(payload.paymentId),
+      amount: payload.amount,
+    });
+    return { refundId: refund.id, status: refund.status };
+  },
+
+  "mercadopago.device.mode.switched": async ({ payload }) => {
+    const creds = await getCredentials({ tenantId: payload.tenantId });
+    if (!creds) throw new Error("MP credentials not configured");
+
+    const terminal = await switchDeviceMode({
+      accessToken: creds.access_token,
+      deviceId: payload.deviceId,
+      operatingMode: payload.operatingMode,
+    });
+    return { deviceId: terminal.id, operatingMode: terminal.operating_mode };
   },
 };

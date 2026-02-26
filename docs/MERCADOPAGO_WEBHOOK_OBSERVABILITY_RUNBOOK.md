@@ -11,10 +11,12 @@ See also:
 
 ## 1. Webhook Architecture Overview
 
+The platform has **two independent webhook pipelines** — one per MP app:
+
 ```
-MP Servers
+MP-Point App (2318642168506769) — Tenant payment events
   │
-  ├── POST /api/mercadopago/webhook   (production — HMAC validated)
+  ├── POST /api/mercadopago/webhook   (production — HMAC: MP_WEBHOOK_SECRET)
   └── POST /api/mercadopago/webhook/test  (sandbox — no HMAC)
         │
         └── webhookService.processWebhook()
@@ -23,6 +25,20 @@ MP Servers
               │     ├── "payment"              → fetch payment details → update payment_sync_attempts
               │     ├── "point_integration_wh" → update PDV attempt status
               │     └── "mp-connect"           → credential lifecycle audit
+              └── Return 200 always
+
+Billing App (6186158011206269) — Platform subscription events
+  │
+  ├── POST /api/billing/mercadopago/webhook   (production — HMAC: MP_BILLING_WEBHOOK_SECRET)
+  └── POST /api/billing/mercadopago/webhook/test  (sandbox — no HMAC)
+        │
+        └── billingWebhookService.processBillingEvent()
+              ├── Route by event type:
+              │     ├── "subscription_preapproval"          → upsert tenant_subscriptions
+              │     ├── "subscription_authorized_payment"   → update subscription status
+              │     └── "payment" / "mp-connect"            → audit logging
+              ├── Recompute tenant_entitlements
+              ├── Write tenant_billing_events (audit)
               └── Return 200 always
 ```
 
@@ -239,7 +255,48 @@ curl -X POST http://localhost:3000/api/mercadopago/webhook/test \
 
 ---
 
-## 10. References
+## 10. Billing Webhook Observability
+
+### HMAC Validation
+
+Billing webhooks use a separate secret (`MP_BILLING_WEBHOOK_SECRET`) and the same
+HMAC-SHA256 validation scheme as tenant payment webhooks. The manifest string format
+is identical: `id:{data.id};request-id:{x-request-id};ts:{ts};`.
+
+### Event Types
+
+| `type` value | Meaning | Handler action |
+|-------------|---------|----------------|
+| `subscription_preapproval` | Subscription created/updated/canceled | Upsert `tenant_subscriptions`, recompute entitlement |
+| `subscription_authorized_payment` | Subscription payment succeeded/failed | Update subscription status + period end |
+| `payment` | One-time billing payment | Audit log |
+| `mp-connect` | App authorization lifecycle | Audit log |
+
+### Alert Thresholds (Billing)
+
+| Metric | Source | Alert when |
+|--------|--------|-----------|
+| Billing webhook 4xx/5xx | Server metrics | Any 5xx |
+| Entitlement flipped to inactive | DB change | Any occurrence (notify ops + tenant) |
+| `subscription_authorized_payment` failure | Billing event log | Any `past_due` transition |
+| No billing webhooks received in 7 days | Monitoring | Unexpected silence if active subscriptions exist |
+
+### Sandbox Testing
+
+Use `POST /api/billing/mercadopago/webhook/test` with the same structure:
+```bash
+curl -X POST http://localhost:3000/api/billing/mercadopago/webhook/test \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "subscription_preapproval",
+    "data": { "id": "preapproval_12345" },
+    "action": "updated"
+  }'
+```
+
+---
+
+## 11. References
 
 - Webhook handler: `app/api/mercadopago/webhook/route.ts`
 - Webhook processing: `lib/services/mercadopago/webhookService.ts`

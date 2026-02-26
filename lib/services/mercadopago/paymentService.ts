@@ -10,10 +10,7 @@
  *   https://www.mercadopago.com.mx/developers/es/docs/mp-point/payment-processing
  */
 
-const MP_BASE_URL = "https://api.mercadopago.com";
-
-/** Default timeout for all MP API calls (20s — MP expects response within 22s). */
-const MP_FETCH_TIMEOUT_MS = 20_000;
+import { mpFetch } from "./mpFetch";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -47,52 +44,6 @@ export interface MpOrderResult {
   transactions: {
     payments: Array<{ id: string; amount: string; status: string }>;
   };
-}
-
-// ─── Internal helper ─────────────────────────────────────────────────────────
-
-async function mpFetch<T>(params: {
-  accessToken: string;
-  method?: "GET" | "POST" | "PUT" | "DELETE";
-  path: string;
-  body?: unknown;
-  /** Additional headers merged on top of Authorization + Content-Type */
-  extraHeaders?: Record<string, string>;
-}): Promise<T> {
-  const { accessToken, method = "GET", path, body, extraHeaders } = params;
-
-  const headers: HeadersInit = {
-    Authorization: `Bearer ${accessToken}`,
-    "Content-Type": "application/json",
-    ...extraHeaders,
-  };
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), MP_FETCH_TIMEOUT_MS);
-
-  let res: Response;
-  try {
-    res = await fetch(`${MP_BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  const json = await res.json();
-
-  if (!res.ok) {
-    const message =
-      (json as { message?: string; error?: string })?.message ??
-      (json as { message?: string; error?: string })?.error ??
-      `MP API error ${res.status}`;
-    throw new Error(message);
-  }
-
-  return json as T;
 }
 
 // ─── Terminal list ────────────────────────────────────────────────────────────
@@ -277,4 +228,33 @@ export async function cancelPDVPaymentIntent({
       error instanceof Error ? error.message : error,
     );
   }
+}
+
+// ─── Device mode switch (B2 quality checklist) ───────────────────────────────
+
+export type DeviceOperatingMode = "PDV" | "STANDALONE";
+
+export interface SwitchDeviceModeParams {
+  accessToken: string;
+  deviceId: string;
+  operatingMode: DeviceOperatingMode;
+}
+
+/**
+ * Switches a Point terminal between PDV and STANDALONE modes.
+ * Endpoint: PATCH /point/integration-api/devices/{device_id}
+ *
+ * Quality checklist item: `Switch device mode`
+ */
+export async function switchDeviceMode({
+  accessToken,
+  deviceId,
+  operatingMode,
+}: SwitchDeviceModeParams): Promise<MpTerminal> {
+  return mpFetch<MpTerminal>({
+    accessToken,
+    method: "PATCH",
+    path: `/point/integration-api/devices/${deviceId}`,
+    body: { operating_mode: operatingMode },
+  });
 }

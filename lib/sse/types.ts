@@ -60,8 +60,8 @@ export const TABLE_INVALIDATION_MAP: Record<NotifyTable, string[][]> = {
   inventory_items: [["inventory", "items", "list"]],
   categories: [["inventory", "categories", "list"]],
   transactions: [["inventory", "transactions", "list"]],
-  /** Invalidate the tenant alerts list and unread badge */
-  platform_alerts: [["alerts", "list"]],
+  /** Invalidate the tenant alerts list, admin list, and unread badge */
+  platform_alerts: [["alerts", "list"], ["alerts", "adminList"]],
   /** Invalidate product consumption / ingredient links */
   product_consumptions: [["products", "consumptions", "list"]],
 };
