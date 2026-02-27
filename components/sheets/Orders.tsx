@@ -270,9 +270,14 @@ export function OpenOrderSheet() {
   }, [sheetOpen, tabFromSheetParam]);
 
   useEffect(() => {
-    if (currentOrder?.closed) {
+    if (!currentOrder) return;
+    if (currentOrder.closed) {
       setFilterStatus("closed");
       void setSheetParam("closed");
+    } else {
+      // Order was re-opened: switch tab back to "opened" so it stays visible.
+      setFilterStatus("opened");
+      void setSheetParam("true");
     }
   }, [currentOrder?.closed, setSheetParam]);
 
@@ -310,7 +315,7 @@ export function OpenOrderSheet() {
     <Sheet
       open={sheetOpen}
       onOpenChange={(open) => {
-        if (!open) handleClose();
+        if (!open) handleAddMoreProducts();
         else void setSheetParam("true");
       }}
     >
@@ -358,7 +363,7 @@ export function OpenOrderSheet() {
         <SheetHeader className="flex flex-row gap-2 justify-between items-center p-0">
           <SheetTitle
             className="text-center text-xl font-bold px-3 cursor-pointer"
-            onClick={handleClose}
+            onClick={handleAddMoreProducts}
           >
             ORDENES
           </SheetTitle>

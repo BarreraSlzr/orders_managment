@@ -157,6 +157,15 @@ export function useOrders({
     }
   }, [queryClient, trpc.orders.getDetails]);
 
+  // Invalidates ALL orders.list cache entries regardless of status/date/timeZone
+  // params. Uses the path-prefix of the query key so the sheet's per-status
+  // and per-date queries (openOrdersQuery, closedOrdersQuery) are also refreshed.
+  const invalidateAllOrderLists = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: listOpts.queryKey.slice(0, 1),
+    });
+  }, [queryClient, listOpts.queryKey]);
+
   useEffect(() => {
     const closeHandler = () => {
       void setSelectedOrderIds([]);
@@ -321,8 +330,9 @@ export function useOrders({
       }
       try {
         await closeMutation.mutateAsync({ orderId });
-        // Refetch orders list after closing
-        await queryClient.refetchQueries({ queryKey: listOpts.queryKey });
+        // Invalidate all orders.list entries (open + closed, any date) so every
+        // query variant in the sheet reflects the updated status immediately.
+        invalidateAllOrderLists();
         return true;
       } catch {
         if (snapshot) {
@@ -336,8 +346,9 @@ export function useOrders({
       const orderId = formData.get("orderId") as string;
       try {
         await openMutation.mutateAsync({ orderId });
-        // Refetch orders list and detail after reopening
-        await queryClient.refetchQueries({ queryKey: listOpts.queryKey });
+        // Invalidate all orders.list entries (open + closed, any date) so the
+        // sheet's per-status/per-date queries both refresh after re-opening.
+        invalidateAllOrderLists();
         invalidateDetail();
         return true;
       } catch {
