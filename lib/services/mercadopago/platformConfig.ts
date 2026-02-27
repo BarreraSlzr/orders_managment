@@ -17,7 +17,9 @@ export interface MpPlatformConfig {
   clientSecret: string | null;
   redirectUri: string | null;
   webhookSecret: string | null;
+  paymentAccessToken: string | null;
   billingWebhookSecret: string | null;
+  billingAccessToken: string | null;
   tokensEncryptionKey: string | null;
 }
 
@@ -38,6 +40,8 @@ export async function getMpPlatformConfig(): Promise<MpPlatformConfig> {
     client_secret: string | null;
     redirect_uri: string | null;
     webhook_secret: string | null;
+    payment_access_token: string | null;
+    billing_access_token: string | null;
     billing_webhook_secret: string | null;
     tokens_encryption_key: string | null;
   } | null = null;
@@ -51,6 +55,8 @@ export async function getMpPlatformConfig(): Promise<MpPlatformConfig> {
           "client_secret",
           "redirect_uri",
           "webhook_secret",
+          "payment_access_token",
+          "billing_access_token",
           "billing_webhook_secret",
           "tokens_encryption_key",
         ])
@@ -65,6 +71,10 @@ export async function getMpPlatformConfig(): Promise<MpPlatformConfig> {
     clientSecret: dbRow?.client_secret?.trim() || process.env.MP_CLIENT_SECRET?.trim() || null,
     redirectUri: dbRow?.redirect_uri?.trim() || process.env.MP_REDIRECT_URI?.trim() || null,
     webhookSecret: dbRow?.webhook_secret?.trim() || process.env.MP_WEBHOOK_SECRET?.trim() || null,
+    paymentAccessToken:
+      dbRow?.payment_access_token?.trim() || process.env.MP_ACCESS_TOKEN?.trim() || null,
+    billingAccessToken:
+      dbRow?.billing_access_token?.trim() || process.env.MP_BILLING_ACCESS_TOKEN?.trim() || null,
     billingWebhookSecret:
       dbRow?.billing_webhook_secret?.trim() || process.env.MP_BILLING_WEBHOOK_SECRET?.trim() || null,
     tokensEncryptionKey:

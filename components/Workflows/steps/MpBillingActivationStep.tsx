@@ -16,8 +16,6 @@ export function MpBillingActivationStep({
   linkedEmail,
   onChange,
 }: MpBillingActivationStepProps) {
-  const billingAccessToken =
-    typeof data.billingAccessToken === "string" ? data.billingAccessToken : "";
   const reason = typeof data.reason === "string" ? data.reason : "Orders Management — Plan Mensual";
   const amount = typeof data.transactionAmount === "number" ? String(data.transactionAmount) : "299";
   const currencyId = typeof data.currencyId === "string" ? data.currencyId : "MXN";
@@ -25,7 +23,8 @@ export function MpBillingActivationStep({
   return (
     <div className="space-y-5">
       <div className="rounded-lg border border-violet-100 bg-violet-50/60 px-4 py-3 text-xs text-violet-800">
-        Usa el <strong>access token de la app de facturación</strong> para crear el plan y la suscripción inicial del tenant.
+        La suscripción se crea usando el <strong>Billing Access Token de plataforma</strong>.
+        Este token ya no se solicita al tenant en este flujo.
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -41,19 +40,6 @@ export function MpBillingActivationStep({
             className={!linkedEmail ? "border-amber-300 text-amber-700" : undefined}
           />
         </div>
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="billing-access-token">Billing Access Token</Label>
-        <Input
-          id="billing-access-token"
-          type="password"
-          value={billingAccessToken}
-          onChange={(e) => onChange({ data: { billingAccessToken: e.target.value } })}
-          placeholder="APP_USR-..."
-          autoComplete="new-password"
-          spellCheck={false}
-        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

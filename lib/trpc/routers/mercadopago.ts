@@ -33,6 +33,7 @@ import {
     getAttempt,
     getLatestAttempt,
 } from "@/lib/services/mercadopago/statusService";
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
 import { getDb, sql } from "@/lib/sql/database";
 import { getIsoTimestamp } from "@/utils/stamp";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
@@ -336,13 +337,43 @@ const billingRouter = router({
   activate: managerProcedure
     .input(
       z.object({
-        billingAccessToken: z.string().min(1),
         reason: z.string().min(3),
         transactionAmount: z.number().positive(),
         currencyId: z.string().min(3),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const platformConfig = await getMpPlatformConfig();
+      const normalizedBillingAccessToken =
+        platformConfig.billingAccessToken?.trim() ?? "";
+      if (!normalizedBillingAccessToken) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Platform billing token is not configured. Set MP_BILLING_ACCESS_TOKEN in platform configuration.",
+        });
+      }
+
+      const platformSecrets = new Set(
+        [
+          platformConfig.clientId,
+          platformConfig.clientSecret,
+          platformConfig.webhookSecret,
+          platformConfig.billingWebhookSecret,
+          platformConfig.tokensEncryptionKey,
+        ]
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      );
+
+      if (platformSecrets.has(normalizedBillingAccessToken)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Billing Access Token must be unique and must not match platform Mercado Pago config values.",
+        });
+      }
+
       const creds = await getCredentials({ tenantId: ctx.tenantId });
       const payerEmail = creds?.contact_email?.trim() || "";
 
@@ -360,7 +391,7 @@ const billingRouter = router({
       const backUrl = `${origin}/onboardings/configure-mp-billing`;
 
       const plan = await createPreapprovalPlan({
-        accessToken: input.billingAccessToken,
+        accessToken: normalizedBillingAccessToken,
         reason: input.reason,
         transactionAmount: input.transactionAmount,
         currencyId: input.currencyId,
@@ -368,7 +399,7 @@ const billingRouter = router({
       });
 
       const subscription = await createSubscription({
-        accessToken: input.billingAccessToken,
+        accessToken: normalizedBillingAccessToken,
         preapprovalPlanId: plan.id,
         payerEmail,
         externalReference: ctx.tenantId,

@@ -9,6 +9,8 @@ interface EnvStatus {
   MP_CLIENT_SECRET: boolean;
   MP_REDIRECT_URI: boolean;
   MP_WEBHOOK_SECRET: boolean;
+  MP_ACCESS_TOKEN: boolean;
+  MP_BILLING_ACCESS_TOKEN: boolean;
   MP_BILLING_WEBHOOK_SECRET: boolean;
   MP_TOKENS_ENCRYPTION_KEY: boolean;
 }
@@ -53,6 +55,8 @@ export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onC
   const clientId = typeof data.MP_CLIENT_ID === "string" ? data.MP_CLIENT_ID : "";
   const clientSecret = typeof data.MP_CLIENT_SECRET === "string" ? data.MP_CLIENT_SECRET : "";
   const webhookSecret = typeof data.MP_WEBHOOK_SECRET === "string" ? data.MP_WEBHOOK_SECRET : "";
+  const paymentAccessToken = typeof data.MP_ACCESS_TOKEN === "string" ? data.MP_ACCESS_TOKEN : "";
+  const billingAccessToken = typeof data.MP_BILLING_ACCESS_TOKEN === "string" ? data.MP_BILLING_ACCESS_TOKEN : "";
   const billingSecret = typeof data.MP_BILLING_WEBHOOK_SECRET === "string" ? data.MP_BILLING_WEBHOOK_SECRET : "";
   const encryptionKey = typeof data.MP_TOKENS_ENCRYPTION_KEY === "string" ? data.MP_TOKENS_ENCRYPTION_KEY : "";
 
@@ -65,6 +69,8 @@ export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onC
     `MP_CLIENT_SECRET=${clientSecret}`,
     `MP_REDIRECT_URI=${redirectUri}`,
     `MP_WEBHOOK_SECRET=${webhookSecret}`,
+    ...(paymentAccessToken ? [`MP_ACCESS_TOKEN=${paymentAccessToken}`] : []),
+    ...(billingAccessToken ? [`MP_BILLING_ACCESS_TOKEN=${billingAccessToken}`] : []),
     ...(billingSecret ? [`MP_BILLING_WEBHOOK_SECRET=${billingSecret}`] : []),
     ...(encryptionKey ? [`MP_TOKENS_ENCRYPTION_KEY=${encryptionKey}`] : []),
   ].join("\n");
@@ -92,6 +98,8 @@ export function MpEnvReviewStep({ data, envStatus, isError = false, onRetry, onC
     { key: "MP_CLIENT_SECRET", label: "Client Secret", value: mask(clientSecret) },
     { key: "MP_REDIRECT_URI", label: "Redirect URI", value: redirectUri },
     { key: "MP_WEBHOOK_SECRET", label: "Webhook Secret", value: mask(webhookSecret) },
+    { key: "MP_ACCESS_TOKEN", label: "Payment Access Token", value: paymentAccessToken ? mask(paymentAccessToken) : "—" },
+    { key: "MP_BILLING_ACCESS_TOKEN", label: "Billing Access Token", value: billingAccessToken ? mask(billingAccessToken) : "—" },
     { key: "MP_BILLING_WEBHOOK_SECRET", label: "Billing Secret", value: billingSecret ? mask(billingSecret) : "—" },
     { key: "MP_TOKENS_ENCRYPTION_KEY", label: "Encryption Key", value: encryptionKey ? mask(encryptionKey) : "—" },
   ];

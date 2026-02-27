@@ -1275,6 +1275,44 @@ INSERT INTO mp_platform_config (id) VALUES ('singleton') ON CONFLICT DO NOTHING;
   },
 };
 
+// ── v19: add billing_access_token to mp_platform_config ─────────────────────
+
+const migration019: Migration = {
+  version: 19,
+  description: "Add billing_access_token to mp_platform_config for platform-managed billing activation",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+ALTER TABLE mp_platform_config
+ADD COLUMN IF NOT EXISTS billing_access_token TEXT;
+`
+      )
+    );
+
+    console.info("[v19] mp_platform_config.billing_access_token added.");
+  },
+};
+
+// ── v20: add payment_access_token to mp_platform_config ─────────────────────
+
+const migration020: Migration = {
+  version: 20,
+  description: "Add payment_access_token to mp_platform_config for platform-managed payment token",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+ALTER TABLE mp_platform_config
+ADD COLUMN IF NOT EXISTS payment_access_token TEXT;
+`
+      )
+    );
+
+    console.info("[v20] mp_platform_config.payment_access_token added.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1296,4 +1334,6 @@ export const allMigrations: Migration[] = [
   migration016,
   migration017,
   migration018,
+  migration019,
+  migration020,
 ];

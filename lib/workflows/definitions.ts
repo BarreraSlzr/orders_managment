@@ -156,6 +156,8 @@ export const configureMpEnvWorkflow: WorkflowDefinition = {
       title: "App de facturación",
       description: "Webhook de la app de suscripciones y clave de cifrado de tokens OAuth",
       schema: z.object({
+        MP_ACCESS_TOKEN: z.string().optional(),
+        MP_BILLING_ACCESS_TOKEN: z.string().optional(),
         MP_BILLING_WEBHOOK_SECRET: z.string().optional(),
         MP_TOKENS_ENCRYPTION_KEY: z.string().optional(),
       }),
@@ -194,7 +196,6 @@ export const configureMpBillingWorkflow: WorkflowDefinition = {
       title: "Configurar plan y suscripción",
       description: "Usa tu sesión de tenant y el email OAuth vinculado para crear la suscripción en MP Billing",
       schema: z.object({
-        billingAccessToken: z.string().min(1, "Billing access token es requerido"),
         reason: z.string().min(3, "Reason es requerido"),
         transactionAmount: z.number().positive("Monto inválido"),
         currencyId: z.string().min(3, "Currency ID inválido"),

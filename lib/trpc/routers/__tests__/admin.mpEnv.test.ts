@@ -90,6 +90,8 @@ describe("admin.mpEnvStatus", () => {
     process.env.MP_CLIENT_SECRET = "test-secret";
     delete process.env.MP_REDIRECT_URI;
     delete process.env.MP_WEBHOOK_SECRET;
+    delete process.env.MP_ACCESS_TOKEN;
+    delete process.env.MP_BILLING_ACCESS_TOKEN;
     delete process.env.MP_BILLING_WEBHOOK_SECRET;
     delete process.env.MP_TOKENS_ENCRYPTION_KEY;
 
@@ -102,6 +104,8 @@ describe("admin.mpEnvStatus", () => {
     expect(result.vars.MP_CLIENT_SECRET).toBe(true);
     expect(result.vars.MP_REDIRECT_URI).toBe(false);
     expect(result.vars.MP_WEBHOOK_SECRET).toBe(false);
+    expect(result.vars.MP_ACCESS_TOKEN).toBe(false);
+    expect(result.vars.MP_BILLING_ACCESS_TOKEN).toBe(false);
     expect(result.vars.MP_BILLING_WEBHOOK_SECRET).toBe(false);
     expect(result.vars.MP_TOKENS_ENCRYPTION_KEY).toBe(false);
   });
@@ -111,6 +115,8 @@ describe("admin.mpEnvStatus", () => {
     process.env.MP_CLIENT_SECRET = "secret";
     process.env.MP_REDIRECT_URI = "https://example.com/api/mercadopago/webhook";
     process.env.MP_WEBHOOK_SECRET = "whsec";
+    process.env.MP_ACCESS_TOKEN = "pay-token";
+    process.env.MP_BILLING_ACCESS_TOKEN = "bill-token";
     process.env.MP_BILLING_WEBHOOK_SECRET = "billsec";
     process.env.MP_TOKENS_ENCRYPTION_KEY = "enckey";
 
@@ -128,6 +134,8 @@ describe("admin.mpEnvStatus", () => {
       "MP_CLIENT_SECRET",
       "MP_REDIRECT_URI",
       "MP_WEBHOOK_SECRET",
+      "MP_ACCESS_TOKEN",
+      "MP_BILLING_ACCESS_TOKEN",
       "MP_BILLING_WEBHOOK_SECRET",
       "MP_TOKENS_ENCRYPTION_KEY",
     ]) {

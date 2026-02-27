@@ -300,6 +300,8 @@ export interface MpPlatformConfigTable {
   client_secret: string | null;
   redirect_uri: string | null;
   webhook_secret: string | null;
+  payment_access_token: string | null;
+  billing_access_token: string | null;
   billing_webhook_secret: string | null;
   tokens_encryption_key: string | null;
   updated_at: ColumnType<Date, string | undefined, string | undefined>;

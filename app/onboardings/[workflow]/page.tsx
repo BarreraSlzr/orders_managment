@@ -390,6 +390,8 @@ export default function OnboardingRunnerPage() {
         details: [
           { label: "MP_CLIENT_ID", value: String(data.MP_CLIENT_ID || "") || "—" },
           { label: "MP_WEBHOOK_SECRET", value: data.MP_WEBHOOK_SECRET ? "✓ provisto" : "—" },
+          { label: "MP_ACCESS_TOKEN", value: data.MP_ACCESS_TOKEN ? "✓ provisto" : "—" },
+          { label: "MP_BILLING_ACCESS_TOKEN", value: data.MP_BILLING_ACCESS_TOKEN ? "✓ provisto" : "—" },
           { label: "MP_BILLING_WEBHOOK_SECRET", value: data.MP_BILLING_WEBHOOK_SECRET ? "✓ provisto" : "—" },
           { label: "MP_TOKENS_ENCRYPTION_KEY", value: data.MP_TOKENS_ENCRYPTION_KEY ? "✓ provisto" : "—" },
         ],
@@ -398,7 +400,6 @@ export default function OnboardingRunnerPage() {
 
     if (workflowDefinition.id === "configure-mp-billing") {
       const result = await mpBillingActivateMutation.mutateAsync({
-        billingAccessToken: String(data.billingAccessToken || ""),
         reason: String(data.reason || "Orders Management — Plan Mensual"),
         transactionAmount: Number(data.transactionAmount || 0),
         currencyId: String(data.currencyId || "MXN"),
@@ -516,6 +517,12 @@ export default function OnboardingRunnerPage() {
                 clientSecret: String(data.MP_CLIENT_SECRET ?? ""),
                 redirectUri: `${origin}/api/mercadopago/webhook`,
                 webhookSecret: String(data.MP_WEBHOOK_SECRET ?? ""),
+                paymentAccessToken: data.MP_ACCESS_TOKEN
+                  ? String(data.MP_ACCESS_TOKEN)
+                  : undefined,
+                billingAccessToken: data.MP_BILLING_ACCESS_TOKEN
+                  ? String(data.MP_BILLING_ACCESS_TOKEN)
+                  : undefined,
                 billingWebhookSecret: data.MP_BILLING_WEBHOOK_SECRET
                   ? String(data.MP_BILLING_WEBHOOK_SECRET)
                   : undefined,

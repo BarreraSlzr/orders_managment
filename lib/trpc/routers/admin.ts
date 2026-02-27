@@ -525,6 +525,8 @@ export const adminRouter = router({
           MP_CLIENT_SECRET: Boolean(cfg.clientSecret),
           MP_REDIRECT_URI: Boolean(cfg.redirectUri),
           MP_WEBHOOK_SECRET: Boolean(cfg.webhookSecret),
+          MP_ACCESS_TOKEN: Boolean(cfg.paymentAccessToken),
+          MP_BILLING_ACCESS_TOKEN: Boolean(cfg.billingAccessToken),
           MP_BILLING_WEBHOOK_SECRET: Boolean(cfg.billingWebhookSecret),
           MP_TOKENS_ENCRYPTION_KEY: Boolean(cfg.tokensEncryptionKey),
         },
@@ -711,6 +713,35 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      const normalizedBillingAccessToken = input.billingAccessToken.trim();
+      if (!normalizedBillingAccessToken) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Billing access token is required.",
+        });
+      }
+
+      const platformConfig = await getMpPlatformConfig();
+      const platformSecrets = new Set(
+        [
+          platformConfig.clientId,
+          platformConfig.clientSecret,
+          platformConfig.webhookSecret,
+          platformConfig.billingWebhookSecret,
+          platformConfig.tokensEncryptionKey,
+        ]
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      );
+
+      if (platformSecrets.has(normalizedBillingAccessToken)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Billing Access Token must be unique and must not match platform Mercado Pago config values.",
+        });
+      }
+
       await logAdminAccess({
         action: "mpBillingCreateSubscription",
         adminId: ctx.session?.sub,
@@ -728,7 +759,7 @@ export const adminRouter = router({
       const backUrl = `${origin}/onboardings/configure-mp-billing`;
 
       const plan = await createPreapprovalPlan({
-        accessToken: input.billingAccessToken,
+        accessToken: normalizedBillingAccessToken,
         reason: input.reason,
         transactionAmount: input.transactionAmount,
         currencyId: input.currencyId,
@@ -736,7 +767,7 @@ export const adminRouter = router({
       });
 
       const subscription = await createSubscription({
-        accessToken: input.billingAccessToken,
+        accessToken: normalizedBillingAccessToken,
         preapprovalPlanId: plan.id,
         payerEmail: input.payerEmail,
         externalReference: input.tenantId,
@@ -821,6 +852,8 @@ export const adminRouter = router({
         clientSecret: z.string().min(1),
         redirectUri: z.string().min(1),
         webhookSecret: z.string().min(1),
+        paymentAccessToken: z.string().optional(),
+        billingAccessToken: z.string().optional(),
         billingWebhookSecret: z.string().optional(),
         tokensEncryptionKey: z.string().optional(),
       }),
@@ -841,6 +874,8 @@ export const adminRouter = router({
           client_secret: input.clientSecret,
           redirect_uri: input.redirectUri,
           webhook_secret: input.webhookSecret,
+          payment_access_token: input.paymentAccessToken ?? null,
+          billing_access_token: input.billingAccessToken ?? null,
           billing_webhook_secret: input.billingWebhookSecret ?? null,
           tokens_encryption_key: input.tokensEncryptionKey ?? null,
           updated_at: new Date().toISOString(),
