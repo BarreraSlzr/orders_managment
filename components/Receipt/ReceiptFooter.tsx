@@ -16,7 +16,6 @@ export function ReceiptFooter({
 }: PropsWithChildren<Props>) {
   return (
     <>
-      <Separator />
       <div className="flex-grow flex justify-between font-bold">
         <p>{label}</p>
         <p className="tabular-nums">{formatPrice(orderTotal)}</p>

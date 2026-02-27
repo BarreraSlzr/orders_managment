@@ -4,14 +4,12 @@ import {
   Card,
   CardContent,
   CardFooter,
-  CardHeader,
 } from "@/components/ui/card";
 import { ReceiptEditProvider, useReceiptEdit } from "@/context/useReceiptEdit";
 import { OrderItemsView } from "@/lib/sql/types";
 import { MpSyncResult } from "@/lib/types";
-import { PropsWithChildren, useState } from "react";
+import { PropsWithChildren, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "../ui/button";
 import { MercadoPagoPaymentModal } from "./MercadoPagoPaymentModal";
 import { ReceiptActions } from "./ReceiptActions";
 import { ReceiptFooter } from "./ReceiptFooter";
@@ -37,7 +35,6 @@ function ReceiptForm({
     order,
     items,
     editMode,
-    totalPrice,
     toggleEditMode,
     handleActionSubmit,
     handleStartMercadoPagoSync,
@@ -45,6 +42,8 @@ function ReceiptForm({
 
   const [mpResult, setMpResult] = useState<MpSyncResult | null>(null);
   const [mpLoading, setMpLoading] = useState(false);
+  const [showTotalRightPadding, setShowTotalRightPadding] = useState(false);
+  const headerBlockRef = useRef<HTMLDivElement>(null);
 
   const handleMercadoPagoClick = async () => {
     setMpLoading(true);
@@ -98,71 +97,56 @@ function ReceiptForm({
     await handleActionSubmit(actionType, formData);
   };
 
+  const handleReceiptScroll = (ev: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = ev.currentTarget.scrollTop;
+    const headerHeight = headerBlockRef.current?.offsetHeight ?? 0;
+    const shouldShowPadding = scrollTop >= headerHeight;
+    if (shouldShowPadding !== showTotalRightPadding) {
+      setShowTotalRightPadding(shouldShowPadding);
+    }
+  };
+
   return (
-    <Card className="w-full bg-white font-mono text-sm">
-      <CardHeader className="text-center space-y-0 p-3">
-        <h1 className="font-bold text-lg tracking-wide">DETALLE DE ORDEN</h1>
-        <ReceiptHeader
-          order={order}
-          serverInfo={serverInfo}
-          className="text-sm"
-        />
-      </CardHeader>
-      <CardContent>
+    <Card className="w-full h-full bg-white font-mono text-sm flex flex-col overflow-hidden">
+      <CardContent className="flex-1 min-h-0 p-0">
         <form
           onSubmit={handleSubmit}
           onReset={toggleEditMode}
-          className="flex flex-col gap-3"
+          className="h-full min-h-0 flex flex-col"
         >
-          <ReceiptFooter orderTotal={order.total} />
-          <ReceiptItems items={items} listProducts={editMode} />
-          <CardFooter className="flex flex-wrap gap-2 justify-between p-2 sticky bottom-0 bg-white">
-            {editMode && !!totalPrice && (
-              <ReceiptFooter label="SUBTOTAL:" orderTotal={totalPrice} />
-            )}
-            {!editMode ? (
-              <>
-                {order.closed ? (
-                  <>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      type="button"
-                      className="bg-blue-600 hover:bg-blue-700"
-                      disabled={mpLoading}
-                      onClick={handleMercadoPagoClick}
-                    >
-                      {mpLoading ? "Procesando…" : "Cobrar con Mercado Pago"}
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      type="submit"
-                      id="open"
-                      className="bg-green-600 hover:bg-green-700"
-                    >
-                      Abrir orden
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button variant="secondary" size="sm" type="reset">
-                      Modificar orden
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      type="submit"
-                      id="close"
-                    >
-                      Cerrar orden
-                    </Button>
-                  </>
-                )}
-              </>
-            ) : (
-              <>{children || <ReceiptActions />}</>
-            )}
+          <div
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+            onScroll={handleReceiptScroll}
+          >
+            <div ref={headerBlockRef} className="text-center space-y-0 p-3">
+              <h1 className="font-bold text-lg tracking-wide">DETALLE DE ORDEN</h1>
+              <ReceiptHeader
+                order={order}
+                serverInfo={serverInfo}
+                className="text-sm"
+              />
+            </div>
+            <div
+              className={`sticky top-0 z-20 bg-white px-3 pt-1 transition-[padding] duration-200 ease-out ${
+                showTotalRightPadding ? "pr-10" : ""
+              }`}
+            >
+              <ReceiptFooter orderTotal={order.total} />
+              <hr className="border-dashed border-gray-400 mt-1"/>
+            </div>
+            <div className="px-3 pb-2 pt-2">
+              <ReceiptItems items={items} listProducts={editMode} />
+            </div>
+          </div>
+
+          <CardFooter className="shrink-0 bg-white border-t border-slate-200 p-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)]">
+            <ReceiptActions
+              orderClosed={Boolean(order.closed)}
+              mpLoading={mpLoading}
+              onMercadoPagoClick={handleMercadoPagoClick}
+            >
+              {children}
+            </ReceiptActions>
           </CardFooter>
         </form>
       </CardContent>
