@@ -13,12 +13,12 @@ export default function OrderDetails({
 }) {
   return (
     <div
-      className="relative h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+      className="relative h-full min-h-0 overflow-visible"
       data-testid={TEST_IDS.ORDER_DETAILS.ROOT}
     >
       <Receipt data={selectedOrder} editMode={editMode} />
       <Button
-        className="absolute right-2 top-2 z-20 h-8 w-8 rounded-full border border-slate-200 bg-white/95 p-0 text-slate-700 shadow-sm hover:bg-white"
+        className="absolute right-2 top-2 z-40 h-8 w-8 rounded-full border border-slate-200 bg-white/95 p-0 text-slate-700 shadow-sm hover:bg-white"
         variant="ghost"
         data-testid={TEST_IDS.ORDER_DETAILS.CLOSE_BTN}
         onClick={() => {

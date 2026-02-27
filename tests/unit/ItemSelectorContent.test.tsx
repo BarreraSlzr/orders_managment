@@ -16,11 +16,24 @@
  */
 
 import { ItemSelectorContent } from "@/components/Inventory/ItemSelector";
+import "./setup.dom";
 import { TEST_IDS, tid } from "@/lib/testIds";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import "@testing-library/jest-dom/vitest";
 import React, { type PropsWithChildren } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+afterEach(() => {
+  cleanup();
+});
 
 // ─── Mock data ───────────────────────────────────────────────────────────────
 
@@ -29,16 +42,25 @@ const MOCK_ITEMS = [
   { id: "item-2", name: "Harina", quantity_type_key: "Peso" },
 ];
 
-// ─── Hoisted mocks (must be declared before vi.mock) ─────────────────────────
-// vi.hoisted runs before all imports so the mock factory can close over them.
+// ─── Hoisted-safe shared mock object ─────────────────────────────────────────
+// Use `var` so it exists when vi.mock is hoisted by the test runner.
 
-const { mockTrpc } = vi.hoisted(() => {
+let mockTrpc: {
+  inventory: {
+    items: {
+      list: { queryOptions: ReturnType<typeof vi.fn> };
+      add: { mutationOptions: ReturnType<typeof vi.fn> };
+    };
+  };
+};
+
+vi.mock("@/lib/trpc/react", () => {
   const makeItemsQueryOpts = (data: unknown) => ({
     queryKey: ["inventory", "items", "list"] as const,
     queryFn: vi.fn().mockResolvedValue(data),
   });
 
-  const mockTrpc = {
+  mockTrpc = {
     inventory: {
       items: {
         list: {
@@ -53,12 +75,10 @@ const { mockTrpc } = vi.hoisted(() => {
     },
   };
 
-  return { mockTrpc };
+  return {
+    useTRPC: () => mockTrpc,
+  };
 });
-
-vi.mock("@/lib/trpc/react", () => ({
-  useTRPC: () => mockTrpc,
-}));
 
 // ─── Mock vaul Drawer sub-components ─────────────────────────────────────────
 // DrawerHeader / DrawerTitle / DrawerFooter require a Radix Dialog context that
@@ -121,61 +141,78 @@ describe("ItemSelectorContent — search step", () => {
   it("renders the search input with no result rows on empty search", () => {
     renderSelector();
     expect(
-      screen.getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT),
+      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT),
     ).toBeInTheDocument();
     // No results because search is empty → suggestions = []
     expect(
-      screen.queryByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+      within(document.body).queryByTestId(
+        tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+      ),
     ).not.toBeInTheDocument();
   });
 
   it("shows matching result rows after typing a search query", async () => {
     renderSelector();
-    const input = screen.getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT);
+    const user = userEvent.setup();
+    const input = within(document.body).getByTestId(
+      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
+    );
 
-    fireEvent.change(input, { target: { value: "Tom" } });
+    await user.type(input, "Tom");
 
     await waitFor(() => {
       expect(
-        screen.getByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+        within(document.body).getByTestId(
+          tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+        ),
       ).toBeInTheDocument();
     });
 
     // Non-matching item should not be rendered
     expect(
-      screen.queryByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-2")),
+      within(document.body).queryByTestId(
+        tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-2"),
+      ),
     ).not.toBeInTheDocument();
   });
 
   it("shows the create button when the query has no exact match", async () => {
     renderSelector();
-    const input = screen.getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT);
+    const user = userEvent.setup();
+    const input = within(document.body).getByTestId(
+      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
+    );
 
-    fireEvent.change(input, { target: { value: "Otro ingrediente" } });
+    await user.type(input, "Otro ingrediente");
 
     await waitFor(() => {
       expect(
-        screen.getByTestId(TEST_IDS.AGREGAR_GASTO.CREATE_BTN),
+        within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.CREATE_BTN),
       ).toBeInTheDocument();
     });
   });
 
   it("hides the create button when the query exactly matches an existing item", async () => {
     renderSelector();
-    const input = screen.getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT);
+    const user = userEvent.setup();
+    const input = within(document.body).getByTestId(
+      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
+    );
 
-    fireEvent.change(input, { target: { value: "Tomate" } });
+    await user.type(input, "Tomate");
 
     // Wait for results to appear
     await waitFor(() => {
       expect(
-        screen.getByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+        within(document.body).getByTestId(
+          tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+        ),
       ).toBeInTheDocument();
     });
 
     // Create button must be absent for an exact match
     expect(
-      screen.queryByTestId(TEST_IDS.AGREGAR_GASTO.CREATE_BTN),
+      within(document.body).queryByTestId(TEST_IDS.AGREGAR_GASTO.CREATE_BTN),
     ).not.toBeInTheDocument();
   });
 });
@@ -193,18 +230,25 @@ describe("ItemSelectorContent — details step", () => {
   /** Navigate to the details step by selecting "Tomate" from results. */
   async function openDetailsForTomate(onConfirm = vi.fn(), onCancel = vi.fn()) {
     renderSelector(onConfirm, onCancel);
+    const user = userEvent.setup();
 
-    const input = screen.getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT);
-    fireEvent.change(input, { target: { value: "Tom" } });
+    const input = within(document.body).getByTestId(
+      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
+    );
+    await user.type(input, "Tom");
 
     await waitFor(() => {
       expect(
-        screen.getByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+        within(document.body).getByTestId(
+          tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+        ),
       ).toBeInTheDocument();
     });
 
     fireEvent.click(
-      screen.getByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+      within(document.body).getByTestId(
+        tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+      ),
     );
   }
 
@@ -212,10 +256,10 @@ describe("ItemSelectorContent — details step", () => {
     await openDetailsForTomate();
 
     expect(
-      screen.getByTestId(TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT),
+      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT),
     ).toBeInTheDocument();
     expect(
-      screen.getByTestId(TEST_IDS.AGREGAR_GASTO.PRICE_INPUT),
+      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.PRICE_INPUT),
     ).toBeInTheDocument();
   });
 
@@ -224,7 +268,7 @@ describe("ItemSelectorContent — details step", () => {
     // the useEffect pre-selects unitOptions[0], so the button becomes enabled.
     await openDetailsForTomate();
 
-    const confirmBtn = screen.getByTestId(
+    const confirmBtn = within(document.body).getByTestId(
       TEST_IDS.AGREGAR_GASTO.CONFIRM_BTN,
     ) as HTMLButtonElement;
 
@@ -235,23 +279,27 @@ describe("ItemSelectorContent — details step", () => {
 
   it("accept quantity input changes", async () => {
     await openDetailsForTomate();
+    const user = userEvent.setup();
 
-    const qtyInput = screen.getByTestId(
+    const qtyInput = within(document.body).getByTestId(
       TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT,
     ) as HTMLInputElement;
 
-    fireEvent.change(qtyInput, { target: { value: "3.5" } });
+    await user.clear(qtyInput);
+    await user.type(qtyInput, "3.5");
     expect(qtyInput.value).toBe("3.5");
   });
 
   it("accept price input changes", async () => {
     await openDetailsForTomate();
+    const user = userEvent.setup();
 
-    const priceInput = screen.getByTestId(
+    const priceInput = within(document.body).getByTestId(
       TEST_IDS.AGREGAR_GASTO.PRICE_INPUT,
     ) as HTMLInputElement;
 
-    fireEvent.change(priceInput, { target: { value: "150" } });
+    await user.clear(priceInput);
+    await user.type(priceInput, "150");
     expect(priceInput.value).toBe("150");
   });
 });
@@ -270,30 +318,41 @@ describe("ItemSelectorContent — cancel behaviour", () => {
     const onCancel = vi.fn();
     renderSelector(vi.fn(), onCancel);
 
-    fireEvent.click(screen.getByTestId(TEST_IDS.AGREGAR_GASTO.CANCEL_BTN));
+    fireEvent.click(
+      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.CANCEL_BTN),
+    );
 
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 
   it("cancel button calls onCancel from the details step", async () => {
     const onCancel = vi.fn();
+    const user = userEvent.setup();
 
     // Reach the details step
     renderSelector(vi.fn(), onCancel);
-    const input = screen.getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT);
-    fireEvent.change(input, { target: { value: "Tom" } });
+    const input = within(document.body).getByTestId(
+      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
+    );
+    await user.type(input, "Tom");
 
     await waitFor(() => {
       expect(
-        screen.getByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+        within(document.body).getByTestId(
+          tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+        ),
       ).toBeInTheDocument();
     });
 
     fireEvent.click(
-      screen.getByTestId(tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1")),
+      within(document.body).getByTestId(
+        tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
+      ),
     );
 
-    fireEvent.click(screen.getByTestId(TEST_IDS.AGREGAR_GASTO.CANCEL_BTN));
+    fireEvent.click(
+      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.CANCEL_BTN),
+    );
 
     expect(onCancel).toHaveBeenCalledTimes(1);
   });

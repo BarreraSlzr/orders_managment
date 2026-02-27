@@ -60,6 +60,7 @@ vi.mock("@/lib/services/alerts/alertsService", () => ({
 }));
 
 import { createPlatformAlert } from "@/lib/services/alerts/alertsService";
+import { getDb } from "@/lib/sql/database";
 import {
     fetchPaymentDetails,
     handleMpConnectEvent,
@@ -68,6 +69,8 @@ import {
     validateWebhookSignature,
     type MpWebhookNotification,
 } from "../webhookService";
+
+  const mockedGetDb = vi.mocked(getDb);
 
 // ─── B4: timingSafeEqual in HMAC validation ────────────────────────────────
 
@@ -316,8 +319,7 @@ describe("handlePaymentEvent — alert with order deep-link", () => {
     });
 
     // Mock getDb to return an attempt with terminal_id (PDV flow)
-    const { getDb } = require("@/lib/sql/database");
-    getDb.mockReturnValue({
+    mockedGetDb.mockReturnValue({
       selectFrom: vi.fn().mockReturnValue({
         selectAll: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
@@ -388,8 +390,7 @@ describe("handlePaymentEvent — alert with order deep-link", () => {
   });
 
   it("infers qr flow when terminal_id is null", async () => {
-    const { getDb } = require("@/lib/sql/database");
-    getDb.mockReturnValue({
+    mockedGetDb.mockReturnValue({
       selectFrom: vi.fn().mockReturnValue({
         selectAll: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
@@ -421,8 +422,7 @@ describe("handlePaymentEvent — alert with order deep-link", () => {
   });
 
   it("acknowledges payment without business attempt", async () => {
-    const { getDb } = require("@/lib/sql/database");
-    getDb.mockReturnValue({
+    mockedGetDb.mockReturnValue({
       selectFrom: vi.fn().mockReturnValue({
         selectAll: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
@@ -461,8 +461,7 @@ describe("handlePointIntegrationEvent — alert with order deep-link", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    const { getDb } = require("@/lib/sql/database");
-    getDb.mockReturnValue({
+    mockedGetDb.mockReturnValue({
       selectFrom: vi.fn().mockReturnValue({
         selectAll: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
@@ -530,8 +529,7 @@ describe("handlePointIntegrationEvent — alert with order deep-link", () => {
   });
 
   it("acknowledges point event without matching attempt", async () => {
-    const { getDb } = require("@/lib/sql/database");
-    getDb.mockReturnValue({
+    mockedGetDb.mockReturnValue({
       selectFrom: vi.fn().mockReturnValue({
         selectAll: vi.fn().mockReturnThis(),
         select: vi.fn().mockReturnThis(),
@@ -570,8 +568,7 @@ describe("handleMpConnectEvent — deauth alert", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    const { getDb } = require("@/lib/sql/database");
-    getDb.mockReturnValue({
+    mockedGetDb.mockReturnValue({
       updateTable: vi.fn().mockReturnValue({
         set: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),

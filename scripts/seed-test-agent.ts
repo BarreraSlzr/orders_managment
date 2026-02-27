@@ -85,10 +85,18 @@ if (existingTarget) {
   await db.deleteFrom("categories").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("extras").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("products").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("product_consumptions").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("payment_options").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("payment_sync_attempts").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("users").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("domain_events").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("mercadopago_credentials").where("tenant_id", "=", tid).execute();
   await db.deleteFrom("mercadopago_access_requests").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("platform_alerts").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("tenant_billing_events").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("tenant_entitlements").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("tenant_subscriptions").where("tenant_id", "=", tid).execute();
+  await db.deleteFrom("admin_audit_logs").where("target_tenant_id", "=", tid).execute();
   await db.deleteFrom("tenants").where("id", "=", tid).execute();
   log("Reset complete.");
 }

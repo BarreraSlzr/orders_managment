@@ -19,7 +19,6 @@ import { es } from "date-fns/locale";
 import {
     Calendar,
     ChevronDown,
-    ChevronLeft,
     ChevronRight,
     Layers,
     Pencil,
@@ -30,8 +29,10 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ItemSelectorContent } from "../Inventory/ItemSelector";
+import { OrderButton } from "./OrderButton";
+import { OrdersSheetLayout } from "./OrdersSheetLayout";
 import OrderStatus from "../Orders/OrderControls";
 import OrderDetails from "../Orders/OrderDetails";
 import OrdersList from "../Orders/OrderList";
@@ -39,77 +40,14 @@ import { OrderSummary } from "../OrderSummary";
 import { Card } from "../ui/card";
 import { Spinner } from "../ui/spinner";
 
-// ── ChevronFloodButton ───────────────────────────────────────────────────────
-// Measures its own width after mount so chevrons exactly fill the container.
-// Slides up on appearance and centers the label with a text-shadow halo.
-function ChevronFloodButton({
-  onClick,
-  testId,
-}: {
-  onClick: () => void;
-  testId: string;
-}) {
-  const ref = useRef<HTMLButtonElement>(null);
-  const [count, setCount] = useState(12); // initial fallback until measured
-
-  useEffect(() => {
-    if (!ref.current) return;
-    const measure = () => {
-      const w = ref.current?.offsetWidth ?? 0;
-      // each ChevronLeft icon is w-4 = 16px; +2 ensures full bleed after clip
-      setCount(Math.ceil(w / 16) + 2);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <button
-      ref={ref}
-      onClick={onClick}
-      title="Agregar más productos"
-      data-testid={testId}
-      className="animate-slide-up group relative w-full flex items-center overflow-hidden py-3 rounded-t-xl text-zinc-600 hover:text-zinc-300 transition-colors duration-200"
-    >
-      {/* Chevron flood — width-driven count, wave travels right→left */}
-      <span className="flex items-center" aria-hidden>
-        {Array.from({ length: count }, (_, i) => (
-          <ChevronLeft
-            key={i}
-            className={cn(
-              "h-4 w-4 shrink-0",
-              i % 6 === 0 && "animate-chevron-6",
-              i % 6 === 1 && "animate-chevron-5",
-              i % 6 === 2 && "animate-chevron-4",
-              i % 6 === 3 && "animate-chevron-3",
-              i % 6 === 4 && "animate-chevron-2",
-              i % 6 === 5 && "animate-chevron-1",
-            )}
-          />
-        ))}
-      </span>
-      {/* Label — absolutely centered, dark blurred pill for contrast over chevrons */}
-      <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
-        <span className="text-xs font-bold tracking-widest font-mono uppercase text-white px-3 rounded bg-black/60 backdrop-blur-sm shadow-[0_0_16px_8px_rgba(0,0,0,0.55)] group-hover:bg-black/80 transition-colors duration-200">
-          Agregar más productos
-        </span>
-      </span>
-    </button>
-  );
-}
-
 // ───────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function OpenOrderSheet() {
   const {
-    orders,
     currentOrder,
     selectedOrderIds,
-    setCurrentOrderDetails,
     clearOrderSelection,
     handleCombineOrders,
     handleCloseMultiple,
@@ -135,7 +73,7 @@ export function OpenOrderSheet() {
     "date",
     parseAsString.withDefault(today),
   );
-  const [summaryExpanded, setSummaryExpanded] = useState(true);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const [gastoOpen, setGastoOpen] = useState(false);
   const [gastosListExpanded, setGastosListExpanded] = useState(false);
   const [editingGastoId, setEditingGastoId] = useState<number | null>(null);
@@ -270,9 +208,14 @@ export function OpenOrderSheet() {
   }, [sheetOpen, tabFromSheetParam]);
 
   useEffect(() => {
-    if (currentOrder?.closed) {
+    if (!currentOrder) return;
+    if (currentOrder.closed) {
       setFilterStatus("closed");
       void setSheetParam("closed");
+    } else {
+      // Order was re-opened: switch tab back to "opened" so it stays visible.
+      setFilterStatus("opened");
+      void setSheetParam("true");
     }
   }, [currentOrder?.closed, setSheetParam]);
 
@@ -287,9 +230,10 @@ export function OpenOrderSheet() {
     };
   }, [sheetOpen]);
 
-  function handleClose() {
+  // Closes the sheet so the user can add more products to the current order.
+  // Intentionally does NOT clear currentOrder — the selection must survive.
+  function handleAddMoreProducts() {
     void setSheetParam("");
-    void setCurrentOrderDetails(null);
   }
 
   function handleFilterStatusChange(value: string) {
@@ -299,12 +243,19 @@ export function OpenOrderSheet() {
   }
 
   const isMultiSelect = selectedOrderIds.length > 1;
+  const viewMode: "multi" | "single" | "gasto" | "idle" = isMultiSelect
+    ? "multi"
+    : currentOrder
+      ? "single"
+      : gastoOpen
+        ? "gasto"
+        : "idle";
 
   return (
     <Sheet
       open={sheetOpen}
       onOpenChange={(open) => {
-        if (!open) handleClose();
+        if (!open) handleAddMoreProducts();
         else void setSheetParam("true");
       }}
     >
@@ -346,42 +297,44 @@ export function OpenOrderSheet() {
         </Button>
       </div>
       <SheetContent
-        className="flex w-full h-full flex-col overflow-hidden sm:max-w-lg p-0 pt-4"
+        className="flex w-full h-full flex-col overflow-hidden sm:max-w-lg p-0 pt-2 [&>button]:z-[80] [&>button]:top-2 [&>button]:right-2"
         data-testid={TEST_IDS.ORDER_SHEET.ROOT}
       >
-        <SheetHeader className="flex flex-row gap-2 justify-between items-center p-0">
-          <SheetTitle
-            className="text-center text-xl font-bold px-3 cursor-pointer"
-            onClick={handleClose}
-          >
-            ORDENES
-          </SheetTitle>
-          <div className="px-3 pr-10">
-            <OrderStatus
-              defaultStatus="opened"
-              value={filterStatus}
-              onValueChange={handleFilterStatusChange}
-              openCount={openCount}
-              closedCount={closedCount}
-              totalCount={totalCount}
-              date={selectedDate}
-            />
-          </div>
-        </SheetHeader>
-        <div className="px-3 pt-2">
-          {lowStockCount > 0 && (
-            <Link href="/items?lowStock=true">
-              <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-amber-800">
-                <span>⚠️</span>
-                <span>
-                  {lowStockCount} ingrediente
-                  {lowStockCount !== 1 ? "s" : ""} con stock bajo
-                </span>
-                <ChevronRight className="ml-auto h-3 w-3" />
-              </div>
-            </Link>
-          )}
-          <Card className="relative border-slate-300 bg-white font-mono">
+        <OrdersSheetLayout>
+          <OrdersSheetLayout.Top>
+          <SheetHeader className="flex flex-row gap-1 justify-between items-center p-0">
+            <SheetTitle
+              className="text-center text-lg font-bold px-2 cursor-pointer"
+              onClick={handleAddMoreProducts}
+            >
+              ORDENES
+            </SheetTitle>
+            <div className="px-2 pr-10">
+              <OrderStatus
+                defaultStatus="opened"
+                value={filterStatus}
+                onValueChange={handleFilterStatusChange}
+                openCount={openCount}
+                closedCount={closedCount}
+                totalCount={totalCount}
+                date={selectedDate}
+              />
+            </div>
+          </SheetHeader>
+          <div className="px-2 pt-1 pb-1">
+            {lowStockCount > 0 && (
+              <Link href="/items?lowStock=true">
+                <div className="mb-2 flex items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] font-mono uppercase tracking-wide text-amber-800">
+                  <span>⚠️</span>
+                  <span>
+                    {lowStockCount} ingrediente
+                    {lowStockCount !== 1 ? "s" : ""} con stock bajo
+                  </span>
+                  <ChevronRight className="ml-auto h-3 w-3" />
+                </div>
+              </Link>
+            )}
+            <Card className="relative border-slate-300 bg-white font-mono">
             {/* Summary Header — Calendar | Date | Count+Total | Chevron */}
             <input
               type="date"
@@ -561,29 +514,43 @@ export function OpenOrderSheet() {
                 )}
               </div>
             )}
-          </Card>
-        </div>
-        <div className="flex flex-col flex-1 min-h-0">
+            </Card>
+          </div>
+          </OrdersSheetLayout.Top>
           {/* Orders List — shrinks when bottom panel expands */}
-          <div className="flex-1 overflow-auto overscroll-contain touch-pan-y">
+          <OrdersSheetLayout.List>
             <Suspense fallback={<Spinner className="mx-auto" />}>
               <OrdersList />
             </Suspense>
-          </div>
+          </OrdersSheetLayout.List>
 
-          {/* ── Bottom panel — inside SheetContent, no portal, no z-conflict ── */}
-          <div
-            className={[
-              "shrink-0 bg-black rounded-t-xl border border-zinc-800 text-white flex flex-col transition-all duration-200",
-              currentOrder || gastoOpen ? "max-h-[85dvh] flex-1" : "",
-            ].join(" ")}
-          >
-            {isMultiSelect ? (
+          {/* ── Bottom panel — sticky for all modes ── */}
+          <OrdersSheetLayout.Bottom>
+            <div
+              className={[
+                "bg-black rounded-t-xl border border-zinc-800 text-white flex flex-col transition-all duration-200",
+                viewMode === "single"
+                  ? "grid grid-rows-[auto_minmax(0,1fr)] max-h-[75dvh] min-h-0 overflow-hidden"
+                  : gastoOpen
+                    ? "grid grid-rows-[minmax(0,1fr)] max-h-[75dvh] min-h-0 overflow-hidden"
+                    : "",
+              ].join(" ")}
+            >
+              {viewMode === "multi" ? (
               /* ── Multi-select bulk actions ───────────────── */
               <div
-                className="flex flex-col gap-2 p-4"
+                className="relative flex flex-col gap-2 p-4"
                 data-testid={TEST_IDS.ORDER_LIST.MULTI_ACTIONS_PANEL}
               >
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={clearOrderSelection}
+                  data-testid={TEST_IDS.ORDER_LIST.MULTI_CLEAR_BTN}
+                  className="absolute right-2 top-2 h-8 w-8 rounded-full border border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
                 <p className="text-sm text-center text-white/60">
                   {selectedOrderIds.length} órdenes seleccionadas
                 </p>
@@ -609,67 +576,61 @@ export function OpenOrderSheet() {
                   >
                     Cerrar todas
                   </Button>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={clearOrderSelection}
-                    data-testid={TEST_IDS.ORDER_LIST.MULTI_CLEAR_BTN}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
-            ) : currentOrder ? (
+            ) : viewMode === "single" && currentOrder ? (
               /* ── Single-order detail ──────────────────── */
               <>
                 {!currentOrder.closed && (
-                  <ChevronFloodButton
-                    onClick={handleClose}
+                  <OrderButton
+                    onClick={handleAddMoreProducts}
                     testId={TEST_IDS.ORDER_SHEET.ADD_MORE_BTN}
                   />
                 )}
-                <div className="animate-slide-up flex-1 min-h-0 overflow-hidden">
+                <div className="animate-slide-up min-h-0 overflow-hidden">
                   <OrderDetails order={currentOrder} />
                 </div>
               </>
-            ) : gastoOpen ? (
+            ) : viewMode === "gasto" ? (
               /* ── Agregar / Editar gasto ─────────────────────────────── */
-              <ItemSelectorContent
-                key={editingGastoId ?? "new"}
-                title={editingGastoId ? "Editar gasto" : "Agregar gasto"}
-                initialValues={(() => {
-                  if (!editingGastoId) return undefined;
-                  const row = (gastosByDateQuery.data ?? []).find(
-                    (r) => r.id === editingGastoId,
-                  );
-                  if (!row) return undefined;
-                  return {
-                    itemId: row.item_id,
-                    itemName: row.item_name,
-                    quantity: row.quantity,
-                    unit: row.quantity_type_value,
-                    price: row.price,
-                  };
-                })()}
-                onConfirm={async ({ itemId, quantity, unit, price }) => {
-                  await upsertTransactionMutation.mutateAsync({
-                    itemId,
-                    type: "IN",
-                    quantity,
-                    quantityTypeValue: unit,
-                    price,
-                    id: editingGastoId ?? undefined,
-                  });
-                  void dailyGastosQuery.refetch();
-                  void gastosByDateQuery.refetch();
-                  setGastoOpen(false);
-                  setEditingGastoId(null);
-                }}
-                onCancel={() => {
-                  setGastoOpen(false);
-                  setEditingGastoId(null);
-                }}
-              />
+              <div className="min-h-0 overflow-y-auto overscroll-contain touch-pan-y">
+                <ItemSelectorContent
+                  key={editingGastoId ?? "new"}
+                  title={editingGastoId ? "Editar gasto" : "Agregar gasto"}
+                  initialValues={(() => {
+                    if (!editingGastoId) return undefined;
+                    const row = (gastosByDateQuery.data ?? []).find(
+                      (r) => r.id === editingGastoId,
+                    );
+                    if (!row) return undefined;
+                    return {
+                      itemId: row.item_id,
+                      itemName: row.item_name,
+                      quantity: row.quantity,
+                      unit: row.quantity_type_value,
+                      price: row.price,
+                    };
+                  })()}
+                  onConfirm={async ({ itemId, quantity, unit, price }) => {
+                    await upsertTransactionMutation.mutateAsync({
+                      itemId,
+                      type: "IN",
+                      quantity,
+                      quantityTypeValue: unit,
+                      price,
+                      id: editingGastoId ?? undefined,
+                    });
+                    void dailyGastosQuery.refetch();
+                    void gastosByDateQuery.refetch();
+                    setGastoOpen(false);
+                    setEditingGastoId(null);
+                  }}
+                  onCancel={() => {
+                    setGastoOpen(false);
+                    setEditingGastoId(null);
+                  }}
+                />
+              </div>
             ) : (
               /* ── Idle strip ──────────────────────────────── */
               <button
@@ -685,8 +646,9 @@ export function OpenOrderSheet() {
                 </span>
               </button>
             )}
-          </div>
-        </div>
+            </div>
+          </OrdersSheetLayout.Bottom>
+        </OrdersSheetLayout>
       </SheetContent>
     </Sheet>
   );

@@ -1,6 +1,6 @@
 "use server"
 
-import { db } from "../database";
+import { db, sql } from "../database";
 import { Order } from "@/lib/types";
 
 // Function to reopen a closed order
@@ -10,7 +10,7 @@ export async function openOrder(params: {
 }): Promise<Order> {
   return await db
     .updateTable('orders')
-    .set({ closed: undefined })
+    .set({ closed: sql`null` })
     .where('id', '=', params.orderId)
     .where('tenant_id', '=', params.tenantId)
     .returningAll()
