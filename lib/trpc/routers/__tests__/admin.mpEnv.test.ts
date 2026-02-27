@@ -23,6 +23,7 @@ vi.mock("@/lib/sql/database", () => {
   const chainable = () => ({
     selectAll: vi.fn().mockReturnThis(),
     select: vi.fn().mockReturnThis(),
+    set: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     whereRef: vi.fn().mockReturnThis(),
     orderBy: vi.fn().mockReturnThis(),
@@ -383,6 +384,76 @@ describe("admin.mpCredentialUpsert", () => {
     const caller = createCaller(guestCtx());
 
     await expect(caller.mpCredentialUpsert(validInput)).rejects.toMatchObject({
+      code: "UNAUTHORIZED",
+    } satisfies Partial<TRPCError>);
+  });
+});
+
+// ── mpPlatformConfigUpsert ───────────────────────────────────────────────────
+
+describe("admin.mpPlatformConfigUpsert", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    invalidateMpPlatformConfigCache();
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+    vi.resetAllMocks();
+  });
+
+  const validPlatformInput = {
+    clientId: "client-id-123",
+    clientSecret: "client-secret-456",
+    redirectUri: "https://example.com/api/mercadopago/webhook",
+    webhookSecret: "webhook-secret-789",
+  };
+
+  it("rejects when two fields share the same value", async () => {
+    const caller = createCaller(adminCtx());
+
+    await expect(
+      caller.mpPlatformConfigUpsert({
+        ...validPlatformInput,
+        // billingAccessToken intentionally duplicates clientSecret
+        billingAccessToken: validPlatformInput.clientSecret,
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("rejects when paymentAccessToken equals billingAccessToken", async () => {
+    const caller = createCaller(adminCtx());
+
+    await expect(
+      caller.mpPlatformConfigUpsert({
+        ...validPlatformInput,
+        paymentAccessToken: "same-token",
+        billingAccessToken: "same-token",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    } satisfies Partial<TRPCError>);
+  });
+
+  it("accepts when all values are unique", async () => {
+    const caller = createCaller(adminCtx());
+    const result = await caller.mpPlatformConfigUpsert({
+      ...validPlatformInput,
+      paymentAccessToken: "unique-payment-token",
+      billingAccessToken: "unique-billing-token",
+    });
+
+    expect(result.ok).toBe(true);
+  });
+
+  it("throws UNAUTHORIZED for non-admin caller", async () => {
+    const caller = createCaller(guestCtx());
+
+    await expect(caller.mpPlatformConfigUpsert(validPlatformInput)).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     } satisfies Partial<TRPCError>);
   });

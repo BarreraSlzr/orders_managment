@@ -15,6 +15,7 @@
  * It expects a response within 22 seconds.
  */
 import { handleOAuthCallback } from "@/lib/services/mercadopago/oauthCallbackHandler";
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
 import {
     processWebhook,
     validateWebhookSignature,
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as MpWebhookNotification;
 
     // ── Signature validation ──────────────────────────────────────────
-    const secret = process.env.MP_WEBHOOK_SECRET;
+    const { webhookSecret: secret } = await getMpPlatformConfig();
     if (secret) {
       const xSignature = request.headers.get("x-signature") ?? "";
       const xRequestId = request.headers.get("x-request-id") ?? "";

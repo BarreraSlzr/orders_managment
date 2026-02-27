@@ -859,6 +859,23 @@ export const adminRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
+      // Cross-check: no two platform secrets should share the same value
+      const allValues = [
+        input.clientId, input.clientSecret, input.redirectUri,
+        input.webhookSecret, input.paymentAccessToken,
+        input.billingAccessToken, input.billingWebhookSecret,
+        input.tokensEncryptionKey,
+      ].filter((v): v is string => Boolean(v?.trim()));
+
+      const unique = new Set(allValues.map(v => v.trim()));
+      if (unique.size < allValues.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Platform config values must all be unique — no two fields should share the same value.",
+        });
+      }
+
       await logAdminAccess({
         action: "mpPlatformConfigUpsert",
         adminId: ctx.session?.sub,
@@ -878,7 +895,7 @@ export const adminRouter = router({
           billing_access_token: input.billingAccessToken ?? null,
           billing_webhook_secret: input.billingWebhookSecret ?? null,
           tokens_encryption_key: input.tokensEncryptionKey ?? null,
-          updated_at: new Date().toISOString(),
+          updated_at: getIsoTimestamp(),
           updated_by: ctx.session?.sub ?? null,
         })
         .where("id", "=", "singleton")

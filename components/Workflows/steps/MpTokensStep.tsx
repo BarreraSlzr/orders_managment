@@ -213,12 +213,6 @@ export function MpTokensStep({ data, onChange }: MpTokensStepProps) {
           Token privado para operaciones server-to-server de la app de pagos.
           Se gestiona una sola vez a nivel plataforma (system/admin).
         </p>
-        <p className="text-xs text-slate-500">
-          Cifra los tokens de acceso/actualización de MP en la base de datos.
-          Si está vacío, se usa <span className="font-mono">AUTH_SECRET</span>{" "}
-          como respaldo. Haz clic en <strong>Generar</strong> para crear una
-          clave aleatoria criptográficamente segura.
-        </p>
       </div>
     </div>
   );

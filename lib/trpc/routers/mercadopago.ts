@@ -361,6 +361,7 @@ const billingRouter = router({
           platformConfig.webhookSecret,
           platformConfig.billingWebhookSecret,
           platformConfig.tokensEncryptionKey,
+          platformConfig.paymentAccessToken,
         ]
           .map((value) => value?.trim())
           .filter((value): value is string => Boolean(value)),
