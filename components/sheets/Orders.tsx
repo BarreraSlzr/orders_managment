@@ -292,6 +292,12 @@ export function OpenOrderSheet() {
     void setCurrentOrderDetails(null);
   }
 
+  // Closes the sheet so the user can add more products to the current order.
+  // Intentionally does NOT clear currentOrder — the selection must survive.
+  function handleAddMoreProducts() {
+    void setSheetParam("");
+  }
+
   function handleFilterStatusChange(value: string) {
     const nextStatus = (value || "opened") as "opened" | "closed" | "all";
     setFilterStatus(nextStatus);
@@ -624,7 +630,7 @@ export function OpenOrderSheet() {
               <>
                 {!currentOrder.closed && (
                   <ChevronFloodButton
-                    onClick={handleClose}
+                    onClick={handleAddMoreProducts}
                     testId={TEST_IDS.ORDER_SHEET.ADD_MORE_BTN}
                   />
                 )}
