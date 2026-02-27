@@ -46,11 +46,13 @@ export async function deleteTransaction(params: {
   tenantId: string;
   id: number;
 }) {
-  return await db
+  const results = await db
     .deleteFrom('transactions')
     .where('id', '=', params.id)
     .where('tenant_id', '=', params.tenantId)
     .execute();
+  // Kysely returns BigInt in numDeletedRows — coerce to number so tRPC can serialize it.
+  return { numDeletedRows: Number(results[0]?.numDeletedRows ?? 0) };
 }
 
 export async function getTransactions(params: {
