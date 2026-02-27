@@ -14,9 +14,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockProcessBillingEvent = vi.fn().mockResolvedValue(undefined);
+const mockTranslateMpBillingNotification = vi.fn().mockResolvedValue({
+  tenantId: "t-1",
+  provider: "mercadopago",
+  eventType: "subscription.updated",
+  status: "active",
+  externalSubscriptionId: "sub-1",
+  externalEventId: "notif-1",
+});
 
 vi.mock("@/lib/services/entitlements/billingWebhookService", () => ({
   processBillingEvent: (...args: unknown[]) => mockProcessBillingEvent(...args),
+}));
+
+vi.mock("@/lib/services/billing/mpBillingTranslator", () => ({
+  translateMpBillingNotification: (...args: unknown[]) =>
+    mockTranslateMpBillingNotification(...args),
 }));
 
 // Mock platformConfig so tests are not affected by the 60s in-memory cache
@@ -28,6 +41,7 @@ vi.mock("@/lib/services/mercadopago/platformConfig", () => ({
     redirectUri: process.env.MP_REDIRECT_URI?.trim() || null,
     webhookSecret: process.env.MP_WEBHOOK_SECRET?.trim() || null,
     billingWebhookSecret: process.env.MP_BILLING_WEBHOOK_SECRET?.trim() || null,
+    billingAccessToken: process.env.MP_BILLING_ACCESS_TOKEN?.trim() || null,
     tokensEncryptionKey:
       process.env.MP_TOKENS_ENCRYPTION_KEY?.trim() ||
       process.env.AUTH_SECRET?.trim() ||
@@ -106,7 +120,19 @@ describe("/api/billing/mercadopago/webhook", () => {
 
   beforeEach(() => {
     mockProcessBillingEvent.mockClear();
+    mockTranslateMpBillingNotification.mockClear();
+    // Reset translator to return a valid BillingEvent by default
+    mockTranslateMpBillingNotification.mockResolvedValue({
+      tenantId: "t-1",
+      provider: "mercadopago",
+      eventType: "subscription.updated",
+      status: "active",
+      externalSubscriptionId: "sub-1",
+      externalEventId: "notif-1",
+    });
     process.env = { ...originalEnv };
+    // Ensure billingAccessToken is present by default
+    process.env.MP_BILLING_ACCESS_TOKEN = "test-billing-token";
   });
 
   afterEach(() => {
@@ -262,6 +288,80 @@ describe("/api/billing/mercadopago/webhook", () => {
 
       expect(response.status).toBe(200);
       expect(json).toEqual({ received: true });
+    });
+
+    it("returns 200 even when translator throws", async () => {
+      mockTranslateMpBillingNotification.mockRejectedValueOnce(new Error("MP API timeout"));
+
+      const payload = JSON.stringify({ type: "subscription_preapproval", data: { id: "sub-1" } });
+      const { POST } = await import("../route");
+      const response = await POST(makeRequest({ body: payload }));
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json).toEqual({ received: true });
+      expect(mockProcessBillingEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Translator integration ──────────────────────────────────────────────
+
+  describe("translator integration", () => {
+    beforeEach(() => {
+      delete process.env.MP_BILLING_WEBHOOK_SECRET;
+    });
+
+    it("passes payload to translator and translator result to processBillingEvent", async () => {
+      const payload = JSON.stringify({ type: "subscription_preapproval", action: "updated", data: { id: "sub-1" } });
+
+      const { POST } = await import("../route");
+      await POST(makeRequest({ body: payload }));
+
+      expect(mockTranslateMpBillingNotification).toHaveBeenCalledOnce();
+      expect(mockTranslateMpBillingNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: { type: "subscription_preapproval", action: "updated", data: { id: "sub-1" } },
+          accessToken: "test-billing-token",
+        }),
+      );
+      expect(mockProcessBillingEvent).toHaveBeenCalledWith({
+        tenantId: "t-1",
+        provider: "mercadopago",
+        eventType: "subscription.updated",
+        status: "active",
+        externalSubscriptionId: "sub-1",
+        externalEventId: "notif-1",
+      });
+    });
+
+    it("skips processBillingEvent when translator returns null", async () => {
+      mockTranslateMpBillingNotification.mockResolvedValueOnce(null);
+
+      const payload = JSON.stringify({ type: "payment", action: "updated", data: { id: "p-1" } });
+
+      const { POST } = await import("../route");
+      const response = await POST(makeRequest({ body: payload }));
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json).toEqual({ received: true });
+      expect(mockTranslateMpBillingNotification).toHaveBeenCalledOnce();
+      expect(mockProcessBillingEvent).not.toHaveBeenCalled();
+    });
+
+    it("returns 200 when billingAccessToken is not configured", async () => {
+      // Set env so the mock returns no billingAccessToken
+      process.env.MP_BILLING_ACCESS_TOKEN = "";
+
+      const payload = JSON.stringify({ type: "subscription_preapproval", data: { id: "sub-1" } });
+      const { POST } = await import("../route");
+      const response = await POST(makeRequest({ body: payload }));
+      const json = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(json).toEqual({ received: true });
+      expect(mockTranslateMpBillingNotification).not.toHaveBeenCalled();
+      expect(mockProcessBillingEvent).not.toHaveBeenCalled();
     });
   });
 });

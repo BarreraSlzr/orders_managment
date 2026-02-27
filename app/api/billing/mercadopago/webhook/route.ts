@@ -23,6 +23,7 @@
  * See docs/MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md for the full design.
  */
 
+import { translateMpBillingNotification } from "@/lib/services/billing/mpBillingTranslator";
 import { processBillingEvent } from "@/lib/services/entitlements/billingWebhookService";
 import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
 import { createHmac, timingSafeEqual } from "crypto";
@@ -132,8 +133,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  // ── Translate raw MP notification → BillingEvent envelope ─────────────
   try {
-    await processBillingEvent(payload);
+    const { billingAccessToken } = await getMpPlatformConfig();
+    if (!billingAccessToken) {
+      console.error("[billing/webhook] No billingAccessToken configured — cannot fetch subscription details");
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    const billingEvent = await translateMpBillingNotification({
+      payload,
+      accessToken: billingAccessToken,
+    });
+
+    if (billingEvent) {
+      await processBillingEvent(billingEvent);
+    } else {
+      console.info("[billing/webhook] Notification translated to null — no action needed");
+    }
   } catch (error) {
     // Log but always return 200 — provider should not retry on app errors
     console.error("[billing/webhook] Processing error:", error);

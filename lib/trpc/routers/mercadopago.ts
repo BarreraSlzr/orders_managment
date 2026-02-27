@@ -391,6 +391,39 @@ const billingRouter = router({
         "https://orders.internetfriends.xyz";
       const backUrl = `${origin}/onboardings/configure-mp-billing`;
 
+      // ── Idempotency guard: skip remote creation if active sub exists ────
+      const existingSub = await getDb()
+        .selectFrom("tenant_subscriptions")
+        .select([
+          "id",
+          "external_subscription_id",
+          "status",
+          "metadata",
+        ])
+        .where("tenant_id", "=", ctx.tenantId)
+        .where("provider", "=", "mercadopago")
+        .where("status", "not in", ["canceled", "expired"])
+        .orderBy("created_at", "desc")
+        .limit(1)
+        .executeTakeFirst();
+
+      if (existingSub) {
+        console.info(
+          `[billing.activate] Tenant ${ctx.tenantId} already has active subscription ${existingSub.external_subscription_id} (status=${existingSub.status}) — returning existing`,
+        );
+        const meta = (existingSub.metadata ?? {}) as Record<string, unknown>;
+        return {
+          ok: true as const,
+          tenantId: ctx.tenantId,
+          payerEmail,
+          planId: (meta.plan_id as string) ?? null,
+          subscriptionId: existingSub.external_subscription_id ?? "",
+          status: existingSub.status,
+          initPoint: (meta.checkout_url as string) ?? null,
+          existing: true as const,
+        };
+      }
+
       const plan = await createPreapprovalPlan({
         accessToken: normalizedBillingAccessToken,
         reason: input.reason,

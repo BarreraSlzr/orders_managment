@@ -1,5 +1,42 @@
 import { mpFetch } from "@/lib/services/mercadopago/mpFetch";
 
+// ─── Subscription Details (read from MP API) ─────────────────────────────────
+
+export interface MpSubscriptionDetails {
+  id: string;
+  status: string;
+  external_reference?: string;
+  payer_email?: string;
+  reason?: string;
+  date_created?: string;
+  last_modified?: string;
+  auto_recurring?: {
+    frequency?: number;
+    frequency_type?: string;
+    transaction_amount?: number;
+    currency_id?: string;
+  };
+  next_payment_date?: string;
+}
+
+/**
+ * Fetches full subscription (preapproval) details from the MP API.
+ * Used by the billing webhook translator to resolve `external_reference`
+ * (our tenantId) and map the remote status.
+ */
+export async function fetchSubscriptionDetails(params: {
+  accessToken: string;
+  subscriptionId: string;
+}): Promise<MpSubscriptionDetails> {
+  return mpFetch<MpSubscriptionDetails>({
+    accessToken: params.accessToken,
+    method: "GET",
+    path: `/preapproval/${params.subscriptionId}`,
+  });
+}
+
+// ─── Create plan + subscription ──────────────────────────────────────────────
+
 export interface CreatePreapprovalPlanParams {
   accessToken: string;
   reason: string;
