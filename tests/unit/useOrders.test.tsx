@@ -12,16 +12,39 @@
  * Run: bun vitest run tests/unit/useOrders.test.tsx
  */
 import { useOrders } from "@/hooks/useOrders";
+import "./setup.dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { type PropsWithChildren } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// ─── Stable mock objects (hoisted so vi.mock can reference them) ──────────────
-// vi.hoisted runs before imports so the mock factory below can close over these.
+// ─── Stable mock object shared across tests ───────────────────────────────────
+// Use `var` so it is safely available to hoisted vi.mock factories.
 
-const { mockTrpc } = vi.hoisted(() => {
+let mockTrpc: {
+  orders: {
+    list: { queryOptions: ReturnType<typeof vi.fn> };
+    getDetails: { queryOptions: ReturnType<typeof vi.fn> };
+    split: { mutationOptions: ReturnType<typeof vi.fn> };
+    close: { mutationOptions: ReturnType<typeof vi.fn> };
+    open: { mutationOptions: ReturnType<typeof vi.fn> };
+    combine: { mutationOptions: ReturnType<typeof vi.fn> };
+    removeProducts: { mutationOptions: ReturnType<typeof vi.fn> };
+    togglePayment: { mutationOptions: ReturnType<typeof vi.fn> };
+    setPaymentOption: { mutationOptions: ReturnType<typeof vi.fn> };
+    toggleTakeaway: { mutationOptions: ReturnType<typeof vi.fn> };
+  };
+  mercadopago: {
+    payment: {
+      start: { mutationOptions: ReturnType<typeof vi.fn> };
+    };
+  };
+};
+
+// ─── Mock tRPC — always returns the same stable mockTrpc instance ─────────────
+vi.mock("@/lib/trpc/react", () => {
   const makeQueryOpts = (key: unknown[], opts?: { enabled?: boolean }) => ({
     queryKey: key,
     queryFn: vi.fn().mockResolvedValue(null),
@@ -31,7 +54,7 @@ const { mockTrpc } = vi.hoisted(() => {
     mutationFn: vi.fn().mockResolvedValue({}),
   });
 
-  const mockTrpc = {
+  mockTrpc = {
     orders: {
       list: {
         queryOptions: vi.fn((_args: unknown) => makeQueryOpts(["orders", "list"])),
@@ -58,13 +81,10 @@ const { mockTrpc } = vi.hoisted(() => {
     },
   };
 
-  return { mockTrpc };
+  return {
+    useTRPC: () => mockTrpc,
+  };
 });
-
-// ─── Mock tRPC — always returns the same stable mockTrpc instance ─────────────
-vi.mock("@/lib/trpc/react", () => ({
-  useTRPC: () => mockTrpc,
-}));
 
 // ─── Wrapper factory ──────────────────────────────────────────────────────────
 
