@@ -23,6 +23,14 @@ export function MpTokensStep({ data, onChange }: MpTokensStepProps) {
     typeof data.MP_BILLING_WEBHOOK_SECRET === "string"
       ? data.MP_BILLING_WEBHOOK_SECRET
       : "";
+  const billingAccessToken =
+    typeof data.MP_BILLING_ACCESS_TOKEN === "string"
+      ? data.MP_BILLING_ACCESS_TOKEN
+      : "";
+  const paymentAccessToken =
+    typeof data.MP_ACCESS_TOKEN === "string"
+      ? data.MP_ACCESS_TOKEN
+      : "";
   const encryptionKey =
     typeof data.MP_TOKENS_ENCRYPTION_KEY === "string"
       ? data.MP_TOKENS_ENCRYPTION_KEY
@@ -96,6 +104,28 @@ export function MpTokensStep({ data, onChange }: MpTokensStepProps) {
 
       {/* Billing webhook secret */}
       <div className="space-y-1">
+        <Label htmlFor="mp-billing-access-token">
+          Access token de facturación
+          <span className="font-mono text-xs text-slate-400"> MP_BILLING_ACCESS_TOKEN</span>
+        </Label>
+        <Input
+          id="mp-billing-access-token"
+          type="password"
+          value={billingAccessToken}
+          onChange={(e) =>
+            onChange({ data: { MP_BILLING_ACCESS_TOKEN: e.target.value } })
+          }
+          placeholder="APP_USR-..."
+          autoComplete="new-password"
+          spellCheck={false}
+        />
+        <p className="text-xs text-slate-500">
+          Token privado de la app de facturación usado por el backend para crear
+          planes y suscripciones. No se solicita en el flujo del tenant.
+        </p>
+      </div>
+
+      <div className="space-y-1">
         <Label htmlFor="mp-billing-secret">
           Clave secreta de facturación{" "}
           <span className="font-mono text-xs text-slate-400">MP_BILLING_WEBHOOK_SECRET</span>
@@ -156,6 +186,32 @@ export function MpTokensStep({ data, onChange }: MpTokensStepProps) {
           Si está vacío, se usa <span className="font-mono">AUTH_SECRET</span>{" "}
           como respaldo. Haz clic en <strong>Generar</strong> para crear una
           clave aleatoria criptográficamente segura.
+        </p>
+      </div>
+
+      {/* Payment access token */}
+      <div className="space-y-1">
+        <Label htmlFor="mp-access-token">
+          Access token de pagos (Point)
+          <span className="font-mono text-xs text-slate-400"> MP_ACCESS_TOKEN</span>
+          <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">
+            opcional
+          </span>
+        </Label>
+        <Input
+          id="mp-access-token"
+          type="password"
+          value={paymentAccessToken}
+          onChange={(e) =>
+            onChange({ data: { MP_ACCESS_TOKEN: e.target.value } })
+          }
+          placeholder="APP_USR-..."
+          autoComplete="new-password"
+          spellCheck={false}
+        />
+        <p className="text-xs text-slate-500">
+          Token privado para operaciones server-to-server de la app de pagos.
+          Se gestiona una sola vez a nivel plataforma (system/admin).
         </p>
       </div>
     </div>

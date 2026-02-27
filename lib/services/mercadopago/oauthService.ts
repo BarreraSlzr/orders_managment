@@ -9,6 +9,8 @@
  * Reference: https://www.mercadopago.com.mx/developers/en/docs/security/oauth
  */
 
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
+
 /**
  * Country-specific auth domain for MercadoPago OAuth.
  * Override via MP_AUTH_BASE_URL env var for other countries
@@ -74,27 +76,26 @@ function resolveBaseUrl(origin?: string): string {
 }
 
 /**
- * Returns OAuth config from environment variables.
- * Throws if any required var is missing.
+ * Returns OAuth config. Reads from DB (`mp_platform_config`) first,
+ * falls back to env vars so existing deployments continue working.
  *
- * `origin` is used to resolve `MP_REDIRECT_URI` when it's a relative
- * path (e.g. `/api/mercadopago/oauth/callback`).  Route handlers should pass
- * `new URL(request.url).origin` so the redirect_uri sent to MercadoPago is
- * always an absolute URL.
+ * `origin` is used to resolve a relative redirect URI to an absolute URL.
  */
-export function getOAuthConfig(params?: { origin?: string }): OAuthConfig {
-  const clientId = process.env.MP_CLIENT_ID;
-  const clientSecret = process.env.MP_CLIENT_SECRET;
-  const redirectPath = process.env.MP_REDIRECT_URI;
+export async function getOAuthConfig(params?: { origin?: string }): Promise<OAuthConfig> {
+  const cfg = await getMpPlatformConfig();
+
+  const clientId = cfg.clientId;
+  const clientSecret = cfg.clientSecret;
+  const redirectPath = cfg.redirectUri;
 
   if (!clientId) {
-    throw new Error("MP_CLIENT_ID environment variable is required");
+    throw new Error("MP_CLIENT_ID is required (set in mp_platform_config or MP_CLIENT_ID env var)");
   }
   if (!clientSecret) {
-    throw new Error("MP_CLIENT_SECRET environment variable is required");
+    throw new Error("MP_CLIENT_SECRET is required (set in mp_platform_config or MP_CLIENT_SECRET env var)");
   }
   if (!redirectPath) {
-    throw new Error("MP_REDIRECT_URI environment variable is required");
+    throw new Error("MP_REDIRECT_URI is required (set in mp_platform_config or MP_REDIRECT_URI env var)");
   }
 
   // Resolve relative path to absolute URL for MercadoPago

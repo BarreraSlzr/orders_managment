@@ -293,6 +293,21 @@ export interface PlatformAlertsTable {
 
 export type PlatformAlert = Selectable<PlatformAlertsTable>;
 
+// ── Platform-level MP config (singleton row, id = 'singleton') ───────────────
+export interface MpPlatformConfigTable {
+  id: Generated<string>;
+  client_id: string | null;
+  client_secret: string | null;
+  redirect_uri: string | null;
+  webhook_secret: string | null;
+  payment_access_token: string | null;
+  billing_access_token: string | null;
+  billing_webhook_secret: string | null;
+  tokens_encryption_key: string | null;
+  updated_at: ColumnType<Date, string | undefined, string | undefined>;
+  updated_by: string | null;
+}
+
 // Keys of this interface are table names.
 export interface Database {
   tenants: TenantTable;
@@ -311,6 +326,7 @@ export interface Database {
   admin_audit_logs: AdminAuditLogsTable;
   mercadopago_credentials: MercadopagoCredentialsTable;
   mercadopago_access_requests: MercadopagoAccessRequestsTable;
+  mp_platform_config: MpPlatformConfigTable;
   payment_sync_attempts: PaymentSyncAttemptsTable;
   product_consumptions: ProductConsumptionsTable;
   tenant_subscriptions: TenantSubscriptionsTable;

@@ -59,7 +59,7 @@ export async function handleOAuthCallback(request: NextRequest) {
     }
 
     const origin = new URL(request.url).origin;
-    const config = getOAuthConfig({ origin });
+    const config = await getOAuthConfig({ origin });
     const tokenResponse = await exchangeCodeForToken({ config, code });
 
     const userInfo = await getUserInfo({

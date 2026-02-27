@@ -1,24 +1,26 @@
 "use client";
 
+import { MpCredentialsPanel } from "@/components/Admin/MpCredentialsPanel";
 import { WorkflowRunner } from "@/components/Workflows/WorkflowRunner";
 import {
-  CsvImportStep,
-  ManagerInfoStep,
-  MpEnvReviewStep,
-  MpOAuthStep,
-  MpTokensStep,
-  MpWebhooksStep,
-  PermissionsStep,
-  ReviewStep,
-  StaffInfoStep,
-  TenantInfoStep,
+    CsvImportStep,
+    ManagerInfoStep,
+  MpBillingActivationStep,
+    MpEnvReviewStep,
+    MpOAuthStep,
+    MpTokensStep,
+    MpWebhooksStep,
+    PermissionsStep,
+    ReviewStep,
+    StaffInfoStep,
+    TenantInfoStep,
 } from "@/components/Workflows/steps";
 import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
 import {
-  getAvailableWorkflows,
-  getWorkflowDefinition,
-  WorkflowDefinition,
+    getAvailableWorkflows,
+    getWorkflowDefinition,
+    WorkflowDefinition,
 } from "@/lib/workflows/definitions";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Link from "next/link";
@@ -68,6 +70,12 @@ export default function OnboardingRunnerPage() {
     ...trpc.admin.mpEnvStatus.queryOptions(),
     enabled: !isLoading,
   });
+  const mpPlatformConfigUpsertMutation = useMutation(
+    trpc.admin.mpPlatformConfigUpsert.mutationOptions(),
+  );
+  const mpBillingActivateMutation = useMutation(
+    trpc.mercadopago.billing.activate.mutationOptions(),
+  );
   const onboardTenantStaffMutation = useMutation(
     trpc.users.onboardTenantStaff.mutationOptions(),
   );
@@ -93,6 +101,10 @@ export default function OnboardingRunnerPage() {
   });
 
   const editableUser = editableUserQuery.data ?? null;
+  const mpCredentialsQuery = useQuery({
+    ...trpc.mercadopago.credentials.get.queryOptions(),
+    enabled: definition?.id === "configure-mp-billing",
+  });
   const isReadOnly = isEditMode && editableUser?.role === "staff";
   const defaultStaffPermissions = [
     "orders.create",
@@ -378,8 +390,31 @@ export default function OnboardingRunnerPage() {
         details: [
           { label: "MP_CLIENT_ID", value: String(data.MP_CLIENT_ID || "") || "—" },
           { label: "MP_WEBHOOK_SECRET", value: data.MP_WEBHOOK_SECRET ? "✓ provisto" : "—" },
+          { label: "MP_ACCESS_TOKEN", value: data.MP_ACCESS_TOKEN ? "✓ provisto" : "—" },
+          { label: "MP_BILLING_ACCESS_TOKEN", value: data.MP_BILLING_ACCESS_TOKEN ? "✓ provisto" : "—" },
           { label: "MP_BILLING_WEBHOOK_SECRET", value: data.MP_BILLING_WEBHOOK_SECRET ? "✓ provisto" : "—" },
           { label: "MP_TOKENS_ENCRYPTION_KEY", value: data.MP_TOKENS_ENCRYPTION_KEY ? "✓ provisto" : "—" },
+        ],
+      });
+    }
+
+    if (workflowDefinition.id === "configure-mp-billing") {
+      const result = await mpBillingActivateMutation.mutateAsync({
+        reason: String(data.reason || "Orders Management — Plan Mensual"),
+        transactionAmount: Number(data.transactionAmount || 0),
+        currencyId: String(data.currencyId || "MXN"),
+      });
+
+      setCompletion({
+        title: "Suscripción creada",
+        subtitle: "El tenant ya tiene plan y suscripción inicial en Mercado Pago Billing.",
+        details: [
+          { label: "Tenant", value: tenantName ?? "—" },
+          { label: "Payer Email", value: result.payerEmail },
+          { label: "Plan ID", value: result.planId },
+          { label: "Subscription ID", value: result.subscriptionId },
+          { label: "Status", value: result.status },
+          { label: "Checkout", value: result.initPoint || "—" },
         ],
       });
     }
@@ -451,11 +486,69 @@ export default function OnboardingRunnerPage() {
         return <MpWebhooksStep data={data} onChange={onChange} />;
       case "mp-tokens":
         return <MpTokensStep data={data} onChange={onChange} />;
+      case "mp-credentials":
+        return <MpCredentialsPanel />;
+      case "billing-activation":
+        return (
+          <MpBillingActivationStep
+            data={data}
+            tenantName={tenantName}
+            linkedEmail={mpCredentialsQuery.data?.contactEmail ?? null}
+            onChange={onChange}
+          />
+        );
       case "env-review":
         return (
           <MpEnvReviewStep
             data={data}
-            envStatus={mpEnvStatusQuery.data ?? null}
+            envStatus={
+              mpEnvStatusQuery.data?.ok
+                ? mpEnvStatusQuery.data.vars
+                : null
+            }
+            isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
+            onRetry={() => void mpEnvStatusQuery.refetch()}
+            onChange={onChange}
+            isSaving={mpPlatformConfigUpsertMutation.isPending}
+            onSaveToDb={async () => {
+              const origin = typeof window !== "undefined" ? window.location.origin : "";
+              await mpPlatformConfigUpsertMutation.mutateAsync({
+                clientId: String(data.MP_CLIENT_ID ?? ""),
+                clientSecret: String(data.MP_CLIENT_SECRET ?? ""),
+                redirectUri: `${origin}/api/mercadopago/webhook`,
+                webhookSecret: String(data.MP_WEBHOOK_SECRET ?? ""),
+                paymentAccessToken: data.MP_ACCESS_TOKEN
+                  ? String(data.MP_ACCESS_TOKEN)
+                  : undefined,
+                billingAccessToken: data.MP_BILLING_ACCESS_TOKEN
+                  ? String(data.MP_BILLING_ACCESS_TOKEN)
+                  : undefined,
+                billingWebhookSecret: data.MP_BILLING_WEBHOOK_SECRET
+                  ? String(data.MP_BILLING_WEBHOOK_SECRET)
+                  : undefined,
+                tokensEncryptionKey: data.MP_TOKENS_ENCRYPTION_KEY
+                  ? String(data.MP_TOKENS_ENCRYPTION_KEY)
+                  : undefined,
+              });
+              onChange({ data: { confirmed: true } });
+              void mpEnvStatusQuery.refetch();
+            }}
+          />
+        );
+      case "billing-review":
+        return (
+          <ReviewStep
+            data={data}
+            title={workflowDefinition.title}
+            items={[
+              { label: "Tenant", value: tenantName ?? "—" },
+              {
+                label: "Payer Email",
+                value: mpCredentialsQuery.data?.contactEmail ?? "No vinculado en Settings",
+              },
+              { label: "Monto", value: String(data.transactionAmount || "") },
+              { label: "Moneda", value: String(data.currencyId || "") },
+            ]}
             onChange={onChange}
           />
         );

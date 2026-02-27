@@ -14,12 +14,13 @@
  * MercadoPago retries on non-2xx every 15 min for up to 3 days.
  * It expects a response within 22 seconds.
  */
-import {
-  processWebhook,
-  validateWebhookSignature,
-  type MpWebhookNotification,
-} from "@/lib/services/mercadopago/webhookService";
 import { handleOAuthCallback } from "@/lib/services/mercadopago/oauthCallbackHandler";
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
+import {
+    processWebhook,
+    validateWebhookSignature,
+    type MpWebhookNotification,
+} from "@/lib/services/mercadopago/webhookService";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as MpWebhookNotification;
 
     // ── Signature validation ──────────────────────────────────────────
-    const secret = process.env.MP_WEBHOOK_SECRET;
+    const { webhookSecret: secret } = await getMpPlatformConfig();
     if (secret) {
       const xSignature = request.headers.get("x-signature") ?? "";
       const xRequestId = request.headers.get("x-request-id") ?? "";

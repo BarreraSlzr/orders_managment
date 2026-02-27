@@ -23,7 +23,9 @@
  * See docs/MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md for the full design.
  */
 
+import { translateMpBillingNotification } from "@/lib/services/billing/mpBillingTranslator";
 import { processBillingEvent } from "@/lib/services/entitlements/billingWebhookService";
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -36,9 +38,10 @@ function validateBillingSignature(params: {
   xSignature: string;
   xRequestId: string;
   rawBody: string;
+  dataId: string;
   secret: string;
 }): boolean {
-  const { xSignature, xRequestId, rawBody, secret } = params;
+  const { xSignature, xRequestId, rawBody, dataId, secret } = params;
 
   let ts = "";
   let hash = "";
@@ -53,20 +56,38 @@ function validateBillingSignature(params: {
 
   if (!ts || !hash) return false;
 
-  // Manifest: body + request-id + ts (only non-empty segments)
-  const segments: string[] = [];
-  if (rawBody) segments.push(`body:${rawBody}`);
-  if (xRequestId) segments.push(`request-id:${xRequestId}`);
-  if (ts) segments.push(`ts:${ts}`);
-  const manifest = segments.join(";") + ";";
+  const manifests: string[] = [];
 
-  const computed = createHmac("sha256", secret).update(manifest).digest("hex");
-
-  try {
-    return timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(hash, "hex"));
-  } catch {
-    return false;
+  // Canonical MercadoPago manifest: id + request-id + ts
+  {
+    const segments: string[] = [];
+    if (dataId) segments.push(`id:${dataId}`);
+    if (xRequestId) segments.push(`request-id:${xRequestId}`);
+    if (ts) segments.push(`ts:${ts}`);
+    manifests.push(segments.join(";") + ";");
   }
+
+  // Backward-compatible manifest: body + request-id + ts
+  {
+    const segments: string[] = [];
+    if (rawBody) segments.push(`body:${rawBody}`);
+    if (xRequestId) segments.push(`request-id:${xRequestId}`);
+    if (ts) segments.push(`ts:${ts}`);
+    manifests.push(segments.join(";") + ";");
+  }
+
+  for (const manifest of manifests) {
+    const computed = createHmac("sha256", secret).update(manifest).digest("hex");
+    try {
+      if (timingSafeEqual(Buffer.from(computed, "hex"), Buffer.from(hash, "hex"))) {
+        return true;
+      }
+    } catch {
+      // ignore malformed comparisons and continue trying other manifests
+    }
+  }
+
+  return false;
 }
 
 export async function POST(request: NextRequest) {
@@ -80,12 +101,24 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Signature validation ──────────────────────────────────────────────────
-  const billingSecret = process.env.MP_BILLING_WEBHOOK_SECRET;
+  const { billingWebhookSecret: billingSecret } = await getMpPlatformConfig();
   if (billingSecret) {
+    let dataId = "";
+    try {
+      const maybePayload = JSON.parse(rawBody) as { data?: { id?: unknown } };
+      if (typeof maybePayload?.data?.id === "string") {
+        dataId = maybePayload.data.id;
+      } else if (typeof maybePayload?.data?.id === "number") {
+        dataId = String(maybePayload.data.id);
+      }
+    } catch {
+      // keep empty dataId; payload parse is validated later in the handler
+    }
+
     const xSignature = request.headers.get("x-signature") ?? "";
     const xRequestId = request.headers.get("x-request-id") ?? "";
 
-    if (!validateBillingSignature({ xSignature, xRequestId, rawBody, secret: billingSecret })) {
+    if (!validateBillingSignature({ xSignature, xRequestId, rawBody, dataId, secret: billingSecret })) {
       console.error("[billing/webhook] Signature validation failed");
       // Return 200 to avoid retry storms — log for alerting
       return NextResponse.json({ received: true, error: "invalid_signature" }, { status: 200 });
@@ -100,8 +133,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   }
 
+  // ── Translate raw MP notification → BillingEvent envelope ─────────────
   try {
-    await processBillingEvent(payload);
+    const { billingAccessToken } = await getMpPlatformConfig();
+    if (!billingAccessToken) {
+      console.error("[billing/webhook] No billingAccessToken configured — cannot fetch subscription details");
+      return NextResponse.json({ received: true }, { status: 200 });
+    }
+
+    const billingEvent = await translateMpBillingNotification({
+      payload,
+      accessToken: billingAccessToken,
+    });
+
+    if (billingEvent) {
+      await processBillingEvent(billingEvent);
+    } else {
+      console.info("[billing/webhook] Notification translated to null — no action needed");
+    }
   } catch (error) {
     // Log but always return 200 — provider should not retry on app errors
     console.error("[billing/webhook] Processing error:", error);

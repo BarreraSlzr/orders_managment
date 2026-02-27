@@ -2,7 +2,20 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypt
 
 const TOKEN_PREFIX = "enc:v1:";
 
+// Override injected by platformConfig after DB load — avoids making all
+// crypto functions async while still supporting DB-sourced encryption keys.
+let _keyOverride: string | null | undefined = undefined;
+
+/**
+ * Injects an encryption key from an external source (e.g. DB platform config).
+ * Pass `null` to explicitly clear; `undefined` (default) means "not set yet".
+ */
+export function setEncryptionKeyOverride(key: string | null): void {
+  _keyOverride = key;
+}
+
 function getEncryptionSecret(): string | null {
+  if (_keyOverride !== undefined) return _keyOverride;
   return process.env.MP_TOKENS_ENCRYPTION_KEY || process.env.AUTH_SECRET || null;
 }
 

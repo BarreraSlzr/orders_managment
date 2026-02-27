@@ -9,13 +9,13 @@
  * MP_TOKENS_ENCRYPTION_KEY (or AUTH_SECRET fallback) is configured.
  */
 import {
-  getOAuthConfig,
-  refreshAccessToken,
+    getOAuthConfig,
+    refreshAccessToken,
 } from "@/lib/services/mercadopago/oauthService";
 import {
-  decryptMpToken,
-  encryptMpToken,
-  isMpTokenEncrypted,
+    decryptMpToken,
+    encryptMpToken,
+    isMpTokenEncrypted,
 } from "@/lib/services/mercadopago/tokenCrypto";
 import { getDb, sql } from "@/lib/sql/database";
 import { MercadopagoCredentialsTable } from "@/lib/sql/types";
@@ -137,6 +137,25 @@ export async function markCredentialsError({
     .execute();
 }
 
+/**
+ * Updates only the contact email for existing MP credentials.
+ * Used to persist email hint before OAuth completion.
+ */
+export async function updateContactEmail({
+  tenantId,
+  contactEmail,
+}: {
+  tenantId: string;
+  contactEmail: string;
+}): Promise<void> {
+  await getDb()
+    .updateTable("mercadopago_credentials")
+    .set({ contact_email: contactEmail })
+    .where("tenant_id", "=", tenantId)
+    .where("status", "=", "active")
+    .execute();
+}
+
 async function refreshCredentialsIfNeeded(
   creds: MpCredentials,
 ): Promise<MpCredentials> {
@@ -151,7 +170,7 @@ async function refreshCredentialsIfNeeded(
   }
 
   try {
-    const config = getOAuthConfig();
+    const config = await getOAuthConfig();
     const refreshed = await refreshAccessToken({
       config,
       refreshToken: creds.refresh_token,

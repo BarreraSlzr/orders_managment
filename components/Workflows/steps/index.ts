@@ -1,5 +1,6 @@
 export { CsvImportStep } from "./CsvImportStep";
 export { ManagerInfoStep } from "./ManagerInfoStep";
+export { MpBillingActivationStep } from "./MpBillingActivationStep";
 export { MpEnvReviewStep } from "./MpEnvReviewStep";
 export { MpOAuthStep } from "./MpOAuthStep";
 export { MpTokensStep } from "./MpTokensStep";

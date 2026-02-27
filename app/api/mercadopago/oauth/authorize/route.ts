@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     // Get OAuth config (pass origin so relative redirect URI becomes absolute)
     const origin = new URL(request.url).origin;
-    const config = getOAuthConfig({ origin });
+    const config = await getOAuthConfig({ origin });
 
     // Generate authorization URL
     const authorizeUrl = getAuthorizeUrl({ config, state });

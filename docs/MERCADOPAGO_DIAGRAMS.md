@@ -8,6 +8,7 @@ See also:
 - [MercadoPago OAuth Integration](./MERCADOPAGO_OAUTH.md)
 - [Entitlement Architecture](./MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md)
 - [Approach — Payment & Billing](./MERCADOPAGO_APPROACH.md)
+- [Planned Process (Visual Guide)](./MERCADOPAGO_PLANNED_PROCESS.md)
 
 ## Mercado Pago Docs Retrieval Convention
 
@@ -358,32 +359,63 @@ sequenceDiagram
 ## 7. Billing Webhook Pipeline
 
 Platform subscription events from App 2 (Billing) are handled on a separate
-endpoint with independent HMAC validation.
+endpoint with independent HMAC validation. Raw MP notifications are translated
+into provider-agnostic `BillingEvent` envelopes before processing.
 
 ```mermaid
 flowchart TD
     MP2["MercadoPago Billing App\n(6186158011206269)"] --> BWH["POST /api/billing/mercadopago/webhook"]
 
-    BWH --> BSIG{"MP_BILLING_WEBHOOK_SECRET\nset in env?"}
+    BWH --> BSIG{"MP_BILLING_WEBHOOK_SECRET\nset?"}
     BSIG -->|Yes| BVAL["Validate x-signature\nHMAC-SHA256"]
     BSIG -->|"No (dev only)"| BSKIP["Skip validation"]
-    BVAL -->|Invalid| BR401["❌ 401 Invalid signature"]
-    BVAL -->|Valid| BROUTE
-    BSKIP --> BROUTE
+    BVAL -->|Invalid| BR401["⚠ 200 OK + error:invalid_signature\n(logged for alerting)"]
+    BVAL -->|Valid| BPARSE
+    BSKIP --> BPARSE
 
-    BROUTE{"Route by\nevent type"} -->|subscription_preapproval| BSUB["processBillingEvent()"]
-    BROUTE -->|subscription_authorized_payment| BPAY["processBillingEvent()"]
-    BROUTE -->|payment| BPMT["processBillingEvent()"]
-    BROUTE -->|other| BACK["✅ 200 OK acknowledged"]
+    BPARSE["JSON.parse rawBody"] --> BTRANSLATE
 
-    BSUB --> BENT["Update tenant_subscriptions\n→ recompute tenant_entitlements"]
-    BPAY --> BENT
-    BPMT --> BENT
-    BENT --> BAUD["Write tenant_billing_events\n(audit)"]
+    BTRANSLATE["translateMpBillingNotification()\n· Identify type\n· Fetch /preapproval/:id → external_reference\n· Map MP status → BillingEvent status"]
+
+    BTRANSLATE -->|subscription_preapproval| BFETCH["fetchSubscriptionDetails()\nGET /preapproval/:id"]
+    BTRANSLATE -->|subscription_authorized_payment| BFETCHPAY["Fetch /authorized_payments/:id\n→ resolve preapproval_id\n→ fetchSubscriptionDetails()"]
+    BTRANSLATE -->|test / plan_update / other| BNULL["Return null → 200 OK"]
+
+    BFETCH --> BMAP["Map MP status:\nauthorized → active\npending → active\npaused → past_due\ncancelled → canceled"]
+    BFETCHPAY --> BPAYMAP["Map payment status:\nrejected → past_due\napproved/pending → null (no change)"]
+
+    BMAP --> BENVELOPE["Build BillingEvent envelope:\ntenantId from external_reference\nprovider: mercadopago\neventType + status + metadata"]
+    BPAYMAP -->|status change| BENVELOPE
+    BPAYMAP -->|no change| BNULL
+
+    BENVELOPE --> BPROCESS["processBillingEvent()\n(provider-agnostic)"]
+    BPROCESS --> BDEDUP{"externalEventId\nalready seen?"}
+    BDEDUP -->|Yes| BSKIPDUP["Skip (dedup)"]
+    BDEDUP -->|No| BENT["Upsert tenant_subscriptions\n→ Recompute tenant_entitlements"]
+    BENT --> BAUD["Write tenant_billing_events\n(audit log)"]
     BAUD --> BR200["✅ 200 OK"]
 
     style MP2 fill:#faf5ff,stroke:#8b5cf6
     style BWH fill:#faf5ff,stroke:#8b5cf6
+    style BTRANSLATE fill:#ede9fe,stroke:#7c3aed
+    style BENVELOPE fill:#ede9fe,stroke:#7c3aed
+```
+
+### 7.1 Activation Idempotency
+
+The `billing.activate` tRPC mutation guards against duplicate plan/subscription
+creation in MercadoPago by checking for an existing active subscription before
+calling the remote API:
+
+```mermaid
+flowchart TD
+    REQ["billing.activate mutation"] --> CHECK["Query tenant_subscriptions\nWHERE tenant_id + provider\nAND status NOT IN (canceled, expired)"]
+    CHECK -->|Existing found| RET["Return existing subscription\n(no MP API calls)"]
+    CHECK -->|None found| CREATE["createPreapprovalPlan()\n→ createSubscription()\n→ Upsert DB"]
+    CREATE --> OK["Return new subscription + init_point"]
+
+    style CHECK fill:#fef9c3,stroke:#ca8a04
+    style RET fill:#dcfce7,stroke:#16a34a
 ```
 
 ---
@@ -403,6 +435,13 @@ app/api/billing/mercadopago/
 └── webhook/
     ├── route.ts             ← Billing webhooks (uses MP_BILLING_WEBHOOK_SECRET)
     └── test/route.ts        ← Billing sandbox webhooks
+
+lib/services/billing/
+├── mpBillingTranslator.ts   ← Raw MP notification → BillingEvent translator
+└── subscriptionService.ts   ← Create plan/subscription + fetch details from MP API
+
+lib/services/entitlements/
+└── billingWebhookService.ts ← Provider-agnostic BillingEvent processor
 
 lib/services/mercadopago/
 ├── mpFetch.ts               ← Shared HTTP helper (Bearer auth, B4 headers)

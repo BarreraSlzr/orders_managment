@@ -53,11 +53,11 @@ vi.mock("@/lib/services/mercadopago/tokenCrypto", () => ({
 // Mock the oauthService
 const mockRefreshAccessToken = vi.fn();
 vi.mock("@/lib/services/mercadopago/oauthService", () => ({
-  getOAuthConfig: vi.fn(() => ({
+  getOAuthConfig: vi.fn().mockResolvedValue({
     clientId: "cid",
     clientSecret: "csec",
     redirectUri: "http://localhost/callback",
-  })),
+  }),
   refreshAccessToken: (...args: unknown[]) => mockRefreshAccessToken(...args),
 }));
 

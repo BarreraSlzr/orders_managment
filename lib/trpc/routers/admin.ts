@@ -1,7 +1,12 @@
 import { generateTempPassword, hashPassword } from "@/lib/auth/passwords";
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
+import {
+  createPreapprovalPlan,
+  createSubscription,
+} from "@/lib/services/billing/subscriptionService";
+import { getMpPlatformConfig, invalidateMpPlatformConfigCache } from "@/lib/services/mercadopago/platformConfig";
 import { exportAllData, getTableCounts, validateSnapshot } from "@/lib/sql/backup";
-import { getDb } from "@/lib/sql/database";
+import { getDb, sql } from "@/lib/sql/database";
 import { listAdminAuditLogs } from "@/lib/sql/functions/adminAudit";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getProducts } from "@/lib/sql/functions/getProducts";
@@ -10,6 +15,7 @@ import { createUser, listUsersByTenants } from "@/lib/sql/functions/users";
 import { getMigrationStatus } from "@/lib/sql/migrate";
 import { allMigrations } from "@/lib/sql/migrations";
 import { parseProductsCSV } from "@/lib/utils/parseProductsCSV";
+import { getIsoTimestamp } from "@/utils/stamp";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, publicProcedure, router } from "../init";
@@ -504,25 +510,400 @@ export const adminRouter = router({
     }),
 
   /**
-   * Returns which Mercado Pago environment variables are currently configured
-   * in the running server.  Never exposes the actual values — only boolean flags.
-   * Admin-only (requires admin API key cookie / header).
+   * Returns which Mercado Pago platform variables are currently configured.
+   * Checks DB (`mp_platform_config`) first, then env vars as fallback.
+   * Never exposes actual values — only boolean presence flags.
    */
-  mpEnvStatus: adminProcedure.query(() => {
-    const isSet = (key: string) => {
-      const val = process.env[key];
-      return typeof val === "string" && val.trim().length > 0;
-    };
+  mpEnvStatus: adminProcedure.query(async () => {
+    try {
+      const cfg = await getMpPlatformConfig();
+
+      return {
+        ok: true as const,
+        vars: {
+          MP_CLIENT_ID: Boolean(cfg.clientId),
+          MP_CLIENT_SECRET: Boolean(cfg.clientSecret),
+          MP_REDIRECT_URI: Boolean(cfg.redirectUri),
+          MP_WEBHOOK_SECRET: Boolean(cfg.webhookSecret),
+          MP_ACCESS_TOKEN: Boolean(cfg.paymentAccessToken),
+          MP_BILLING_ACCESS_TOKEN: Boolean(cfg.billingAccessToken),
+          MP_BILLING_WEBHOOK_SECRET: Boolean(cfg.billingWebhookSecret),
+          MP_TOKENS_ENCRYPTION_KEY: Boolean(cfg.tokensEncryptionKey),
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: "internal" as const,
+        message: err instanceof Error ? err.message : "unknown",
+        vars: null,
+      };
+    }
+  }),
+
+  /**
+   * Returns a diagnostic summary of all mercadopago_credentials rows.
+   *
+   * Used to diagnose the P0 production blocker where incoming webhook
+   * `user_id` values cannot be resolved to an active tenant credential.
+   *
+   * Returns:
+   *  - rows: all credential rows (non-sensitive fields only — no tokens)
+   *  - activeCount: rows with status='active' and deleted IS NULL
+   *  - unmappedUserIds: user_ids that appear in inactive/deleted rows but
+   *    have no corresponding active row (likely the cause of 'No tenant found')
+   */
+  mpCredentialHealth: adminProcedure.query(async ({ ctx }) => {
+    await logAdminAccess({
+      action: "mpCredentialHealth",
+      adminId: ctx.session?.sub,
+      role: ctx.session?.role,
+      tenantId: ctx.session?.tenant_id,
+    });
+
+    const rows = await getDb()
+      .selectFrom("mercadopago_credentials")
+      .select([
+        "id",
+        "tenant_id",
+        "user_id",
+        "app_id",
+        "contact_email",
+        "status",
+        "deleted",
+        "created",
+        "error_message",
+      ])
+      .orderBy("created", "desc")
+      .execute();
+
+    const activeRows = rows.filter((r) => r.status === "active" && r.deleted == null);
+    const activeUserIds = new Set(activeRows.map((r) => r.user_id));
+
+    // user_ids that exist in the table but have no active mapping
+    const inactiveUserIds = rows
+      .filter((r) => r.user_id && !activeUserIds.has(r.user_id))
+      .map((r) => r.user_id)
+      .filter((id, i, arr) => arr.indexOf(id) === i); // deduplicate
 
     return {
-      MP_CLIENT_ID: isSet("MP_CLIENT_ID"),
-      MP_CLIENT_SECRET: isSet("MP_CLIENT_SECRET"),
-      MP_REDIRECT_URI: isSet("MP_REDIRECT_URI"),
-      MP_WEBHOOK_SECRET: isSet("MP_WEBHOOK_SECRET"),
-      MP_BILLING_WEBHOOK_SECRET: isSet("MP_BILLING_WEBHOOK_SECRET"),
-      MP_TOKENS_ENCRYPTION_KEY: isSet("MP_TOKENS_ENCRYPTION_KEY"),
+      rows: rows.map((r) => ({
+        id: r.id,
+        tenantId: r.tenant_id,
+        userId: r.user_id,
+        appId: r.app_id,
+        contactEmail: r.contact_email,
+        status: r.status,
+        deleted: r.deleted,
+        created: r.created,
+        errorMessage: r.error_message ?? null,
+        isActive: r.status === "active" && r.deleted == null,
+      })),
+      activeCount: activeRows.length,
+      inactiveUserIds,
+      summary: {
+        total: rows.length,
+        active: activeRows.length,
+        inactive: rows.filter((r) => r.status === "inactive").length,
+        error: rows.filter((r) => r.status === "error").length,
+        deleted: rows.filter((r) => r.deleted != null).length,
+      },
     };
   }),
-});
 
+  /**
+   * Upsert a mercadopago_credentials row by tenant_id.
+   * Intended for admin reconciliation — insert or patch a credential row
+   * without requiring the full OAuth flow (e.g. to map a known MP user_id
+   * to an existing tenant so webhook tenant resolution succeeds).
+   *
+   * NOTE: access_token is stored as provided. In production the token must
+   * already be encrypted before submission (or encryption happens here if
+   * MP_TOKENS_ENCRYPTION_KEY is set — extend as needed).
+   */
+  mpCredentialUpsert: adminProcedure
+    .input(
+      z.object({
+        tenantId: z.string().uuid(),
+        userId: z.string().min(1),
+        appId: z.string().min(1),
+        accessToken: z.string().min(1),
+        contactEmail: z.string().email().optional(),
+        manualAssessment: z.boolean().optional(),
+        status: z.enum(["active", "inactive", "error"]).default("active"),
+      }).superRefine((value, ctx) => {
+        if (!value.manualAssessment && !value.contactEmail) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["contactEmail"],
+            message:
+              "Contact email is required for tenant linking unless manual assessment mode is enabled",
+          });
+        }
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await logAdminAccess({
+        action: "mpCredentialUpsert",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        targetTenantId: input.tenantId,
+        metadata: {
+          userId: input.userId,
+          appId: input.appId,
+          manualAssessment: input.manualAssessment ?? false,
+        },
+      });
+
+      const row = await getDb()
+        .insertInto("mercadopago_credentials")
+        .values({
+          tenant_id: input.tenantId,
+          user_id: input.userId,
+          app_id: input.appId,
+          access_token: input.accessToken,
+          contact_email:
+            input.manualAssessment === true ? null : (input.contactEmail ?? null),
+          status: input.status,
+          deleted: null,
+        })
+        .onConflict((oc) =>
+          oc.column("tenant_id").doUpdateSet({
+            user_id: input.userId,
+            app_id: input.appId,
+            access_token: input.accessToken,
+            contact_email:
+              input.manualAssessment === true ? null : (input.contactEmail ?? null),
+            status: input.status,
+            deleted: null,
+          }),
+        )
+        .returning([
+          "id",
+          "tenant_id",
+          "user_id",
+          "app_id",
+          "contact_email",
+          "status",
+          "created",
+        ])
+        .executeTakeFirstOrThrow();
+
+      return {
+        id: row.id,
+        tenantId: row.tenant_id,
+        userId: row.user_id,
+        appId: row.app_id,
+        contactEmail: row.contact_email,
+        status: row.status,
+        created: row.created,
+      };
+    }),
+
+  mpBillingCreateSubscription: adminProcedure
+    .input(
+      z.object({
+        billingAccessToken: z.string().min(1),
+        tenantId: z.string().uuid(),
+        payerEmail: z.string().email(),
+        reason: z.string().min(3),
+        transactionAmount: z.number().positive(),
+        currencyId: z.string().min(3),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const normalizedBillingAccessToken = input.billingAccessToken.trim();
+      if (!normalizedBillingAccessToken) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Billing access token is required.",
+        });
+      }
+
+      const platformConfig = await getMpPlatformConfig();
+      const platformSecrets = new Set(
+        [
+          platformConfig.clientId,
+          platformConfig.clientSecret,
+          platformConfig.webhookSecret,
+          platformConfig.billingWebhookSecret,
+          platformConfig.tokensEncryptionKey,
+        ]
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      );
+
+      if (platformSecrets.has(normalizedBillingAccessToken)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Billing Access Token must be unique and must not match platform Mercado Pago config values.",
+        });
+      }
+
+      await logAdminAccess({
+        action: "mpBillingCreateSubscription",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        targetTenantId: input.tenantId,
+        metadata: {
+          payerEmail: input.payerEmail,
+          transactionAmount: input.transactionAmount,
+          currencyId: input.currencyId,
+        },
+      });
+
+      const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://orders.internetfriends.xyz";
+      const backUrl = `${origin}/onboardings/configure-mp-billing`;
+
+      const plan = await createPreapprovalPlan({
+        accessToken: normalizedBillingAccessToken,
+        reason: input.reason,
+        transactionAmount: input.transactionAmount,
+        currencyId: input.currencyId,
+        backUrl,
+      });
+
+      const subscription = await createSubscription({
+        accessToken: normalizedBillingAccessToken,
+        preapprovalPlanId: plan.id,
+        payerEmail: input.payerEmail,
+        externalReference: input.tenantId,
+        backUrl,
+        reason: input.reason,
+      });
+
+      const now = getIsoTimestamp();
+
+      await getDb()
+        .insertInto("tenant_subscriptions")
+        .values({
+          tenant_id: input.tenantId,
+          provider: "mercadopago",
+          external_subscription_id: subscription.id,
+          status: "active",
+          metadata: {
+            plan_id: plan.id,
+            checkout_url: subscription.init_point ?? null,
+            payer_email: input.payerEmail,
+            reason: input.reason,
+            amount: input.transactionAmount,
+            currency_id: input.currencyId,
+          },
+          updated_at: now,
+        })
+        .onConflict((oc) =>
+          oc.columns(["tenant_id", "provider"]).doUpdateSet({
+            external_subscription_id: subscription.id,
+            status: "active",
+            metadata: {
+              plan_id: plan.id,
+              checkout_url: subscription.init_point ?? null,
+              payer_email: input.payerEmail,
+              reason: input.reason,
+              amount: input.transactionAmount,
+              currency_id: input.currencyId,
+            },
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
+          }),
+        )
+        .execute();
+
+      await getDb()
+        .insertInto("tenant_entitlements")
+        .values({
+          tenant_id: input.tenantId,
+          subscription_status: "active",
+          features_enabled: ["mercadopago"],
+          updated_at: now,
+        })
+        .onConflict((oc) =>
+          oc.column("tenant_id").doUpdateSet({
+            subscription_status: "active",
+            features_enabled: ["mercadopago"],
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
+          }),
+        )
+        .execute();
+
+      return {
+        ok: true as const,
+        planId: plan.id,
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        initPoint: subscription.init_point ?? null,
+      };
+    }),
+
+  /**
+   * Upserts the platform-level MP config (client_id, secrets, etc.) into
+   * the `mp_platform_config` singleton row in the DB.
+   *
+   * This replaces the previous "copy .env to Vercel" flow — the app reads
+   * from the DB first (with env vars as last-resort fallback) so there's
+   * no manual env var management needed after the first deploy.
+   */
+  mpPlatformConfigUpsert: adminProcedure
+    .input(
+      z.object({
+        clientId: z.string().min(1),
+        clientSecret: z.string().min(1),
+        redirectUri: z.string().min(1),
+        webhookSecret: z.string().min(1),
+        paymentAccessToken: z.string().optional(),
+        billingAccessToken: z.string().optional(),
+        billingWebhookSecret: z.string().optional(),
+        tokensEncryptionKey: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Cross-check: no two platform secrets should share the same value
+      const allValues = [
+        input.clientId, input.clientSecret, input.redirectUri,
+        input.webhookSecret, input.paymentAccessToken,
+        input.billingAccessToken, input.billingWebhookSecret,
+        input.tokensEncryptionKey,
+      ].filter((v): v is string => Boolean(v?.trim()));
+
+      const unique = new Set(allValues.map(v => v.trim()));
+      if (unique.size < allValues.length) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Platform config values must all be unique — no two fields should share the same value.",
+        });
+      }
+
+      await logAdminAccess({
+        action: "mpPlatformConfigUpsert",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        metadata: { clientId: input.clientId, redirectUri: input.redirectUri },
+      });
+
+      await getDb()
+        .updateTable("mp_platform_config")
+        .set({
+          client_id: input.clientId,
+          client_secret: input.clientSecret,
+          redirect_uri: input.redirectUri,
+          webhook_secret: input.webhookSecret,
+          payment_access_token: input.paymentAccessToken ?? null,
+          billing_access_token: input.billingAccessToken ?? null,
+          billing_webhook_secret: input.billingWebhookSecret ?? null,
+          tokens_encryption_key: input.tokensEncryptionKey ?? null,
+          updated_at: getIsoTimestamp(),
+          updated_by: ctx.session?.sub ?? null,
+        })
+        .where("id", "=", "singleton")
+        .execute();
+
+      invalidateMpPlatformConfigCache();
+
+      return { ok: true as const };
+    }),
+});
 

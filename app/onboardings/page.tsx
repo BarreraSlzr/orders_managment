@@ -11,7 +11,7 @@ import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
 import { getAvailableWorkflows } from "@/lib/workflows/definitions";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CheckCircle2, CreditCard, Pencil, Plus, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Loader2, Pencil, Plus, RefreshCw, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -84,6 +84,8 @@ export default function OnboardingsPage() {
   const canCreateManager = role === "admin" && isSystemAdmin;
   const canCreateStaff = role === "admin" || role === "manager";
   const canConfigurePlatform = effectiveRole === "admin";
+  const canConfigureTenantBilling =
+    (effectiveRole === "manager" || effectiveRole === "admin") && !isSystemAdmin;
   const selectedTenant =
     isSystemAdmin && selectedTenantId !== "all"
       ? tenantsQuery.data?.find((tenant) => tenant.id === selectedTenantId)
@@ -146,7 +148,52 @@ export default function OnboardingsPage() {
             Configura las integraciones de la plataforma antes de habilitar cobros.
           </p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <MpEnvWorkflowCard envStatus={mpEnvStatusQuery.data ?? null} />
+            <MpEnvWorkflowCard
+              envStatus={
+                mpEnvStatusQuery.data?.ok
+                  ? mpEnvStatusQuery.data.vars
+                  : null
+              }
+              isLoading={mpEnvStatusQuery.isLoading}
+              isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
+              onRetry={() => void mpEnvStatusQuery.refetch()}
+            />
+          </div>
+        </section>
+      )}
+
+      {!isLoading && canConfigureTenantBilling && (
+        <section className="rounded-2xl border border-slate-200 bg-white/70 p-6">
+          <h3 className="font-[var(--font-onboarding)] text-lg text-slate-900">
+            Suscripción del tenant
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Activa la suscripción con tu propia sesión de tenant usando el email OAuth vinculado en Settings.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border bg-white/90 p-5">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-violet-600" />
+                <span className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Billing
+                </span>
+              </div>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">
+                Activar suscripción
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Se asigna automáticamente al tenant de tu sesión, sin selección manual de tenant.
+              </p>
+              <div className="mt-4">
+                <Link
+                  href="/onboardings/configure-mp-billing"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-900 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white"
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  Configurar billing
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
       )}
@@ -485,7 +532,17 @@ interface MpEnvStatus {
   MP_TOKENS_ENCRYPTION_KEY: boolean;
 }
 
-function MpEnvWorkflowCard({ envStatus }: { envStatus: MpEnvStatus | null }) {
+function MpEnvWorkflowCard({
+  envStatus,
+  isLoading = false,
+  isError = false,
+  onRetry,
+}: {
+  envStatus: MpEnvStatus | null;
+  isLoading?: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
+}) {
   // Count configured required keys
   const requiredKeys: (keyof MpEnvStatus)[] = [
     "MP_CLIENT_ID",
@@ -521,8 +578,42 @@ function MpEnvWorkflowCard({ envStatus }: { envStatus: MpEnvStatus | null }) {
         Client ID, secretos de webhook y claves de cifrado para habilitar cobros.
       </p>
 
+      {/* Loading state */}
+      {isLoading && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          Cargando estado del servidor...
+        </div>
+      )}
+
+      {/* Error state */}
+      {!isLoading && isError && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-amber-800">
+                No se pudo cargar el estado de las variables
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-700">
+                Verifica que la clave de administrador esté configurada correctamente.
+              </p>
+            </div>
+          </div>
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 hover:text-amber-900"
+            >
+              <RefreshCw className="h-3 w-3" />
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Live env status */}
-      {envStatus && (
+      {!isLoading && !isError && envStatus && (
         <div className="mt-3 space-y-1.5">
           <p className="text-[10px] uppercase tracking-widest text-slate-400">
             Estado del servidor

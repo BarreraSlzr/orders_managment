@@ -11,6 +11,10 @@
  */
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
 import {
+  createPreapprovalPlan,
+  createSubscription,
+} from "@/lib/services/billing/subscriptionService";
+import {
     checkMpEntitlement,
     mpEntitlementMessage,
 } from "@/lib/services/entitlements/checkEntitlement";
@@ -21,6 +25,7 @@ import {
 } from "@/lib/services/mercadopago/accessRequestsService";
 import {
     getCredentials,
+    updateContactEmail,
     upsertCredentials,
 } from "@/lib/services/mercadopago/credentialsService";
 import {
@@ -28,7 +33,9 @@ import {
     getAttempt,
     getLatestAttempt,
 } from "@/lib/services/mercadopago/statusService";
-import { getDb } from "@/lib/sql/database";
+import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
+import { getDb, sql } from "@/lib/sql/database";
+import { getIsoTimestamp } from "@/utils/stamp";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -116,6 +123,27 @@ const credentialsRouter = router({
     );
     return { available };
   }),
+
+  /**
+   * Updates contact email for existing credentials.
+   * Used to persist email hint before OAuth completion.
+   */
+  updateContactEmail: managerProcedure
+    .input(
+      z.object({
+        contactEmail: z
+          .string()
+          .min(1, "Contact email is required")
+          .email("Contact email must be valid"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await updateContactEmail({
+        tenantId: ctx.tenantId,
+        contactEmail: input.contactEmail.trim().toLowerCase(),
+      });
+      return { success: true };
+    }),
 
   /**
    * Saves (or replaces) MP credentials for the tenant.
@@ -296,6 +324,188 @@ const paymentRouter = router({
     }),
 });
 
+// ─── Billing sub-router ───────────────────────────────────────────────────────
+
+const billingRouter = router({
+  /**
+   * Activates platform billing for the current tenant.
+   *
+   * IMPORTANT: tenant assignment is always derived from the current session,
+   * never manually selected. Payer email is taken from the tenant's linked
+   * Mercado Pago OAuth contact email (settings flow).
+   */
+  activate: managerProcedure
+    .input(
+      z.object({
+        reason: z.string().min(3),
+        transactionAmount: z.number().positive(),
+        currencyId: z.string().min(3),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const platformConfig = await getMpPlatformConfig();
+      const normalizedBillingAccessToken =
+        platformConfig.billingAccessToken?.trim() ?? "";
+      if (!normalizedBillingAccessToken) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Platform billing token is not configured. Set MP_BILLING_ACCESS_TOKEN in platform configuration.",
+        });
+      }
+
+      const platformSecrets = new Set(
+        [
+          platformConfig.clientId,
+          platformConfig.clientSecret,
+          platformConfig.webhookSecret,
+          platformConfig.billingWebhookSecret,
+          platformConfig.tokensEncryptionKey,
+          platformConfig.paymentAccessToken,
+        ]
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      );
+
+      if (platformSecrets.has(normalizedBillingAccessToken)) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Billing Access Token must be unique and must not match platform Mercado Pago config values.",
+        });
+      }
+
+      const creds = await getCredentials({ tenantId: ctx.tenantId });
+      const payerEmail = creds?.contact_email?.trim() || "";
+
+      if (!payerEmail) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "Complete Mercado Pago OAuth email integration in Settings before activating billing.",
+        });
+      }
+
+      const origin =
+        process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+        "https://orders.internetfriends.xyz";
+      const backUrl = `${origin}/onboardings/configure-mp-billing`;
+
+      // ── Idempotency guard: skip remote creation if active sub exists ────
+      const existingSub = await getDb()
+        .selectFrom("tenant_subscriptions")
+        .select([
+          "id",
+          "external_subscription_id",
+          "status",
+          "metadata",
+        ])
+        .where("tenant_id", "=", ctx.tenantId)
+        .where("provider", "=", "mercadopago")
+        .where("status", "not in", ["canceled", "expired"])
+        .orderBy("created_at", "desc")
+        .limit(1)
+        .executeTakeFirst();
+
+      if (existingSub) {
+        console.info(
+          `[billing.activate] Tenant ${ctx.tenantId} already has active subscription ${existingSub.external_subscription_id} (status=${existingSub.status}) — returning existing`,
+        );
+        const meta = (existingSub.metadata ?? {}) as Record<string, unknown>;
+        return {
+          ok: true as const,
+          tenantId: ctx.tenantId,
+          payerEmail,
+          planId: (meta.plan_id as string) ?? null,
+          subscriptionId: existingSub.external_subscription_id ?? "",
+          status: existingSub.status,
+          initPoint: (meta.checkout_url as string) ?? null,
+          existing: true as const,
+        };
+      }
+
+      const plan = await createPreapprovalPlan({
+        accessToken: normalizedBillingAccessToken,
+        reason: input.reason,
+        transactionAmount: input.transactionAmount,
+        currencyId: input.currencyId,
+        backUrl,
+      });
+
+      const subscription = await createSubscription({
+        accessToken: normalizedBillingAccessToken,
+        preapprovalPlanId: plan.id,
+        payerEmail,
+        externalReference: ctx.tenantId,
+        backUrl,
+        reason: input.reason,
+      });
+
+      const now = getIsoTimestamp();
+
+      await getDb()
+        .insertInto("tenant_subscriptions")
+        .values({
+          tenant_id: ctx.tenantId,
+          provider: "mercadopago",
+          external_subscription_id: subscription.id,
+          status: "active",
+          metadata: {
+            plan_id: plan.id,
+            checkout_url: subscription.init_point ?? null,
+            payer_email: payerEmail,
+            reason: input.reason,
+            amount: input.transactionAmount,
+            currency_id: input.currencyId,
+          },
+          updated_at: now,
+        })
+        .onConflict((oc) =>
+          oc.columns(["tenant_id", "provider"]).doUpdateSet({
+            external_subscription_id: subscription.id,
+            status: "active",
+            metadata: {
+              plan_id: plan.id,
+              checkout_url: subscription.init_point ?? null,
+              payer_email: payerEmail,
+              reason: input.reason,
+              amount: input.transactionAmount,
+              currency_id: input.currencyId,
+            },
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
+          }),
+        )
+        .execute();
+
+      await getDb()
+        .insertInto("tenant_entitlements")
+        .values({
+          tenant_id: ctx.tenantId,
+          subscription_status: "active",
+          features_enabled: ["mercadopago"],
+          updated_at: now,
+        })
+        .onConflict((oc) =>
+          oc.column("tenant_id").doUpdateSet({
+            subscription_status: "active",
+            features_enabled: ["mercadopago"],
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
+          }),
+        )
+        .execute();
+
+      return {
+        ok: true as const,
+        tenantId: ctx.tenantId,
+        payerEmail,
+        planId: plan.id,
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        initPoint: subscription.init_point ?? null,
+      };
+    }),
+});
+
 // ─── Store sub-router ─────────────────────────────────────────────────────────
 
 const storeRouter = router({
@@ -464,6 +674,7 @@ const deviceRouter = router({
 export const mercadopagoRouter = router({
   credentials: credentialsRouter,
   payment: paymentRouter,
+  billing: billingRouter,
   store: storeRouter,
   pos: posRouter,
   refund: refundRouter,
