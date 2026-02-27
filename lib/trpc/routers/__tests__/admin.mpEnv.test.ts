@@ -339,7 +339,7 @@ describe("admin.mpCredentialUpsert", () => {
     expect(result).not.toHaveProperty("access_token");
   });
 
-  it("accepts optional contactEmail being absent", async () => {
+  it("accepts missing contactEmail when manualAssessment is enabled", async () => {
     const now = new Date();
     mockUpsertResult = {
       id: "row-2",
@@ -354,9 +354,21 @@ describe("admin.mpCredentialUpsert", () => {
 
     const caller = createCaller(adminCtx());
     const { contactEmail: _omit, ...inputWithoutEmail } = validInput;
-    const result = await caller.mpCredentialUpsert(inputWithoutEmail);
+    const result = await caller.mpCredentialUpsert({
+      ...inputWithoutEmail,
+      manualAssessment: true,
+    });
 
     expect(result.contactEmail).toBeNull();
+  });
+
+  it("rejects missing contactEmail when manualAssessment is disabled", async () => {
+    const caller = createCaller(adminCtx());
+    const { contactEmail: _omit, ...inputWithoutEmail } = validInput;
+
+    await expect(caller.mpCredentialUpsert(inputWithoutEmail)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    } satisfies Partial<TRPCError>);
   });
 
   it("throws UNAUTHORIZED for non-admin caller", async () => {

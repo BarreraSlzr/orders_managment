@@ -1134,11 +1134,19 @@ function MercadoPagoTab() {
     trpc.mercadopago.credentials.checkOAuth.queryOptions(),
   );
 
+  const updateEmailMutation = useMutation(
+    trpc.mercadopago.credentials.updateContactEmail.mutationOptions(),
+  );
+
   const creds = credentialsQuery.data;
   const oauthAvailable = oauthCheckQuery.data?.available ?? false;
   const normalizedContactEmail = contactEmail.trim().toLowerCase();
   const isContactEmailValid = /^\S+@\S+\.\S+$/.test(normalizedContactEmail);
   const isConnected = creds?.status === "active" && !disconnectedMode;
+  
+  // Subscription-first gating: only allow OAuth if subscription is active
+  const hasActiveSubscription = creds?.subscriptionStatus === "active";
+  const canConnectOAuth = oauthAvailable && hasActiveSubscription;
 
   // Pre-fill email from existing credentials
   useEffect(() => {
@@ -1194,6 +1202,26 @@ function MercadoPagoTab() {
     window.location.href = oauthUrl.toString();
   };
 
+  const handleEmailBlur = () => {
+    // Persist email hint when it's valid and different from stored
+    if (
+      isContactEmailValid &&
+      normalizedContactEmail !== creds?.contactEmail?.trim().toLowerCase() &&
+      creds?.id // Only update if credentials exist
+    ) {
+      updateEmailMutation.mutate(
+        { contactEmail: normalizedContactEmail },
+        {
+          onSuccess: () => {
+            void queryClient.invalidateQueries({
+              queryKey: trpc.mercadopago.credentials.get.queryOptions().queryKey,
+            });
+          },
+        },
+      );
+    }
+  };
+
   const handleDisconnect = () => {
     setDisconnectedMode(true);
   };
@@ -1220,6 +1248,7 @@ function MercadoPagoTab() {
             placeholder="your@email.com"
             value={contactEmail}
             onChange={(event) => setContactEmail(event.target.value)}
+            onBlur={handleEmailBlur}
             disabled={isConnected}
             className="bg-background"
           />
@@ -1248,7 +1277,7 @@ function MercadoPagoTab() {
             <Button variant="outline" size="sm" onClick={handleDisconnect}>
               Disconnect
             </Button>
-          ) : oauthAvailable ? (
+          ) : canConnectOAuth ? (
             <Button
               size="sm"
               onClick={handleOAuthConnect}
@@ -1268,6 +1297,15 @@ function MercadoPagoTab() {
         <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-slate-50 text-slate-600 border">
           <AlertCircle className="h-4 w-4 shrink-0" />
           <span>Mercado Pago OAuth no está configurado.</span>
+        </div>
+      )}
+
+      {oauthAvailable && !hasActiveSubscription && !credentialsQuery.isLoading && (
+        <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-amber-50 text-amber-800 border border-amber-200">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>
+            Necesitas una suscripción activa para conectar Mercado Pago.
+          </span>
         </div>
       )}
 

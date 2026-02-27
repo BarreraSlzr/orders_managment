@@ -7,6 +7,10 @@
 import { createHmac } from "crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/server", () => ({
+  after: (promise: Promise<unknown>) => promise,
+}));
+
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 vi.mock("@/lib/sql/database", () => {
@@ -256,6 +260,24 @@ describe("handlePaymentEvent (A5 — fetch resilience)", () => {
     expect(result.detail).toContain("Failed to fetch payment pay-111");
     expect(result.detail).toContain("Network failure");
   });
+
+  it("returns handled:true when MP reports payment not_found", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      text: vi
+        .fn()
+        .mockResolvedValue('{"message":"Payment not found","error":"not_found","status":404}'),
+    });
+
+    const result = await handlePaymentEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.detail).toContain("integration-only event acknowledged");
+  });
 });
 
 // ─── Payment alert with order deep-link ─────────────────────────────────────
@@ -397,6 +419,29 @@ describe("handlePaymentEvent — alert with order deep-link", () => {
       }),
     );
   });
+
+  it("acknowledges payment without business attempt", async () => {
+    const { getDb } = require("@/lib/sql/database");
+    getDb.mockReturnValue({
+      selectFrom: vi.fn().mockReturnValue({
+        selectAll: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        executeTakeFirst: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    const result = await handlePaymentEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.detail).toContain("No active attempt");
+  });
 });
 
 // ─── Point integration alert with order deep-link ───────────────────────────
@@ -482,6 +527,29 @@ describe("handlePointIntegrationEvent — alert with order deep-link", () => {
         title: expect.stringContaining("Error en pago"),
       }),
     );
+  });
+
+  it("acknowledges point event without matching attempt", async () => {
+    const { getDb } = require("@/lib/sql/database");
+    getDb.mockReturnValue({
+      selectFrom: vi.fn().mockReturnValue({
+        selectAll: vi.fn().mockReturnThis(),
+        select: vi.fn().mockReturnThis(),
+        where: vi.fn().mockReturnThis(),
+        orderBy: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockReturnThis(),
+        executeTakeFirst: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
+
+    const result = await handlePointIntegrationEvent({
+      notification: baseNotification,
+      credentials: { access_token: "tok" } as any,
+      tenantId: "t-1",
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.detail).toContain("integration-only event acknowledged");
   });
 });
 

@@ -137,6 +137,25 @@ export async function markCredentialsError({
     .execute();
 }
 
+/**
+ * Updates only the contact email for existing MP credentials.
+ * Used to persist email hint before OAuth completion.
+ */
+export async function updateContactEmail({
+  tenantId,
+  contactEmail,
+}: {
+  tenantId: string;
+  contactEmail: string;
+}): Promise<void> {
+  await getDb()
+    .updateTable("mercadopago_credentials")
+    .set({ contact_email: contactEmail })
+    .where("tenant_id", "=", tenantId)
+    .where("status", "=", "active")
+    .execute();
+}
+
 async function refreshCredentialsIfNeeded(
   creds: MpCredentials,
 ): Promise<MpCredentials> {

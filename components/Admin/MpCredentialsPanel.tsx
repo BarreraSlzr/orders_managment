@@ -2,6 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -55,6 +56,7 @@ export function MpCredentialsPanel() {
   const [appId, setAppId] = useState("");
   const [accessToken, setAccessToken] = useState("");
   const [contactEmail, setContactEmail] = useState("");
+  const [manualAssessment, setManualAssessment] = useState(false);
   const [status, setStatus] = useState<"active" | "inactive" | "error">("active");
 
   function resetForm() {
@@ -63,6 +65,7 @@ export function MpCredentialsPanel() {
     setAppId("");
     setAccessToken("");
     setContactEmail("");
+    setManualAssessment(false);
     setStatus("active");
   }
 
@@ -71,6 +74,7 @@ export function MpCredentialsPanel() {
     userId.trim().length > 0 &&
     appId.trim().length > 0 &&
     accessToken.trim().length > 0 &&
+    (manualAssessment || contactEmail.trim().length > 0) &&
     !upsertMutation.isPending;
 
   const rows = healthQuery.data?.rows ?? [];
@@ -182,6 +186,7 @@ export function MpCredentialsPanel() {
               appId,
               accessToken,
               contactEmail: contactEmail.trim() || undefined,
+              manualAssessment,
               status,
             });
           }}
@@ -248,14 +253,31 @@ export function MpCredentialsPanel() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs">Email contacto (opcional)</Label>
+              <Label className="text-xs">
+                Email contacto {manualAssessment ? "(omitido por evaluación manual)" : "(requerido para vincular tenant)"}
+              </Label>
               <Input
                 className="h-8 text-xs"
                 type="email"
                 placeholder="cuenta@ejemplo.com"
                 value={contactEmail}
                 onChange={(e) => setContactEmail(e.target.value)}
+                disabled={manualAssessment}
               />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Modo</Label>
+              <div className="flex h-8 items-center gap-2 rounded border px-2">
+                <Checkbox
+                  id="manual-assessment"
+                  checked={manualAssessment}
+                  onCheckedChange={(checked) => setManualAssessment(Boolean(checked))}
+                />
+                <Label htmlFor="manual-assessment" className="text-xs font-normal">
+                  Evaluación manual (sin email)
+                </Label>
+              </div>
             </div>
 
             <div className="space-y-1">

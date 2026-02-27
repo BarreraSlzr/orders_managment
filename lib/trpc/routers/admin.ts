@@ -1,8 +1,12 @@
 import { generateTempPassword, hashPassword } from "@/lib/auth/passwords";
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
+import {
+  createPreapprovalPlan,
+  createSubscription,
+} from "@/lib/services/billing/subscriptionService";
 import { getMpPlatformConfig, invalidateMpPlatformConfigCache } from "@/lib/services/mercadopago/platformConfig";
 import { exportAllData, getTableCounts, validateSnapshot } from "@/lib/sql/backup";
-import { getDb } from "@/lib/sql/database";
+import { getDb, sql } from "@/lib/sql/database";
 import { listAdminAuditLogs } from "@/lib/sql/functions/adminAudit";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getProducts } from "@/lib/sql/functions/getProducts";
@@ -11,6 +15,7 @@ import { createUser, listUsersByTenants } from "@/lib/sql/functions/users";
 import { getMigrationStatus } from "@/lib/sql/migrate";
 import { allMigrations } from "@/lib/sql/migrations";
 import { parseProductsCSV } from "@/lib/utils/parseProductsCSV";
+import { getIsoTimestamp } from "@/utils/stamp";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, publicProcedure, router } from "../init";
@@ -622,7 +627,17 @@ export const adminRouter = router({
         appId: z.string().min(1),
         accessToken: z.string().min(1),
         contactEmail: z.string().email().optional(),
+        manualAssessment: z.boolean().optional(),
         status: z.enum(["active", "inactive", "error"]).default("active"),
+      }).superRefine((value, ctx) => {
+        if (!value.manualAssessment && !value.contactEmail) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["contactEmail"],
+            message:
+              "Contact email is required for tenant linking unless manual assessment mode is enabled",
+          });
+        }
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -632,7 +647,11 @@ export const adminRouter = router({
         role: ctx.session?.role,
         tenantId: ctx.session?.tenant_id,
         targetTenantId: input.tenantId,
-        metadata: { userId: input.userId, appId: input.appId },
+        metadata: {
+          userId: input.userId,
+          appId: input.appId,
+          manualAssessment: input.manualAssessment ?? false,
+        },
       });
 
       const row = await getDb()
@@ -642,7 +661,8 @@ export const adminRouter = router({
           user_id: input.userId,
           app_id: input.appId,
           access_token: input.accessToken,
-          contact_email: input.contactEmail ?? null,
+          contact_email:
+            input.manualAssessment === true ? null : (input.contactEmail ?? null),
           status: input.status,
           deleted: null,
         })
@@ -651,7 +671,8 @@ export const adminRouter = router({
             user_id: input.userId,
             app_id: input.appId,
             access_token: input.accessToken,
-            contact_email: input.contactEmail ?? null,
+            contact_email:
+              input.manualAssessment === true ? null : (input.contactEmail ?? null),
             status: input.status,
             deleted: null,
           }),
@@ -675,6 +696,113 @@ export const adminRouter = router({
         contactEmail: row.contact_email,
         status: row.status,
         created: row.created,
+      };
+    }),
+
+  mpBillingCreateSubscription: adminProcedure
+    .input(
+      z.object({
+        billingAccessToken: z.string().min(1),
+        tenantId: z.string().uuid(),
+        payerEmail: z.string().email(),
+        reason: z.string().min(3),
+        transactionAmount: z.number().positive(),
+        currencyId: z.string().min(3),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await logAdminAccess({
+        action: "mpBillingCreateSubscription",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        targetTenantId: input.tenantId,
+        metadata: {
+          payerEmail: input.payerEmail,
+          transactionAmount: input.transactionAmount,
+          currencyId: input.currencyId,
+        },
+      });
+
+      const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://orders.internetfriends.xyz";
+      const backUrl = `${origin}/onboardings/configure-mp-billing`;
+
+      const plan = await createPreapprovalPlan({
+        accessToken: input.billingAccessToken,
+        reason: input.reason,
+        transactionAmount: input.transactionAmount,
+        currencyId: input.currencyId,
+        backUrl,
+      });
+
+      const subscription = await createSubscription({
+        accessToken: input.billingAccessToken,
+        preapprovalPlanId: plan.id,
+        payerEmail: input.payerEmail,
+        externalReference: input.tenantId,
+        backUrl,
+        reason: input.reason,
+      });
+
+      const now = getIsoTimestamp();
+
+      await getDb()
+        .insertInto("tenant_subscriptions")
+        .values({
+          tenant_id: input.tenantId,
+          provider: "mercadopago",
+          external_subscription_id: subscription.id,
+          status: "active",
+          metadata: {
+            plan_id: plan.id,
+            checkout_url: subscription.init_point ?? null,
+            payer_email: input.payerEmail,
+            reason: input.reason,
+            amount: input.transactionAmount,
+            currency_id: input.currencyId,
+          },
+          updated_at: now,
+        })
+        .onConflict((oc) =>
+          oc.columns(["tenant_id", "provider"]).doUpdateSet({
+            external_subscription_id: subscription.id,
+            status: "active",
+            metadata: {
+              plan_id: plan.id,
+              checkout_url: subscription.init_point ?? null,
+              payer_email: input.payerEmail,
+              reason: input.reason,
+              amount: input.transactionAmount,
+              currency_id: input.currencyId,
+            },
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
+          }),
+        )
+        .execute();
+
+      await getDb()
+        .insertInto("tenant_entitlements")
+        .values({
+          tenant_id: input.tenantId,
+          subscription_status: "active",
+          features_enabled: ["mercadopago"],
+          updated_at: now,
+        })
+        .onConflict((oc) =>
+          oc.column("tenant_id").doUpdateSet({
+            subscription_status: "active",
+            features_enabled: ["mercadopago"],
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
+          }),
+        )
+        .execute();
+
+      return {
+        ok: true as const,
+        planId: plan.id,
+        subscriptionId: subscription.id,
+        status: subscription.status,
+        initPoint: subscription.init_point ?? null,
       };
     }),
 

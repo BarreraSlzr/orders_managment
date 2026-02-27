@@ -126,27 +126,57 @@ export async function resolveWebhookTenant(params: {
   const { mpUserId, contactEmail } = params;
 
   // Primary: match by MP user_id
-  let row = await getDb()
+  let rows = await getDb()
     .selectFrom("mercadopago_credentials")
     .selectAll()
     .where("user_id", "=", mpUserId)
     .where("status", "=", "active")
     .where("deleted", "is", null)
     .orderBy("created", "desc")
-    .limit(1)
-    .executeTakeFirst();
+    .orderBy("id", "desc")
+    .limit(2)
+    .execute();
+
+  let row = rows[0];
+
+  if (rows.length > 1) {
+    after(
+      createPlatformAlert({
+        tenantId: null,
+        scope: "admin",
+        type: "system",
+        severity: "warning",
+        title: `Credenciales MP ambiguas para user_id ${mpUserId}`,
+        body:
+          `Se detectaron múltiples credenciales activas para el mismo MP user_id (${mpUserId}). ` +
+          `El webhook usa de forma determinística la más reciente por created/id, pero se recomienda ` +
+          `normalizar a una sola credencial activa por user_id para evitar cruces de tenant.`,
+        sourceType: "mp_webhook",
+        sourceId: `user:${mpUserId}`,
+        metadata: {
+          mp_user_id: mpUserId,
+          active_rows: rows.length,
+          selected_tenant_id: row?.tenant_id ?? null,
+        },
+      }).catch((err) =>
+        console.error("[webhook] Failed to create ambiguous-credentials alert:", err),
+      ),
+    );
+  }
 
   // Secondary fallback: match by contact_email
   if (!row && contactEmail) {
-    row = await getDb()
+    rows = await getDb()
       .selectFrom("mercadopago_credentials")
       .selectAll()
       .where("contact_email", "=", contactEmail)
       .where("status", "=", "active")
       .where("deleted", "is", null)
       .orderBy("created", "desc")
+      .orderBy("id", "desc")
       .limit(1)
-      .executeTakeFirst();
+      .execute();
+    row = rows[0];
   }
 
   if (!row) return null;
@@ -303,6 +333,14 @@ export async function handlePaymentEvent(params: {
       `[webhook] fetchPaymentDetails failed for notification ${notification.id}:`,
       msg,
     );
+
+    if (/not_found/i.test(msg)) {
+      return {
+        handled: true,
+        detail: `Payment ${notification.data.id} not found in MP (integration-only event acknowledged)`,
+      };
+    }
+
     return {
       handled: false,
       detail: `Failed to fetch payment ${notification.data.id}: ${msg}`,
@@ -311,7 +349,10 @@ export async function handlePaymentEvent(params: {
 
   const orderId = payment.external_reference;
   if (!orderId) {
-    return { handled: false, detail: "No external_reference in payment" };
+    return {
+      handled: true,
+      detail: "No external_reference in payment (integration-only event acknowledged)",
+    };
   }
 
   // Find the active (non-terminal) sync attempt for this order
@@ -326,7 +367,10 @@ export async function handlePaymentEvent(params: {
     .executeTakeFirst();
 
   if (!attempt) {
-    return { handled: false, detail: `No active attempt for order ${orderId}` };
+    return {
+      handled: true,
+      detail: `No active attempt for order ${orderId} (integration-only event acknowledged)`,
+    };
   }
 
   // ── Idempotency guard ────────────────────────────────────────────────────
@@ -422,8 +466,8 @@ export async function handlePointIntegrationEvent(params: {
 
   if (!attempt) {
     return {
-      handled: false,
-      detail: `No active attempt for intent ${intentId}`,
+      handled: true,
+      detail: `No active attempt for intent ${intentId} (integration-only event acknowledged)`,
     };
   }
 
@@ -728,6 +772,8 @@ export async function processWebhook(params: {
           `pero no existe credencial activa vinculada a este usuario en la base de datos. ` +
           `Es probable que el onboarding de OAuth no se haya completado en producción, ` +
           `o que las credenciales hayan sido desactivadas. ` +
+          `Para vinculación estándar, el tenant debe registrar su email de contacto junto con la credencial. ` +
+          `Si aún no hay onboarding de tenant, puedes usar evaluación manual temporal desde el panel admin. ` +
           `Revisa la tabla mercadopago_credentials y revincula la cuenta desde Configuración.`,
         sourceType: "mp_webhook",
         sourceId: notification.id.toString(),
