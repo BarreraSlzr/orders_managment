@@ -8,6 +8,7 @@ See also:
 - [MercadoPago OAuth Integration](./MERCADOPAGO_OAUTH.md)
 - [Entitlement Architecture](./MERCADOPAGO_ENTITLEMENT_ARCHITECTURE.md)
 - [Approach — Payment & Billing](./MERCADOPAGO_APPROACH.md)
+- [Planned Process (Visual Guide)](./MERCADOPAGO_PLANNED_PROCESS.md)
 
 ## Mercado Pago Docs Retrieval Convention
 

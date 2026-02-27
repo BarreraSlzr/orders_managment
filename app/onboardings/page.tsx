@@ -84,6 +84,8 @@ export default function OnboardingsPage() {
   const canCreateManager = role === "admin" && isSystemAdmin;
   const canCreateStaff = role === "admin" || role === "manager";
   const canConfigurePlatform = effectiveRole === "admin";
+  const canConfigureTenantBilling =
+    (effectiveRole === "manager" || effectiveRole === "admin") && !isSystemAdmin;
   const selectedTenant =
     isSystemAdmin && selectedTenantId !== "all"
       ? tenantsQuery.data?.find((tenant) => tenant.id === selectedTenantId)
@@ -156,6 +158,42 @@ export default function OnboardingsPage() {
               isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
               onRetry={() => void mpEnvStatusQuery.refetch()}
             />
+          </div>
+        </section>
+      )}
+
+      {!isLoading && canConfigureTenantBilling && (
+        <section className="rounded-2xl border border-slate-200 bg-white/70 p-6">
+          <h3 className="font-[var(--font-onboarding)] text-lg text-slate-900">
+            Suscripción del tenant
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Activa la suscripción con tu propia sesión de tenant usando el email OAuth vinculado en Settings.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div className="rounded-2xl border bg-white/90 p-5">
+              <div className="flex items-center gap-2">
+                <CreditCard className="h-4 w-4 text-violet-600" />
+                <span className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Billing
+                </span>
+              </div>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">
+                Activar suscripción
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Se asigna automáticamente al tenant de tu sesión, sin selección manual de tenant.
+              </p>
+              <div className="mt-4">
+                <Link
+                  href="/onboardings/configure-mp-billing"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-900 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white"
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  Configurar billing
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
       )}

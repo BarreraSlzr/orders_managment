@@ -5,6 +5,7 @@ import { WorkflowRunner } from "@/components/Workflows/WorkflowRunner";
 import {
     CsvImportStep,
     ManagerInfoStep,
+  MpBillingActivationStep,
     MpEnvReviewStep,
     MpOAuthStep,
     MpTokensStep,
@@ -72,6 +73,9 @@ export default function OnboardingRunnerPage() {
   const mpPlatformConfigUpsertMutation = useMutation(
     trpc.admin.mpPlatformConfigUpsert.mutationOptions(),
   );
+  const mpBillingActivateMutation = useMutation(
+    trpc.mercadopago.billing.activate.mutationOptions(),
+  );
   const onboardTenantStaffMutation = useMutation(
     trpc.users.onboardTenantStaff.mutationOptions(),
   );
@@ -97,6 +101,10 @@ export default function OnboardingRunnerPage() {
   });
 
   const editableUser = editableUserQuery.data ?? null;
+  const mpCredentialsQuery = useQuery({
+    ...trpc.mercadopago.credentials.get.queryOptions(),
+    enabled: definition?.id === "configure-mp-billing",
+  });
   const isReadOnly = isEditMode && editableUser?.role === "staff";
   const defaultStaffPermissions = [
     "orders.create",
@@ -387,6 +395,28 @@ export default function OnboardingRunnerPage() {
         ],
       });
     }
+
+    if (workflowDefinition.id === "configure-mp-billing") {
+      const result = await mpBillingActivateMutation.mutateAsync({
+        billingAccessToken: String(data.billingAccessToken || ""),
+        reason: String(data.reason || "Orders Management — Plan Mensual"),
+        transactionAmount: Number(data.transactionAmount || 0),
+        currencyId: String(data.currencyId || "MXN"),
+      });
+
+      setCompletion({
+        title: "Suscripción creada",
+        subtitle: "El tenant ya tiene plan y suscripción inicial en Mercado Pago Billing.",
+        details: [
+          { label: "Tenant", value: tenantName ?? "—" },
+          { label: "Payer Email", value: result.payerEmail },
+          { label: "Plan ID", value: result.planId },
+          { label: "Subscription ID", value: result.subscriptionId },
+          { label: "Status", value: result.status },
+          { label: "Checkout", value: result.initPoint || "—" },
+        ],
+      });
+    }
   };
 
   if (completion) {
@@ -457,6 +487,15 @@ export default function OnboardingRunnerPage() {
         return <MpTokensStep data={data} onChange={onChange} />;
       case "mp-credentials":
         return <MpCredentialsPanel />;
+      case "billing-activation":
+        return (
+          <MpBillingActivationStep
+            data={data}
+            tenantName={tenantName}
+            linkedEmail={mpCredentialsQuery.data?.contactEmail ?? null}
+            onChange={onChange}
+          />
+        );
       case "env-review":
         return (
           <MpEnvReviewStep
@@ -487,6 +526,23 @@ export default function OnboardingRunnerPage() {
               onChange({ data: { confirmed: true } });
               void mpEnvStatusQuery.refetch();
             }}
+          />
+        );
+      case "billing-review":
+        return (
+          <ReviewStep
+            data={data}
+            title={workflowDefinition.title}
+            items={[
+              { label: "Tenant", value: tenantName ?? "—" },
+              {
+                label: "Payer Email",
+                value: mpCredentialsQuery.data?.contactEmail ?? "No vinculado en Settings",
+              },
+              { label: "Monto", value: String(data.transactionAmount || "") },
+              { label: "Moneda", value: String(data.currencyId || "") },
+            ]}
+            onChange={onChange}
           />
         );
       case "review": {

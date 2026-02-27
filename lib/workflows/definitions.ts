@@ -183,6 +183,36 @@ export const configureMpEnvWorkflow: WorkflowDefinition = {
   ],
 };
 
+export const configureMpBillingWorkflow: WorkflowDefinition = {
+  id: "configure-mp-billing",
+  title: "Activar suscripción de plataforma",
+  description: "Crea plan y suscripción inicial para habilitar entitlements del tenant",
+  requiredRole: "manager",
+  steps: [
+    {
+      id: "billing-activation",
+      title: "Configurar plan y suscripción",
+      description: "Usa tu sesión de tenant y el email OAuth vinculado para crear la suscripción en MP Billing",
+      schema: z.object({
+        billingAccessToken: z.string().min(1, "Billing access token es requerido"),
+        reason: z.string().min(3, "Reason es requerido"),
+        transactionAmount: z.number().positive("Monto inválido"),
+        currencyId: z.string().min(3, "Currency ID inválido"),
+      }),
+    },
+    {
+      id: "billing-review",
+      title: "Revisar y activar",
+      description: "Confirma los datos para crear plan + suscripción",
+      schema: z.object({
+        confirmed: z
+          .boolean()
+          .refine((v) => v === true, "Confirma para continuar"),
+      }),
+    },
+  ],
+};
+
 /**
  * Get workflow definition by ID
  */
@@ -193,6 +223,7 @@ export function getWorkflowDefinition(
     "onboard-manager": onboardManagerWorkflow,
     "onboard-staff": onboardStaffWorkflow,
     "configure-mp-env": configureMpEnvWorkflow,
+    "configure-mp-billing": configureMpBillingWorkflow,
   };
   return workflows[workflowId] || null;
 }
@@ -201,7 +232,12 @@ export function getWorkflowDefinition(
  * Get all available workflows (used for listing)
  */
 export function getAllWorkflows(): WorkflowDefinition[] {
-  return [onboardManagerWorkflow, onboardStaffWorkflow, configureMpEnvWorkflow];
+  return [
+    onboardManagerWorkflow,
+    onboardStaffWorkflow,
+    configureMpEnvWorkflow,
+    configureMpBillingWorkflow,
+  ];
 }
 
 /**
