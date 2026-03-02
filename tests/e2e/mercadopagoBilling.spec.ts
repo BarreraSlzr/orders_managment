@@ -84,6 +84,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("billing subscribe redirects to MP checkout URL", async ({ page }) => {
+  let sawMercadoPagoRedirect = false;
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame() && frame.url().includes("mercadopago.com")) {
+      sawMercadoPagoRedirect = true;
+    }
+  });
+
   await page.route("**/api/billing/subscribe", async (route) => {
     await route.fulfill({
       status: 200,
@@ -98,10 +105,15 @@ test("billing subscribe redirects to MP checkout URL", async ({ page }) => {
   await page.goto("/onboardings/billing");
   await expect(page.getByRole("heading", { name: /activar suscripción/i })).toBeVisible();
 
-  await page.locator("#payer-email").fill("billing-e2e@example.com");
+  await page.locator("#payer-email").first().fill("billing-e2e@example.com");
   await page.getByRole("button", { name: /suscribirse/i }).click();
 
-  await expect(page).toHaveURL(/mercadopago\.com/);
+  await expect
+    .poll(() => sawMercadoPagoRedirect, {
+      timeout: 10_000,
+      message: "Expected main frame to navigate to Mercado Pago checkout",
+    })
+    .toBe(true);
 });
 
 test("billing webhook simulation toggles entitlement gate", async ({ page }) => {
