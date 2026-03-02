@@ -23,15 +23,6 @@ const mockTranslateMpBillingNotification = vi.fn().mockResolvedValue({
   externalEventId: "notif-1",
 });
 
-vi.mock("@/lib/services/entitlements/billingWebhookService", () => ({
-  processBillingEvent: (...args: unknown[]) => mockProcessBillingEvent(...args),
-}));
-
-vi.mock("@/lib/services/billing/mpBillingTranslator", () => ({
-  translateMpBillingNotification: (...args: unknown[]) =>
-    mockTranslateMpBillingNotification(...args),
-}));
-
 // Mock platformConfig so tests are not affected by the 60s in-memory cache
 // and can control billingWebhookSecret via process.env directly.
 vi.mock("@/lib/services/mercadopago/platformConfig", () => ({
@@ -118,7 +109,25 @@ function makeRequest(params: {
 describe("/api/billing/mercadopago/webhook", () => {
   const originalEnv = process.env;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    const billingWebhookModule = await import(
+      "@/lib/services/entitlements/billingWebhookService"
+    );
+    const translatorModule = await import(
+      "@/lib/services/billing/mpBillingTranslator"
+    );
+
+    vi
+      .spyOn(billingWebhookModule, "processBillingEvent")
+      .mockImplementation((...args: unknown[]) =>
+        mockProcessBillingEvent(...args),
+      );
+    vi
+      .spyOn(translatorModule, "translateMpBillingNotification")
+      .mockImplementation((...args: unknown[]) =>
+        mockTranslateMpBillingNotification(...args),
+      );
+
     mockProcessBillingEvent.mockClear();
     mockTranslateMpBillingNotification.mockClear();
     // Reset translator to return a valid BillingEvent by default
@@ -137,6 +146,7 @@ describe("/api/billing/mercadopago/webhook", () => {
 
   afterEach(() => {
     process.env = originalEnv;
+    vi.restoreAllMocks();
   });
 
   // ── HMAC validation / MP_BILLING_WEBHOOK_SECRET set ──────────────────────

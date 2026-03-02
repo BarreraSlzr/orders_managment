@@ -46,12 +46,14 @@ vi.mock("@/lib/sql/database", () => {
   };
 });
 
-import { db } from "@/lib/sql/database";
-import { processBillingEvent } from "../billingWebhookService";
+let db: typeof import("@/lib/sql/database").db;
+let processBillingEvent: typeof import("../billingWebhookService").processBillingEvent;
 
 describe("processBillingEvent (C3 — deduplication)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    ({ db } = await import("@/lib/sql/database"));
+    ({ processBillingEvent } = await import("../billingWebhookService"));
   });
 
   const validEvent = {
