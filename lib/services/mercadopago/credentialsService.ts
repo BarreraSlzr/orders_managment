@@ -35,6 +35,22 @@ export interface UpsertCredentialsParams {
 
 const REFRESH_SKEW_MS = 60_000;
 
+interface RefreshCredentialsDeps {
+  getOAuthConfig: typeof getOAuthConfig;
+  refreshAccessToken: typeof refreshAccessToken;
+  getDb: typeof getDb;
+  sql: typeof sql;
+  encryptMpToken: typeof encryptMpToken;
+}
+
+const refreshCredentialsDeps: RefreshCredentialsDeps = {
+  getOAuthConfig,
+  refreshAccessToken,
+  getDb,
+  sql,
+  encryptMpToken,
+};
+
 /**
  * Returns the active MP credentials for a tenant, or null if not configured.
  */
@@ -70,7 +86,7 @@ export async function getCredentials({
     return null;
   }
 
-  return refreshCredentialsIfNeeded(decrypted);
+  return refreshCredentialsIfNeeded(decrypted, refreshCredentialsDeps);
 }
 
 /**
@@ -158,6 +174,7 @@ export async function updateContactEmail({
 
 async function refreshCredentialsIfNeeded(
   creds: MpCredentials,
+  deps: RefreshCredentialsDeps,
 ): Promise<MpCredentials> {
   if (!creds.refresh_token || !creds.token_expires_at) {
     return creds;
@@ -170,8 +187,8 @@ async function refreshCredentialsIfNeeded(
   }
 
   try {
-    const config = await getOAuthConfig();
-    const refreshed = await refreshAccessToken({
+    const config = await deps.getOAuthConfig();
+    const refreshed = await deps.refreshAccessToken({
       config,
       refreshToken: creds.refresh_token,
     });
@@ -179,16 +196,16 @@ async function refreshCredentialsIfNeeded(
     const refreshedToken = refreshed.refresh_token || creds.refresh_token;
     const tokenExpiresAt =
       typeof refreshed.expires_in === "number" && refreshed.expires_in > 0
-        ? sql<Date>`now() + (${refreshed.expires_in} * interval '1 second')`
+        ? deps.sql<Date>`now() + (${refreshed.expires_in} * interval '1 second')`
         : null;
 
-    const updated = await getDb()
+    const updated = await deps.getDb()
       .updateTable("mercadopago_credentials")
       .set({
-        access_token: encryptMpToken(refreshed.access_token),
-        refresh_token: refreshedToken ? encryptMpToken(refreshedToken) : null,
+        access_token: deps.encryptMpToken(refreshed.access_token),
+        refresh_token: refreshedToken ? deps.encryptMpToken(refreshedToken) : null,
         token_expires_at: tokenExpiresAt,
-        refreshed_at: sql<Date>`now()`,
+        refreshed_at: deps.sql<Date>`now()`,
         status: "active",
         error_message: null,
       })
@@ -222,7 +239,7 @@ async function refreshCredentialsIfNeeded(
     }
 
     // Non-transient (e.g. 401 invalid_grant) — mark credentials as error.
-    await getDb()
+    await deps.getDb()
       .updateTable("mercadopago_credentials")
       .set({
         status: "error",
@@ -234,6 +251,10 @@ async function refreshCredentialsIfNeeded(
     return creds;
   }
 }
+
+export const __testables = {
+  refreshCredentialsIfNeeded,
+};
 
 function decryptCredentialTokens(creds: MpCredentials): MpCredentials {
   return {
