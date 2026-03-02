@@ -1,4 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
+import { loadEnvConfig } from "@next/env";
+
+loadEnvConfig(process.cwd());
 
 /**
  * Playwright configuration for e2e tests covering critical user paths:

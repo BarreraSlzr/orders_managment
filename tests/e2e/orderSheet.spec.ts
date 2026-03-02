@@ -44,6 +44,7 @@ const sel = {
   orderDetailsClose: `[data-testid="${TEST_IDS.ORDER_DETAILS.CLOSE_BTN}"]`,
   addMoreBtn: `[data-testid="${TEST_IDS.ORDER_SHEET.ADD_MORE_BTN}"]`,
   emptySelection: `[data-testid="${TEST_IDS.ORDER_SHEET.EMPTY_SELECTION}"]`,
+  receiptActionsRoot: `[data-testid="${TEST_IDS.RECEIPT_ACTIONS.ROOT}"]`,
   togglePayment: `[data-testid="${TEST_IDS.RECEIPT_ACTIONS.TOGGLE_PAYMENT}"]`,
   remove: `[data-testid="${TEST_IDS.RECEIPT_ACTIONS.REMOVE}"]`,
   closeOrder: `[data-testid="${TEST_IDS.RECEIPT_ACTIONS.CLOSE_ORDER}"]`,
@@ -184,6 +185,36 @@ test("closing order details clears selected from URL", async ({ page }) => {
   await expect(page).not.toHaveURL(/[?&]selected=/);
   // Details panel should be gone
   await expect(page.locator(sel.orderDetailsRoot)).not.toBeVisible();
+});
+
+test("receipt actions stay visible inside order-details on small viewport", async ({
+  page,
+}) => {
+  const orderId = await getOpenOrderId(page);
+
+  await page.setViewportSize({ width: 320, height: 420 });
+  await page.goto(`/?sheet=true&selected=${orderId}`);
+
+  const orderDetails = page.locator(sel.orderDetailsRoot);
+  const receiptActions = page.locator(sel.receiptActionsRoot);
+  const closeOrderBtn = page.locator(sel.closeOrder);
+
+  await expect(orderDetails).toBeVisible();
+  await expect(receiptActions).toBeVisible();
+  await expect(closeOrderBtn).toBeVisible();
+  await expect(closeOrderBtn).toBeInViewport();
+
+  // Scroll receipt content to bottom and verify footer actions remain visible.
+  await orderDetails
+    .locator(".overflow-y-auto")
+    .first()
+    .evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+
+  await expect(receiptActions).toBeVisible();
+  await expect(closeOrderBtn).toBeVisible();
+  await expect(closeOrderBtn).toBeInViewport();
 });
 
 // ─── Deep-link ───────────────────────────────────────────────────────────────

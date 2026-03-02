@@ -10,6 +10,7 @@ if (typeof document === "undefined") {
   globals.document = dom.window.document;
   globals.HTMLElement = dom.window.HTMLElement;
   globals.Node = dom.window.Node;
+  globals.DocumentFragment = dom.window.DocumentFragment;
   globals.MutationObserver = dom.window.MutationObserver;
   globals.Event = dom.window.Event;
   globals.CustomEvent = dom.window.CustomEvent;
@@ -30,4 +31,12 @@ if (typeof document === "undefined") {
     value: dom.window.navigator,
     configurable: true,
   });
+}
+
+if (
+  typeof (globalThis as Record<string, unknown>).DocumentFragment === "undefined" &&
+  typeof window !== "undefined" &&
+  typeof window.DocumentFragment !== "undefined"
+) {
+  (globalThis as Record<string, unknown>).DocumentFragment = window.DocumentFragment;
 }

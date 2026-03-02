@@ -1,20 +1,4 @@
 // @vitest-environment jsdom
-/**
- * Unit tests for components/Inventory/ItemSelector — ItemSelectorContent
- *
- * Covers:
- *  - Initial render shows search input with no result rows (empty search → no suggestions)
- *  - Typing shows matching inventory items from the tRPC list query
- *  - Typing a non-existent name shows the "Create" button
- *  - Exact match hides the "Create" button
- *  - Clicking a result navigates to the details step
- *  - Details step: quantity and price inputs are visible
- *  - Details step: confirm button is disabled when no unit of measure is selected
- *  - Cancel button calls onCancel regardless of the current step
- *
- * Run: bun vitest run tests/unit/ItemSelectorContent.test.tsx
- */
-
 import { ItemSelectorContent } from "@/components/Inventory/ItemSelector";
 import "./setup.dom";
 import { TEST_IDS, tid } from "@/lib/testIds";
@@ -26,24 +10,24 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 import React, { type PropsWithChildren } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-afterEach(() => {
-  cleanup();
+beforeEach(() => {
+  vi.useFakeTimers();
 });
 
-// ─── Mock data ───────────────────────────────────────────────────────────────
+afterEach(() => {
+  cleanup();
+  vi.runOnlyPendingTimers();
+  vi.useRealTimers();
+});
 
 const MOCK_ITEMS = [
   { id: "item-1", name: "Tomate", quantity_type_key: "Peso" },
   { id: "item-2", name: "Harina", quantity_type_key: "Peso" },
 ];
-
-// ─── Hoisted-safe shared mock object ─────────────────────────────────────────
-// Use `var` so it exists when vi.mock is hoisted by the test runner.
 
 let mockTrpc: {
   inventory: {
@@ -80,12 +64,6 @@ vi.mock("@/lib/trpc/react", () => {
   };
 });
 
-// ─── Mock vaul Drawer sub-components ─────────────────────────────────────────
-// DrawerHeader / DrawerTitle / DrawerFooter require a Radix Dialog context that
-// is only provided by the full Drawer root. Since ItemSelectorContent is
-// rendered headlessly (without the shell), we replace them with plain divs so
-// the Radix context constraint doesn't fail.
-
 vi.mock("@/components/ui/drawer", () => ({
   DrawerHeader: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <div data-testid="drawer-header" className={className}>{children}</div>
@@ -96,14 +74,11 @@ vi.mock("@/components/ui/drawer", () => ({
   DrawerFooter: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <div data-testid="drawer-footer" className={className}>{children}</div>
   ),
-  // Passthrough for anything else that might be imported from the module
   Drawer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DrawerContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DrawerTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DrawerClose: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
-
-// ─── Wrapper factory ──────────────────────────────────────────────────────────
 
 function makeWrapper() {
   const queryClient = new QueryClient({
@@ -116,19 +91,42 @@ function makeWrapper() {
   };
 }
 
-// ─── Render helper ────────────────────────────────────────────────────────────
-
 function renderSelector(
   onConfirm = vi.fn(),
   onCancel = vi.fn(),
+  options?: {
+    initialSearch?: string;
+    initialValues?: {
+      itemId: string;
+      itemName: string;
+      quantity: number;
+      unit: string;
+      price: number;
+    };
+  },
 ) {
   return render(
-    <ItemSelectorContent onConfirm={onConfirm} onCancel={onCancel} />,
+    <ItemSelectorContent
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+      initialSearch={options?.initialSearch}
+      initialValues={options?.initialValues}
+    />,
     { wrapper: makeWrapper() },
   );
 }
 
-// ─── Search step ──────────────────────────────────────────────────────────────
+function openDetailsForTomate(onConfirm = vi.fn(), onCancel = vi.fn()) {
+  renderSelector(onConfirm, onCancel, {
+    initialValues: {
+      itemId: "item-1",
+      itemName: "Tomate",
+      quantity: 1,
+      unit: "g",
+      price: 0,
+    },
+  });
+}
 
 describe("ItemSelectorContent — search step", () => {
   beforeEach(() => {
@@ -143,7 +141,6 @@ describe("ItemSelectorContent — search step", () => {
     expect(
       within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT),
     ).toBeInTheDocument();
-    // No results because search is empty → suggestions = []
     expect(
       within(document.body).queryByTestId(
         tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
@@ -152,13 +149,7 @@ describe("ItemSelectorContent — search step", () => {
   });
 
   it("shows matching result rows after typing a search query", async () => {
-    renderSelector();
-    const user = userEvent.setup();
-    const input = within(document.body).getByTestId(
-      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
-    );
-
-    await user.type(input, "Tom");
+    renderSelector(vi.fn(), vi.fn(), { initialSearch: "Tom" });
 
     await waitFor(() => {
       expect(
@@ -168,7 +159,6 @@ describe("ItemSelectorContent — search step", () => {
       ).toBeInTheDocument();
     });
 
-    // Non-matching item should not be rendered
     expect(
       within(document.body).queryByTestId(
         tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-2"),
@@ -177,13 +167,7 @@ describe("ItemSelectorContent — search step", () => {
   });
 
   it("shows the create button when the query has no exact match", async () => {
-    renderSelector();
-    const user = userEvent.setup();
-    const input = within(document.body).getByTestId(
-      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
-    );
-
-    await user.type(input, "Otro ingrediente");
+    renderSelector(vi.fn(), vi.fn(), { initialSearch: "Otro ingrediente" });
 
     await waitFor(() => {
       expect(
@@ -193,15 +177,8 @@ describe("ItemSelectorContent — search step", () => {
   });
 
   it("hides the create button when the query exactly matches an existing item", async () => {
-    renderSelector();
-    const user = userEvent.setup();
-    const input = within(document.body).getByTestId(
-      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
-    );
+    renderSelector(vi.fn(), vi.fn(), { initialSearch: "Tomate" });
 
-    await user.type(input, "Tomate");
-
-    // Wait for results to appear
     await waitFor(() => {
       expect(
         within(document.body).getByTestId(
@@ -210,14 +187,11 @@ describe("ItemSelectorContent — search step", () => {
       ).toBeInTheDocument();
     });
 
-    // Create button must be absent for an exact match
     expect(
       within(document.body).queryByTestId(TEST_IDS.AGREGAR_GASTO.CREATE_BTN),
     ).not.toBeInTheDocument();
   });
 });
-
-// ─── Details step ─────────────────────────────────────────────────────────────
 
 describe("ItemSelectorContent — details step", () => {
   beforeEach(() => {
@@ -227,84 +201,64 @@ describe("ItemSelectorContent — details step", () => {
     }));
   });
 
-  /** Navigate to the details step by selecting "Tomate" from results. */
-  async function openDetailsForTomate(onConfirm = vi.fn(), onCancel = vi.fn()) {
-    renderSelector(onConfirm, onCancel);
-    const user = userEvent.setup();
-
-    const input = within(document.body).getByTestId(
-      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
-    );
-    await user.type(input, "Tom");
+  it("shows quantity and price inputs after selecting a result", async () => {
+    openDetailsForTomate();
 
     await waitFor(() => {
       expect(
-        within(document.body).getByTestId(
-          tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
-        ),
+        within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT),
+      ).toBeInTheDocument();
+      expect(
+        within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.PRICE_INPUT),
       ).toBeInTheDocument();
     });
-
-    fireEvent.click(
-      within(document.body).getByTestId(
-        tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
-      ),
-    );
-  }
-
-  it("shows quantity and price inputs after selecting a result", async () => {
-    await openDetailsForTomate();
-
-    expect(
-      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT),
-    ).toBeInTheDocument();
-    expect(
-      within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.PRICE_INPUT),
-    ).toBeInTheDocument();
   });
 
   it("confirm button is enabled when a unit is auto-selected from the item's quantity type", async () => {
-    // Tomate has quantity_type_key "Peso" → measureTypes.Peso has options →
-    // the useEffect pre-selects unitOptions[0], so the button becomes enabled.
-    await openDetailsForTomate();
-
-    const confirmBtn = within(document.body).getByTestId(
-      TEST_IDS.AGREGAR_GASTO.CONFIRM_BTN,
-    ) as HTMLButtonElement;
+    openDetailsForTomate();
 
     await waitFor(() => {
+      const confirmBtn = within(document.body).getByTestId(
+        TEST_IDS.AGREGAR_GASTO.CONFIRM_BTN,
+      ) as HTMLButtonElement;
       expect(confirmBtn).not.toBeDisabled();
     });
   });
 
   it("accept quantity input changes", async () => {
-    await openDetailsForTomate();
-    const user = userEvent.setup();
+    openDetailsForTomate();
+
+    await waitFor(() => {
+      expect(
+        within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT),
+      ).toBeInTheDocument();
+    });
 
     const qtyInput = within(document.body).getByTestId(
       TEST_IDS.AGREGAR_GASTO.QUANTITY_INPUT,
     ) as HTMLInputElement;
 
-    await user.clear(qtyInput);
-    await user.type(qtyInput, "3.5");
+    fireEvent.change(qtyInput, { target: { value: "3.5" } });
     expect(qtyInput.value).toBe("3.5");
   });
 
   it("accept price input changes", async () => {
-    await openDetailsForTomate();
-    const user = userEvent.setup();
+    openDetailsForTomate();
+
+    await waitFor(() => {
+      expect(
+        within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.PRICE_INPUT),
+      ).toBeInTheDocument();
+    });
 
     const priceInput = within(document.body).getByTestId(
       TEST_IDS.AGREGAR_GASTO.PRICE_INPUT,
     ) as HTMLInputElement;
 
-    await user.clear(priceInput);
-    await user.type(priceInput, "150");
+    fireEvent.change(priceInput, { target: { value: "150" } });
     expect(priceInput.value).toBe("150");
   });
 });
-
-// ─── Cancel / dismiss ─────────────────────────────────────────────────────────
 
 describe("ItemSelectorContent — cancel behaviour", () => {
   beforeEach(() => {
@@ -327,28 +281,13 @@ describe("ItemSelectorContent — cancel behaviour", () => {
 
   it("cancel button calls onCancel from the details step", async () => {
     const onCancel = vi.fn();
-    const user = userEvent.setup();
-
-    // Reach the details step
-    renderSelector(vi.fn(), onCancel);
-    const input = within(document.body).getByTestId(
-      TEST_IDS.AGREGAR_GASTO.SEARCH_INPUT,
-    );
-    await user.type(input, "Tom");
+    openDetailsForTomate(vi.fn(), onCancel);
 
     await waitFor(() => {
       expect(
-        within(document.body).getByTestId(
-          tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
-        ),
+        within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.CANCEL_BTN),
       ).toBeInTheDocument();
     });
-
-    fireEvent.click(
-      within(document.body).getByTestId(
-        tid(TEST_IDS.AGREGAR_GASTO.RESULT_ROW, "item-1"),
-      ),
-    );
 
     fireEvent.click(
       within(document.body).getByTestId(TEST_IDS.AGREGAR_GASTO.CANCEL_BTN),

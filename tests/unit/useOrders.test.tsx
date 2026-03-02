@@ -18,7 +18,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { NuqsTestingAdapter } from "nuqs/adapters/testing";
 import { type PropsWithChildren } from "react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ─── Stable mock object shared across tests ───────────────────────────────────
 // Use `var` so it is safely available to hoisted vi.mock factories.
@@ -108,7 +108,13 @@ function makeWrapper(searchString = "") {
 
 describe("useOrders — nuqs URL state", () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   it("initialises with empty selection and no currentOrder", () => {
@@ -219,6 +225,15 @@ describe("useOrders — stale-data regression contract", () => {
 
 // ─── selectSingleOrder ────────────────────────────────────────────────────────
 describe("selectSingleOrder", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
   it("sets selectedOrderIds to [orderId] when nothing is selected", async () => {
     const { result } = renderHook(() => useOrders({}), {
       wrapper: makeWrapper(),

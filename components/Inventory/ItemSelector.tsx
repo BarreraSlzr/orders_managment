@@ -46,6 +46,8 @@ export interface ItemSelectorContentProps {
   title?: string;
   onConfirm: (params: ItemSelectorResult) => void | Promise<void>;
   onCancel: () => void;
+  /** Optional initial search text (mainly for deterministic tests). */
+  initialSearch?: string;
   /** When provided, skip straight to the details step pre-filled for editing. */
   initialValues?: {
     itemId: string;
@@ -64,6 +66,7 @@ export function ItemSelectorContent({
   title = "Agregar ingrediente",
   onConfirm,
   onCancel,
+  initialSearch = "",
   initialValues,
 }: ItemSelectorContentProps) {
   const trpc = useTRPC();
@@ -80,7 +83,7 @@ export function ItemSelectorContent({
 
   // Local state — pre-filled from initialValues when editing
   const [step, setStep] = useState<Step>(initialValues ? "details" : "search");
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [selectedItem, setSelectedItem] = useState<InventoryRow | null>(null);
   const [newQuantityTypeKey, setNewQuantityTypeKey] = useState("");
 

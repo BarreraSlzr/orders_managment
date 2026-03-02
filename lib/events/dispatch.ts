@@ -4,47 +4,20 @@ import {
     DomainEventResultMap,
     DomainEventType,
 } from "./contracts";
+import {
+  dispatchDomainEventWithDeps,
+  DispatchDomainEventDeps,
+} from "./dispatchCore";
 import { domainEventHandlers } from "./handlers";
 
+const dispatchDomainEventDeps: DispatchDomainEventDeps = {
+  db,
+  handlers: domainEventHandlers,
+};
+
 export async function dispatchDomainEvent<TType extends DomainEventType>(
-  params: DispatchDomainEventParams<TType>
+  params: DispatchDomainEventParams<TType>,
+  deps: DispatchDomainEventDeps = dispatchDomainEventDeps,
 ): Promise<DomainEventResultMap[TType]> {
-  const event = await db
-    .insertInto("domain_events")
-    .values({
-      event_type: params.type,
-      payload: JSON.stringify(params.payload),
-      status: "pending",
-      tenant_id: params.payload.tenantId,
-    })
-    .returning(["id"])
-    .executeTakeFirstOrThrow();
-
-  const handler = domainEventHandlers[params.type];
-
-  try {
-    const result = await handler({ payload: params.payload });
-
-    await db
-      .updateTable("domain_events")
-      .set({
-        status: "processed",
-        result: JSON.stringify(result),
-      })
-      .where("id", "=", event.id)
-      .execute();
-
-    return result;
-  } catch (error) {
-    await db
-      .updateTable("domain_events")
-      .set({
-        status: "failed",
-        error_message: error instanceof Error ? error.message : "Unknown error",
-      })
-      .where("id", "=", event.id)
-      .execute();
-
-    throw error;
-  }
+  return dispatchDomainEventWithDeps(params, deps);
 }

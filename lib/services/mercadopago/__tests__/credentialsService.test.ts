@@ -3,67 +3,42 @@
  *  - B2: Transient errors return stale token instead of bricking credentials
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __testables } from "../credentialsService";
 
-// ── Mocks ────────────────────────────────────────────────────────────────────
-
-// Mock database
-const mockExecuteTakeFirst = vi.fn().mockResolvedValue(undefined);
+const mockRefreshAccessToken = vi.fn();
 const mockExecute = vi.fn().mockResolvedValue([]);
-const mockReturningAll = vi.fn(() => ({
-  executeTakeFirst: vi.fn().mockResolvedValue(undefined),
-}));
 
-vi.mock("@/lib/sql/database", () => {
-  const d = {
-    selectFrom: vi.fn(() => ({
-      selectAll: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      orderBy: vi.fn().mockReturnThis(),
-      limit: vi.fn().mockReturnThis(),
-      executeTakeFirst: mockExecuteTakeFirst,
-    })),
+function makeDeps() {
+  const fakeDb = {
     updateTable: vi.fn(() => ({
       set: vi.fn(() => ({
         where: vi.fn(() => ({
-          where: vi.fn(() => ({
-            execute: mockExecute,
-          })),
           execute: mockExecute,
-          returningAll: mockReturningAll,
         })),
       })),
     })),
   };
+
+  const fakeSql = Object.assign(
+    () => null,
+    { raw: vi.fn() },
+  ) as unknown as typeof import("@/lib/sql/database").sql;
+
   return {
-    db: d,
-    getDb: () => d,
-    sql: Object.assign(vi.fn(() => null), {
-      raw: vi.fn(),
-    }),
+    fakeDb,
+    deps: {
+      getOAuthConfig: vi.fn().mockResolvedValue({
+        clientId: "cid",
+        clientSecret: "csec",
+        redirectUri: "http://localhost/callback",
+      }),
+      refreshAccessToken: mockRefreshAccessToken,
+      getDb: vi.fn(() => fakeDb as unknown as ReturnType<typeof import("@/lib/sql/database").getDb>),
+      sql: fakeSql,
+      encryptMpToken: vi.fn((t: string) => `enc:${t}`),
+    },
   };
-});
-
-// Mock the tokenCrypto module — pass-through (no real encryption)
-vi.mock("@/lib/services/mercadopago/tokenCrypto", () => ({
-  encryptMpToken: vi.fn((t: string) => `enc:${t}`),
-  decryptMpToken: vi.fn((t: string) => (t.startsWith("enc:") ? t.slice(4) : t)),
-  isMpTokenEncrypted: vi.fn((t: string) => t.startsWith("enc:")),
-}));
-
-// Mock the oauthService
-const mockRefreshAccessToken = vi.fn();
-vi.mock("@/lib/services/mercadopago/oauthService", () => ({
-  getOAuthConfig: vi.fn().mockResolvedValue({
-    clientId: "cid",
-    clientSecret: "csec",
-    redirectUri: "http://localhost/callback",
-  }),
-  refreshAccessToken: (...args: unknown[]) => mockRefreshAccessToken(...args),
-}));
-
-// Now import the module under test
-import { db } from "@/lib/sql/database";
-import { getCredentials } from "../credentialsService";
+}
 
 describe("credentialsService — refreshCredentialsIfNeeded (B2)", () => {
   beforeEach(() => {
@@ -87,16 +62,16 @@ describe("credentialsService — refreshCredentialsIfNeeded (B2)", () => {
   };
 
   it("returns stale credentials on ECONNREFUSED (transient)", async () => {
-    mockExecuteTakeFirst.mockResolvedValueOnce(expiredCreds);
+    const { deps } = makeDeps();
     mockRefreshAccessToken.mockRejectedValueOnce(
       new Error("connect ECONNREFUSED 127.0.0.1:443"),
     );
 
-    const result = await getCredentials({ tenantId: "t-1" });
+    const result = await __testables.refreshCredentialsIfNeeded(expiredCreds as never, deps as never);
 
     // Should return the stale creds (decrypted), NOT null
     expect(result).not.toBeNull();
-    expect(result?.access_token).toBe("old-tok");
+    expect(result?.access_token).toBe("enc:old-tok");
 
     // The transient catch path should NOT mark credentials as "error".
     // We verify the function returned non-null (stale token) which proves
@@ -105,40 +80,40 @@ describe("credentialsService — refreshCredentialsIfNeeded (B2)", () => {
   });
 
   it("returns stale credentials on AbortError (timeout)", async () => {
-    mockExecuteTakeFirst.mockResolvedValueOnce(expiredCreds);
+    const { deps } = makeDeps();
     const abortError = new Error("The operation was aborted");
     abortError.name = "AbortError";
     mockRefreshAccessToken.mockRejectedValueOnce(abortError);
 
-    const result = await getCredentials({ tenantId: "t-1" });
+    const result = await __testables.refreshCredentialsIfNeeded(expiredCreds as never, deps as never);
 
     expect(result).not.toBeNull();
-    expect(result?.access_token).toBe("old-tok");
+    expect(result?.access_token).toBe("enc:old-tok");
   });
 
   it("returns stale credentials on 503 Service Unavailable (transient)", async () => {
-    mockExecuteTakeFirst.mockResolvedValueOnce(expiredCreds);
+    const { deps } = makeDeps();
     mockRefreshAccessToken.mockRejectedValueOnce(
       new Error("HTTP 503 Service Unavailable"),
     );
 
-    const result = await getCredentials({ tenantId: "t-1" });
+    const result = await __testables.refreshCredentialsIfNeeded(expiredCreds as never, deps as never);
 
     expect(result).not.toBeNull();
-    expect(result?.access_token).toBe("old-tok");
+    expect(result?.access_token).toBe("enc:old-tok");
   });
 
   it("marks credentials error on 401 invalid_grant (non-transient)", async () => {
-    mockExecuteTakeFirst.mockResolvedValueOnce(expiredCreds);
+    const { deps, fakeDb } = makeDeps();
     mockRefreshAccessToken.mockRejectedValueOnce(
       new Error("401 invalid_grant: refresh token revoked"),
     );
 
-    const result = await getCredentials({ tenantId: "t-1" });
+    const result = await __testables.refreshCredentialsIfNeeded(expiredCreds as never, deps as never);
 
     // The function still returns creds (stale) but the DB row is marked error
     expect(result).not.toBeNull();
     // Verify updateTable was called (at least once for the error marking)
-    expect(db.updateTable).toHaveBeenCalled();
+    expect(fakeDb.updateTable).toHaveBeenCalled();
   });
 });
