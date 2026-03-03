@@ -23,29 +23,29 @@
 
 | # | Practice | API Name | Status | Notes |
 |---|----------|----------|--------|-------|
-| 1 | Rejected payment flow test | `Case 2` | ⚠️ Partial | Webhook handler maps `rejected`, no E2E test |
+| 1 | Rejected payment flow test | `Case 2` | ✅ Done | `tests/e2e/mercadopagoPayment.spec.ts` validates rejected status + retry readiness |
 | 2 | Cancel payment intent | `cancel_payment_intent` | ✅ Done | `cancelPDVPaymentIntent()` via `DELETE /v1/orders/{id}` |
 | 3 | Refunds at checkout | `refunds` | ✅ Done | `refundService.ts` — full + partial refunds via `POST /v1/payments/{id}/refunds` |
-| 4 | Search API after notification | `Search API` | ⚠️ Partial | `fetchPaymentDetails()` fetches single payment, no search endpoint |
-| 5 | Implementation manual | `implementation_users_manual` | ❌ Missing | No merchant-facing setup doc |
+| 4 | Search API after notification | `Search API` | ✅ Done | `searchPaymentsByExternalReference()` + `GET /api/mercadopago/payments/search` |
+| 5 | Implementation manual | `implementation_users_manual` | ✅ Done | `docs/MERCADOPAGO_IMPLEMENTATION_MANUAL.md` |
 | 6 | Logs | `Logs` | ✅ Done | Console logging throughout all services |
-| 7 | Operations manual | `Operation User's Manual` | ❌ Missing | No merchant-facing operational doc |
+| 7 | Operations manual | `Operation User's Manual` | ✅ Done | `docs/MERCADOPAGO_OPERATIONS_MANUAL.md` |
 | 8 | List terminals by API | `List Devices` | ✅ Done | `listTerminals()` via `GET /terminals/v1/list` |
 | 9 | Device mode switch (PDV/Standalone) | `Switch device mode` | ✅ Done | `switchDeviceMode()` via `PATCH /point/integration-api/devices/{id}` |
-| 10 | Device alerts | `alert_device_system` | ❌ Missing | No device reset/disconnect notifications |
+| 10 | Device alerts | `alert_device_system` | ✅ Done | `handleDeviceSystemAlertEvent()` for type/action `alert_device_system` |
 | 11 | Access token as header | `header_token_point` | ✅ Done | `Authorization: Bearer` in `mpFetch()` |
 | 12 | Query notified payment | `payment_get_or_search_api` | ✅ Done | `fetchPaymentDetails()` in webhook handler |
 | 13 | Integrator ID | `integrator_id` | ✅ Done | `X-Integrator-Id` sent via `mpFetch()` when `MP_INTEGRATOR_ID` is set |
 | 14 | Platform ID / Sponsor ID | `platform_id/sponsor_id` | ✅ Done | `X-Platform-Id` sent via `mpFetch()` when `MP_PLATFORM_ID` is set |
 | 15 | Refunds API | `refunds_api` | ✅ Done | Same as #3 |
-| 16 | Settlement report | `settlement` | ❌ Missing | No report integration |
-| 17 | All transactions report | `release` | ❌ Missing | No report integration |
+| 16 | Settlement report | `settlement` | ✅ Done | `reportsService.ts` + `GET /api/mercadopago/reports?type=settlement` |
+| 17 | All transactions report | `release` | ✅ Done | `reportsService.ts` + `GET /api/mercadopago/reports?type=release` |
 | 18 | Configurable credentials | `Configurable credentials` | ✅ Done | OAuth flow per-merchant |
 
 ### Summary Scores
 
 - **Implementation**: 7/7 passing (100%) — ✅ All homologation blockers resolved
-- **Good Practices**: 12/18 passing (67%) — remaining gaps: rejected E2E test, search API, manuals, device alerts, reports
+- **Good Practices**: 18/18 passing (100%) — ✅ Covered in code/docs/tests
 
 ---
 
@@ -104,7 +104,7 @@ Body: { operating_mode: "PDV" | "STANDALONE" }
 `mpFetch.ts` sends `X-Integrator-Id` and `X-Platform-Id` headers when `MP_INTEGRATOR_ID` / `MP_PLATFORM_ID` env vars are set. Optional — only for certified MP partners.
 
 #### B4. Search API
-Payment search (`GET /v1/payments/search?external_reference={orderId}`) — not yet implemented. Low priority since `fetchPaymentDetails()` covers the webhook reconciliation path.
+Payment search (`GET /v1/payments/search?external_reference={orderId}`) — ✅ implemented via `searchPaymentsByExternalReference()` and exposed at `/api/mercadopago/payments/search`.
 
 ---
 
@@ -118,8 +118,8 @@ Payment search (`GET /v1/payments/search?external_reference={orderId}`) — not 
 | `billingWebhookService.ts` | ✅ Handles `subscription.activated/past_due/grace_start/canceled/expired/reactivated` |
 | `checkEntitlement.ts` | ✅ Feature gate with `ENTITLEMENT_ENABLED` env var (default: allow all) |
 | DB tables | ✅ `tenant_subscriptions`, `tenant_entitlements`, `tenant_billing_events` |
-| Subscription creation API | ❌ **Missing** — no `POST /preapproval_plan` or `POST /preapproval` |
-| Tenant subscription UI | ❌ **Missing** — no checkout/subscribe flow |
+| Subscription creation API | ✅ Done — `subscriptionService.ts` + `/api/billing/subscribe` |
+| Tenant subscription UI | ✅ Done — `/onboardings/billing` + callback flow |
 | Billing webhook configured | ✅ **Done** — configured on MP Billing app via dashboard |
 
 ### Billing Action Items
@@ -211,6 +211,8 @@ mcp_mercadopago-m_add_money_test_user(user_id=<buyer>, amount=10000)
 4. Verify user can retry payment
 ```
 
+Status: ✅ `tests/e2e/mercadopagoPayment.spec.ts`
+
 #### T5. Cancel Payment Intent
 ```
 1. Create payment intent (PDV)
@@ -227,6 +229,8 @@ mcp_mercadopago-m_add_money_test_user(user_id=<buyer>, amount=10000)
 4. Verify entitlement gate allows MP features
 5. Simulate subscription.canceled → verify features blocked
 ```
+
+Status: ✅ `tests/e2e/mercadopagoBilling.spec.ts`
 
 ### Webhook Simulation
 Use `mcp_mercadopago-m_simulate_webhook` OR the existing test endpoint:
@@ -311,6 +315,13 @@ ENTITLEMENT_ENABLED=true               # Currently false by default
 | `app/onboardings/billing/callback/page.tsx` | Billing callback handler (C4) |
 | `tests/e2e/mercadopagoPayment.spec.ts` | Payment E2E tests (T1-T5) |
 | `tests/e2e/mercadopagoBilling.spec.ts` | Billing E2E tests (T6) |
+| `lib/services/mercadopago/reportsService.ts` | Settlement + release reports integration |
+| `app/api/mercadopago/payments/search/route.ts` | Search payments by `external_reference` |
+| `app/api/mercadopago/reports/route.ts` | Reports API (`settlement` / `release`) |
+| `app/api/billing/mercadopago/webhook/test/route.ts` | Billing event simulator for E2E |
+| `app/api/mercadopago/webhook/test/rejected/route.ts` | Rejected payment simulator for E2E |
+| `docs/MERCADOPAGO_IMPLEMENTATION_MANUAL.md` | Merchant implementation manual |
+| `docs/MERCADOPAGO_OPERATIONS_MANUAL.md` | Merchant operations manual |
 
 ### Modified Files
 | File | Change |

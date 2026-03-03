@@ -46,6 +46,23 @@ export interface MpOrderResult {
   };
 }
 
+export interface MpPaymentSearchResult {
+  results?: Array<{
+    id: number;
+    status: string;
+    status_detail?: string;
+    external_reference?: string;
+    transaction_amount?: number;
+    currency_id?: string;
+    date_created?: string;
+  }>;
+  paging?: {
+    total?: number;
+    offset?: number;
+    limit?: number;
+  };
+}
+
 // ─── Terminal list ────────────────────────────────────────────────────────────
 
 /**
@@ -186,6 +203,40 @@ export async function createPDVPaymentIntent({
     extraHeaders: {
       "X-Idempotency-Key": crypto.randomUUID(),
     },
+  });
+}
+
+// ─── Payments search (Good Practice #4) ─────────────────────────────────────
+
+export interface SearchPaymentsByExternalReferenceParams {
+  accessToken: string;
+  externalReference: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Searches payments by external_reference using MP Payments Search API.
+ * Endpoint: GET /v1/payments/search?external_reference={orderId}
+ */
+export async function searchPaymentsByExternalReference({
+  accessToken,
+  externalReference,
+  limit = 10,
+  offset = 0,
+}: SearchPaymentsByExternalReferenceParams): Promise<MpPaymentSearchResult> {
+  const query = new URLSearchParams({
+    external_reference: externalReference,
+    sort: "date_created",
+    criteria: "desc",
+    limit: String(limit),
+    offset: String(offset),
+  });
+
+  return mpFetch<MpPaymentSearchResult>({
+    accessToken,
+    method: "GET",
+    path: `/v1/payments/search?${query.toString()}`,
   });
 }
 

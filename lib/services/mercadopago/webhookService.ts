@@ -448,6 +448,8 @@ export async function handlePointIntegrationEvent(params: {
     newStatus = "canceled";
   } else if (action === "state_ERROR") {
     newStatus = "error";
+  } else if (action === "alert_device_system") {
+    return handleDeviceSystemAlertEvent({ notification, tenantId });
   } else {
     // Acknowledge but don't process unknown actions
     return { handled: true, detail: `Ignored point action: ${action}` };
@@ -727,6 +729,75 @@ export async function handleSubscriptionEvent(params: {
   };
 }
 
+/**
+ * Handles device-system alert notifications (good practice: alert_device_system).
+ * Creates actionable tenant + admin alerts for terminal reset/disconnect incidents.
+ */
+export async function handleDeviceSystemAlertEvent(params: {
+  notification: MpWebhookNotification;
+  tenantId: string;
+}): Promise<WebhookHandlerResult> {
+  const { notification, tenantId } = params;
+  const sourceId = notification.data?.id ?? notification.id.toString();
+  const action = notification.action ?? "alert_device_system";
+
+  const isDisconnect = /disconnect|offline|unpair/i.test(action);
+  const isReset = /reset|reboot|restart/i.test(action);
+
+  const title = isDisconnect
+    ? "Terminal desconectada"
+    : isReset
+      ? "Terminal reiniciada"
+      : "Alerta de dispositivo Point";
+
+  const body = isDisconnect
+    ? "Mercado Pago reportó que una terminal Point se desconectó. Verifica conectividad y estado del dispositivo."
+    : isReset
+      ? "Mercado Pago reportó reinicio de una terminal Point. Confirma que vuelva a modo operativo."
+      : `Se recibió una alerta de sistema de terminal (${action}).`;
+
+  await Promise.all([
+    createPlatformAlert({
+      tenantId,
+      scope: "tenant",
+      type: "system",
+      severity: isDisconnect ? "critical" : "warning",
+      title,
+      body,
+      sourceType: "mp_point_device",
+      sourceId,
+      metadata: {
+        notification_id: notification.id,
+        action,
+        user_id: notification.user_id,
+        type: notification.type,
+      },
+    }),
+    createPlatformAlert({
+      tenantId,
+      scope: "admin",
+      type: "system",
+      severity: isDisconnect ? "critical" : "warning",
+      title: `MP Device Alert — tenant ${tenantId}`,
+      body: `${title}. Acción: ${action}. Source: ${sourceId}.`,
+      sourceType: "mp_point_device",
+      sourceId,
+      metadata: {
+        tenant_id: tenantId,
+        notification_id: notification.id,
+        action,
+        user_id: notification.user_id,
+        type: notification.type,
+      },
+    }),
+  ]);
+
+  return {
+    handled: true,
+    detail: `Device system alert processed (${action})`,
+  };
+}
+
 // ─── Main Processor ──────────────────────────────────────────────────────────
 
 export interface ProcessWebhookResult {
@@ -843,6 +914,10 @@ export async function processWebhook(params: {
     case "subscription_preapproval":
     case "subscription_authorized_payment":
       result = await handleSubscriptionEvent({ notification, tenantId });
+      break;
+
+    case "alert_device_system":
+      result = await handleDeviceSystemAlertEvent({ notification, tenantId });
       break;
 
     default:
