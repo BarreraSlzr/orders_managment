@@ -18,9 +18,18 @@ import { OpenOrderSheet } from "./sheets/Orders";
 import { TagsSheet } from "./sheets/Tags";
 import TagList from "./Tag/List";
 
-export default function ProductOrderManagment() {
+interface ProductOrderManagmentProps {
+  featureFlags?: {
+    canQuickAddProduct?: boolean;
+  };
+}
+
+export default function ProductOrderManagment({
+  featureFlags,
+}: ProductOrderManagmentProps) {
   const { visibleProducts, visibleTags } = useProductsFilter();
   const { isAdmin, role, tenantName, username, session } = useAdminStatus();
+  const canQuickAddProduct = featureFlags?.canQuickAddProduct ?? true;
   
   // Use nuqs for settings modal state
   // Accepts: false (closed), true (open default tab), or "<tabName>" (open specific tab)
@@ -113,7 +122,10 @@ export default function ProductOrderManagment() {
       </div>
       <div className="p-3">
         {visibleProducts.length === 0 && <EmptyState />}
-        <ListProducts products={visibleProducts} />
+        <ListProducts
+          products={visibleProducts}
+          canQuickAddProduct={canQuickAddProduct}
+        />
         <Actions />
       </div>
     </main>

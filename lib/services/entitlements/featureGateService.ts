@@ -309,3 +309,51 @@ const dbDeps: FeatureGateDeps = {
 };
 
 export const featureGateService = createFeatureGateService(dbDeps);
+
+/**
+ * Side-effect-free feature access check for SSR/UI visibility decisions.
+ *
+ * IMPORTANT:
+ * - Does not stamp trial usage
+ * - Does not write entitlement rows
+ * - Does not emit alerts
+ */
+export async function peekFeatureAccess(params: {
+  tenantId: string;
+  feature: FeatureKey;
+}): Promise<boolean> {
+  const feature = await getDb()
+    .selectFrom("features")
+    .select(["id", "key"])
+    .where("key", "=", params.feature)
+    .executeTakeFirst();
+
+  if (!feature) return false;
+
+  const tenantEntitlement = await getDb()
+    .selectFrom("tenant_entitlements")
+    .select("features_enabled")
+    .where("tenant_id", "=", params.tenantId)
+    .executeTakeFirst();
+
+  const enabled = tenantEntitlement?.features_enabled ?? [];
+  if (
+    enabled.includes(params.feature)
+    || enabled.includes("*")
+    || enabled.includes("all_paid_features")
+  ) {
+    return true;
+  }
+
+  const row = await getDb()
+    .selectFrom("feature_entitlements")
+    .select([
+      "granted_by_plan",
+      sql<boolean>`COALESCE(trial_ends_at > now(), false)`.as("trial_active"),
+    ])
+    .where("tenant_id", "=", params.tenantId)
+    .where("feature_id", "=", feature.id)
+    .executeTakeFirst();
+
+  return Boolean(row?.granted_by_plan || row?.trial_active);
+}

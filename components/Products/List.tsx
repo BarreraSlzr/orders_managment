@@ -8,9 +8,13 @@ import { OrderControls } from "./OrderActions";
 
 export interface IListProductsProps {
   products: Product[];
+  canQuickAddProduct?: boolean;
 }
 
-export function ListProducts({ products }: IListProductsProps) {
+export function ListProducts({
+  products,
+  canQuickAddProduct = true,
+}: IListProductsProps) {
   const { handleEditProduct } = useProducts();
   const { selectedTags } = useProductsFilter();
 
@@ -67,12 +71,14 @@ export function ListProducts({ products }: IListProductsProps) {
           </ProductCard>
         ))}
       </div>
-      <div className="flex justify-center">
-        <Button type="button" onClick={createWithSelectedTags}>
-          <Plus className="h-4 w-4 mr-1" />
-          Nuevo Producto
-        </Button>
-      </div>
+      {canQuickAddProduct && (
+        <div className="flex justify-center">
+          <Button type="button" onClick={createWithSelectedTags}>
+            <Plus className="h-4 w-4 mr-1" />
+            Nuevo Producto
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
