@@ -3,41 +3,20 @@ import { OrderItemsProductsProvider } from "@/context/useOrderItemsProducts";
 import { OrdersProvider } from "@/context/useOrders";
 import { ProductProvider } from "@/context/useProducts";
 import { ProductsFilterProvider } from "@/context/useProductsFilter";
-import { verifySessionToken } from "@/lib/auth/session";
-import { peekFeatureAccess } from "@/lib/services/entitlements/featureGateService";
+import { getFeatureAccessForCurrentSession } from "@/lib/services/entitlements/serverFeatureAccess";
 import { OrdersQuery } from "@/lib/types";
-import { cookies } from "next/headers";
 
 export default async function Page() {
   const ordersQuery: OrdersQuery = {
     status: "opened",
   };
 
-  let canQuickAddProduct = true;
-  let canOrderExpenses = true;
-
-  try {
-    const cookieStore = await cookies();
-    const cookieName = process.env.AUTH_COOKIE_NAME || "__session";
-    const sessionToken = cookieStore.get(cookieName)?.value;
-
-    if (sessionToken) {
-      const session = await verifySessionToken(sessionToken);
-      if (session?.tenant_id) {
-        canQuickAddProduct = await peekFeatureAccess({
-          tenantId: session.tenant_id,
-          feature: "quick_add_product",
-        });
-        canOrderExpenses = await peekFeatureAccess({
-          tenantId: session.tenant_id,
-          feature: "order_expenses",
-        });
-      }
-    }
-  } catch {
-    canQuickAddProduct = true;
-    canOrderExpenses = true;
-  }
+  const featureAccess = await getFeatureAccessForCurrentSession({
+    features: ["quick_add_product", "order_expenses"],
+    fallback: true,
+  });
+  const canQuickAddProduct = featureAccess.quick_add_product ?? true;
+  const canOrderExpenses = featureAccess.order_expenses ?? true;
 
   return (
     <OrdersProvider query={ordersQuery}>
