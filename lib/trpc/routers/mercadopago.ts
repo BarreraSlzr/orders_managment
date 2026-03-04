@@ -15,31 +15,58 @@ import {
   createSubscription,
 } from "@/lib/services/billing/subscriptionService";
 import {
-    checkMpEntitlement,
-    mpEntitlementMessage,
+  checkMpEntitlement,
+  mpEntitlementMessage,
 } from "@/lib/services/entitlements/checkEntitlement";
+import { featureGateService } from "@/lib/services/entitlements/featureGateService";
 import {
-    completeAccessRequest,
-    getLatestAccessRequest,
-    upsertAccessRequest,
+  completeAccessRequest,
+  getLatestAccessRequest,
+  upsertAccessRequest,
 } from "@/lib/services/mercadopago/accessRequestsService";
 import {
-    getCredentials,
-    updateContactEmail,
-    upsertCredentials,
+  getCredentials,
+  updateContactEmail,
+  upsertCredentials,
 } from "@/lib/services/mercadopago/credentialsService";
-import {
-    cancelActiveAttempt,
-    getAttempt,
-    getLatestAttempt,
-} from "@/lib/services/mercadopago/statusService";
 import { getMpPlatformConfig } from "@/lib/services/mercadopago/platformConfig";
+import {
+  cancelActiveAttempt,
+  getAttempt,
+  getLatestAttempt,
+} from "@/lib/services/mercadopago/statusService";
 import { getDb, sql } from "@/lib/sql/database";
-import { getIsoTimestamp } from "@/utils/stamp";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
+import { getIsoTimestamp } from "@/utils/stamp";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { managerProcedure, router, tenantProcedure } from "../init";
+
+function getActorUserId(session: Record<string, unknown> | null): string {
+  const userId = session && typeof session.sub === "string" ? session.sub : "";
+  if (!userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return userId;
+}
+
+async function assertMercadoPagoSyncFeature(params: {
+  tenantId: string;
+  userId: string;
+}): Promise<void> {
+  try {
+    await featureGateService.assert({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      feature: "mercadopago_sync",
+    });
+  } catch {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Tu plan no incluye sincronización con Mercado Pago.",
+    });
+  }
+}
 
 // ─── Credentials sub-router ───────────────────────────────────────────────────
 
@@ -105,6 +132,11 @@ const credentialsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       return upsertAccessRequest({
         tenantId: ctx.tenantId,
         contactEmail: input.contactEmail,
@@ -138,6 +170,11 @@ const credentialsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       await updateContactEmail({
         tenantId: ctx.tenantId,
         contactEmail: input.contactEmail.trim().toLowerCase(),
@@ -164,6 +201,11 @@ const credentialsRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       const creds = await upsertCredentials({
         tenantId: ctx.tenantId,
         accessToken: input.accessToken,
@@ -217,6 +259,11 @@ const paymentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       // Verify credentials exist before dispatching
       const creds = await getCredentials({ tenantId: ctx.tenantId });
       if (!creds) {
@@ -307,6 +354,11 @@ const paymentRouter = router({
   cancel: managerProcedure
     .input(z.object({ orderId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       // Entitlement check (must have active sub to cancel — prevents orphan cancels)
       const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
       if (!ent.allowed) {
@@ -521,6 +573,11 @@ const storeRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
       if (!ent.allowed) {
         throw new TRPCError({
@@ -563,6 +620,11 @@ const posRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
       if (!ent.allowed) {
         throw new TRPCError({
@@ -604,6 +666,11 @@ const refundRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
       if (!ent.allowed) {
         throw new TRPCError({
@@ -644,6 +711,11 @@ const deviceRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      await assertMercadoPagoSyncFeature({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+      });
+
       const ent = await checkMpEntitlement({ tenantId: ctx.tenantId });
       if (!ent.allowed) {
         throw new TRPCError({

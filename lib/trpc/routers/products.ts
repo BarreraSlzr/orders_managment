@@ -1,14 +1,42 @@
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
+import { featureGateService } from "@/lib/services/entitlements/featureGateService";
 import { db } from "@/lib/sql/database";
 import { exportProductsJSON } from "@/lib/sql/functions/exportProductsJSON";
 import { getProducts } from "@/lib/sql/functions/getProducts";
 import { getProductConsumptions } from "@/lib/sql/functions/productConsumptions";
 import {
-    parseProductsCSV,
-    type ProductRow,
+  parseProductsCSV,
+  type ProductRow,
 } from "@/lib/utils/parseProductsCSV";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { managerProcedure, router, tenantProcedure } from "../init";
+
+function getActorUserId(session: Record<string, unknown> | null): string {
+  const userId = session && typeof session.sub === "string" ? session.sub : "";
+  if (!userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return userId;
+}
+
+async function assertProductCompositionAccess(params: {
+  tenantId: string;
+  userId: string;
+}): Promise<void> {
+  try {
+    await featureGateService.assert({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      feature: "product_composition",
+    });
+  } catch {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Tu plan no incluye composición de productos.",
+    });
+  }
+}
 
 export const productsRouter = router({
   list: tenantProcedure
@@ -35,9 +63,25 @@ export const productsRouter = router({
         name: z.string().min(1),
         price: z.number(),
         tags: z.string(),
+        source: z.enum(["catalog", "ordersheet"]).optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
+      if ((input.source ?? "catalog") === "ordersheet") {
+        try {
+          await featureGateService.assert({
+            tenantId: ctx.tenantId,
+            userId: getActorUserId(ctx.session),
+            feature: "quick_add_product",
+          });
+        } catch {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Tu plan no incluye alta rápida de productos en OrderSheet.",
+          });
+        }
+      }
+
       return dispatchDomainEvent({
         type: "product.upserted",
         payload: {
@@ -216,6 +260,11 @@ export const productsRouter = router({
         }),
       )
       .mutation(async ({ ctx, input }) => {
+        await assertProductCompositionAccess({
+          tenantId: ctx.tenantId,
+          userId: getActorUserId(ctx.session),
+        });
+
         return dispatchDomainEvent({
           type: "product.consumption.added",
           payload: { tenantId: ctx.tenantId, ...input },
@@ -225,6 +274,11 @@ export const productsRouter = router({
     remove: managerProcedure
       .input(z.object({ id: z.string() }))
       .mutation(async ({ ctx, input }) => {
+        await assertProductCompositionAccess({
+          tenantId: ctx.tenantId,
+          userId: getActorUserId(ctx.session),
+        });
+
         return dispatchDomainEvent({
           type: "product.consumption.removed",
           payload: { tenantId: ctx.tenantId, id: input.id },

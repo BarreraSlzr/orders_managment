@@ -1,9 +1,43 @@
 import { dispatchDomainEvent } from "@/lib/events/dispatch";
+import { featureGateService } from "@/lib/services/entitlements/featureGateService";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
 import { getOrders } from "@/lib/sql/functions/getOrders";
+import { getIsoTimestamp } from "@/utils/stamp";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { router, tenantProcedure } from "../init";
 import { requireRole } from "../tenancy";
+
+function getActorUserId(session: Record<string, unknown> | null): string {
+  const userId = session && typeof session.sub === "string" ? session.sub : "";
+  if (!userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return userId;
+}
+
+async function assertFeatureAccess(params: {
+  tenantId: string;
+  userId: string;
+  feature: "sales_history_extended" | "payment_method_advanced";
+}): Promise<void> {
+  try {
+    await featureGateService.assert(params);
+  } catch {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Tu plan no incluye esta funcionalidad.",
+    });
+  }
+}
+
+function isDateOutsideFreemiumHistory(params: { date: string; days: number }): boolean {
+  const targetMs = Date.parse(`${params.date}T00:00:00Z`);
+  if (!Number.isFinite(targetMs)) return false;
+  const nowMs = Date.parse(getIsoTimestamp());
+  const windowMs = params.days * 24 * 60 * 60 * 1000;
+  return targetMs < nowMs - windowMs;
+}
 
 export const ordersRouter = router({
   list: tenantProcedure
@@ -15,6 +49,14 @@ export const ordersRouter = router({
       })
     )
     .query(async ({ ctx, input }) => {
+      if (input.date && isDateOutsideFreemiumHistory({ date: input.date, days: 30 })) {
+        await assertFeatureAccess({
+          tenantId: ctx.tenantId,
+          userId: getActorUserId(ctx.session),
+          feature: "sales_history_extended",
+        });
+      }
+
       return getOrders({
         tenantId: ctx.tenantId,
         timeZone: input.timeZone,
@@ -152,6 +194,12 @@ export const ordersRouter = router({
     .input(z.object({ itemIds: z.array(z.number()), paymentOptionId: z.number().min(1).max(6) }))
     .mutation(async ({ ctx, input }) => {
       requireRole(ctx.session, ["staff", "manager", "admin"]);
+      await assertFeatureAccess({
+        tenantId: ctx.tenantId,
+        userId: getActorUserId(ctx.session),
+        feature: "payment_method_advanced",
+      });
+
       return dispatchDomainEvent({
         type: "order.payment.set",
         payload: { tenantId: ctx.tenantId, ...input },

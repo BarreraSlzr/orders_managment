@@ -1,16 +1,17 @@
 import { generateTempPassword, hashPassword } from "@/lib/auth/passwords";
 import { parseUserRole } from "@/lib/auth/roles";
-import {
-  createUser,
-  getUserWithTenantById,
-  listStaffByTenant,
-  listUsersByTenant,
-  listUsersByTenants,
-  updateUserProfile,
-  updateUserPermissions,
-  type UserRole,
-} from "@/lib/sql/functions/users";
+import { featureGateService } from "@/lib/services/entitlements/featureGateService";
 import { createTenant, listTenants } from "@/lib/sql/functions/tenants";
+import {
+    createUser,
+    getUserWithTenantById,
+    listStaffByTenant,
+    listUsersByTenant,
+    listUsersByTenants,
+    updateUserPermissions,
+    updateUserProfile,
+    type UserRole,
+} from "@/lib/sql/functions/users";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { protectedProcedure, router } from "../init";
@@ -22,6 +23,14 @@ function getTenantId(session: Record<string, unknown> | null): string {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return tenantId;
+}
+
+function getActorUserId(session: Record<string, unknown> | null): string {
+  const userId = session && typeof session.sub === "string" ? session.sub : "";
+  if (!userId) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return userId;
 }
 
 function requireManagerRole(session: Record<string, unknown> | null): void {
@@ -298,6 +307,53 @@ export const usersRouter = router({
         passwordHash: hash,
         passwordSalt: salt,
         permissions: input.permissions,
+      });
+
+      return {
+        userId: user.id,
+        username: user.username,
+        tempPassword,
+      };
+    }),
+
+  /** Tenant onboarding: create additional manager user (feature gated) */
+  onboardManager: protectedProcedure
+    .input(
+      z.object({
+        username: z.string().min(1),
+        tempPassword: z.string().min(8).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const role = parseUserRole(ctx.session?.role);
+      if (role !== "manager" && role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN" });
+      }
+
+      const tenantId = getTenantId(ctx.session);
+
+      try {
+        await featureGateService.assert({
+          tenantId,
+          userId: getActorUserId(ctx.session),
+          feature: "multi_manager_users",
+        });
+      } catch {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Tu plan no incluye múltiples usuarios manager.",
+        });
+      }
+
+      const tempPassword = input.tempPassword ?? generateTempPassword();
+      const { hash, salt } = hashPassword({ password: tempPassword });
+
+      const user = await createUser({
+        tenantId,
+        username: input.username,
+        role: "manager",
+        passwordHash: hash,
+        passwordSalt: salt,
       });
 
       return {
