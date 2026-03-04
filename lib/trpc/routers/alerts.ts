@@ -6,17 +6,17 @@
  * changelog / system notices to all tenants.
  */
 import {
-    createPlatformAlert,
-    listAlerts,
-    markAlertRead,
-    markAllAlertsRead,
+  createPlatformAlert,
+  listAlerts,
+  markAlertRead,
+  markAllAlertsRead,
 } from "@/lib/services/alerts/alertsService";
 import { getDb } from "@/lib/sql/database";
 import type { AlertType } from "@/lib/sql/types";
 import { z } from "zod";
 import { adminProcedure, router, tenantProcedure } from "../init";
 
-const AlertTypeSchema = z.enum(["claim", "payment", "mp_connect", "subscription", "changelog", "system"]);
+const AlertTypeSchema = z.enum(["claim", "payment", "mp_connect", "subscription", "trial", "changelog", "system"]);
 
 export const alertsRouter = router({
   /**

@@ -267,9 +267,50 @@ export interface TenantBillingEventsTable {
   created_at: ColumnType<Date, string | undefined, never>;
 }
 
+export type FeatureKey =
+  | 'sales_history_extended'
+  | 'mercadopago_sync'
+  | 'multi_manager_users'
+  | 'payment_method_advanced'
+  | 'quick_add_product'
+  | 'order_expenses'
+  | 'product_composition';
+
+export interface FeaturesTable {
+  id: Generated<string>;
+  key: FeatureKey;
+  trial_days: number;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+export interface PlanFeaturesTable {
+  plan_code: string;
+  feature_id: string;
+  enabled: boolean;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
+export interface FeatureUsageTable {
+  id: Generated<string>;
+  tenant_id: string;
+  feature_id: string;
+  initiated_by_user_id: string;
+  first_used_at: ColumnType<Date, string | undefined, never>;
+}
+
+export interface FeatureEntitlementsTable {
+  tenant_id: string;
+  feature_id: string;
+  trial_started_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  trial_ends_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  granted_by_plan: boolean;
+  created_at: ColumnType<Date, string | undefined, never>;
+  updated_at: ColumnType<Date, string | undefined, Date | undefined>;
+}
+
 // ─── Platform alerts ─────────────────────────────────────────────────────────
 
-export type AlertType = "claim" | "payment" | "mp_connect" | "subscription" | "changelog" | "system";
+export type AlertType = "claim" | "payment" | "mp_connect" | "subscription" | "trial" | "changelog" | "system";
 export type AlertSeverity = "info" | "warning" | "critical";
 export type AlertScope = "tenant" | "admin";
 
@@ -332,6 +373,10 @@ export interface Database {
   tenant_subscriptions: TenantSubscriptionsTable;
   tenant_entitlements: TenantEntitlementsTable;
   tenant_billing_events: TenantBillingEventsTable;
+  features: FeaturesTable;
+  plan_features: PlanFeaturesTable;
+  feature_usage: FeatureUsageTable;
+  feature_entitlements: FeatureEntitlementsTable;
   platform_alerts: PlatformAlertsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;

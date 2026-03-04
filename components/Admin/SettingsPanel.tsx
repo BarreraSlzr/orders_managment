@@ -76,11 +76,12 @@ const ALERT_TYPE_LABELS: Record<AlertType, string> = {
   claim: "Reclamos",
   mp_connect: "Conexión",
   subscription: "Suscripciones",
+  trial: "Trials",
   changelog: "Cambios",
   system: "Sistema",
 };
 
-const ALL_ALERT_TYPES: AlertType[] = ["payment", "claim", "mp_connect", "subscription", "changelog", "system"];
+const ALL_ALERT_TYPES: AlertType[] = ["payment", "claim", "mp_connect", "subscription", "trial", "changelog", "system"];
 
 /** Extract metadata helpers */
 function alertMeta(alert: PlatformAlert): Record<string, unknown> | null {
