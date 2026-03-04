@@ -37,10 +37,41 @@ import {
 } from "@/lib/services/mercadopago/statusService";
 import { getDb, sql } from "@/lib/sql/database";
 import { getOrderItemsView } from "@/lib/sql/functions/getOrderItemsView";
+import type { FeatureKey } from "@/lib/sql/types";
 import { getIsoTimestamp } from "@/utils/stamp";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { managerProcedure, router, tenantProcedure } from "../init";
+
+const BILLING_FEATURE_PRICING_FALLBACK: Record<FeatureKey, number> = {
+  sales_history_extended: 49,
+  mercadopago_sync: 299,
+  multi_manager_users: 99,
+  payment_method_advanced: 59,
+  quick_add_product: 39,
+  order_expenses: 69,
+  product_composition: 79,
+};
+
+const BILLING_FEATURE_LABELS: Record<FeatureKey, string> = {
+  sales_history_extended: "Historial de ventas extendido",
+  mercadopago_sync: "Sincronización Mercado Pago",
+  multi_manager_users: "Multi-manager users",
+  payment_method_advanced: "Métodos de pago avanzados",
+  quick_add_product: "Quick add de productos",
+  order_expenses: "Gestión de gastos por orden",
+  product_composition: "Composición de producto",
+};
+
+const featureKeySchema = z.enum([
+  "sales_history_extended",
+  "mercadopago_sync",
+  "multi_manager_users",
+  "payment_method_advanced",
+  "quick_add_product",
+  "order_expenses",
+  "product_composition",
+]);
 
 function getActorUserId(session: Record<string, unknown> | null): string {
   const userId = session && typeof session.sub === "string" ? session.sub : "";
@@ -379,6 +410,73 @@ const paymentRouter = router({
 // ─── Billing sub-router ───────────────────────────────────────────────────────
 
 const billingRouter = router({
+  featureCatalog: managerProcedure.query(async ({ ctx }) => {
+    const features = await getDb()
+      .selectFrom("features")
+      .leftJoin("feature_entitlements", (join) =>
+        join
+          .onRef("feature_entitlements.feature_id", "=", "features.id")
+          .on("feature_entitlements.tenant_id", "=", ctx.tenantId),
+      )
+      .select([
+        "features.key",
+        "features.trial_days",
+        "features.monthly_price",
+        "feature_entitlements.granted_by_plan",
+        "feature_entitlements.trial_ends_at",
+      ])
+      .orderBy("features.key", "asc")
+      .execute();
+
+    const entitlement = await getDb()
+      .selectFrom("tenant_entitlements")
+      .select("features_enabled")
+      .where("tenant_id", "=", ctx.tenantId)
+      .executeTakeFirst();
+
+    const enabled = new Set(entitlement?.features_enabled ?? []);
+    const now = Date.now();
+
+    const rows = features.map((feature) => {
+      const key = feature.key;
+      const trialEndsAt = feature.trial_ends_at;
+      const trialMs = trialEndsAt ? new Date(trialEndsAt).getTime() - now : null;
+      const trialActive = typeof trialMs === "number" && trialMs > 0;
+      const trialDaysRemaining = trialActive
+        ? Math.ceil(trialMs / (1000 * 60 * 60 * 24))
+        : 0;
+
+      const activeByPlan =
+        feature.granted_by_plan === true
+        || enabled.has(key)
+        || enabled.has("*")
+        || enabled.has("all_paid_features");
+
+      const status = activeByPlan
+        ? "active"
+        : trialActive
+          ? "trial"
+          : trialEndsAt
+            ? "expired"
+            : "inactive";
+
+      return {
+        key,
+        label: BILLING_FEATURE_LABELS[key],
+        monthlyPrice:
+          Number(feature.monthly_price) || BILLING_FEATURE_PRICING_FALLBACK[key],
+        trialDays: feature.trial_days,
+        trialDaysRemaining,
+        status,
+      };
+    });
+
+    return {
+      currencyId: "MXN",
+      features: rows,
+    };
+  }),
+
   /**
    * Activates platform billing for the current tenant.
    *
@@ -392,6 +490,7 @@ const billingRouter = router({
         reason: z.string().min(3),
         transactionAmount: z.number().positive(),
         currencyId: z.string().min(3),
+        featureKeys: z.array(featureKeySchema).min(1),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -442,6 +541,31 @@ const billingRouter = router({
         process.env.NEXT_PUBLIC_APP_URL?.trim() ||
         "https://orders.internetfriends.xyz";
       const backUrl = `${origin}/onboardings/configure-mp-billing`;
+      const uniqueFeatureKeys = Array.from(new Set(input.featureKeys));
+      const pricedFeatures = await getDb()
+        .selectFrom("features")
+        .select(["key", "monthly_price"])
+        .where("key", "in", uniqueFeatureKeys)
+        .execute();
+
+      const priceByKey = new Map<FeatureKey, number>(
+        pricedFeatures.map((feature) => [
+          feature.key,
+          Number(feature.monthly_price) || BILLING_FEATURE_PRICING_FALLBACK[feature.key],
+        ]),
+      );
+
+      const normalizedAmount = uniqueFeatureKeys.reduce(
+        (sum, key) => sum + (priceByKey.get(key) ?? BILLING_FEATURE_PRICING_FALLBACK[key] ?? 0),
+        0,
+      );
+
+      if (normalizedAmount <= 0) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Selecciona al menos una funcionalidad para activar billing.",
+        });
+      }
 
       // ── Idempotency guard: skip remote creation if active sub exists ────
       const existingSub = await getDb()
@@ -479,7 +603,7 @@ const billingRouter = router({
       const plan = await createPreapprovalPlan({
         accessToken: normalizedBillingAccessToken,
         reason: input.reason,
-        transactionAmount: input.transactionAmount,
+        transactionAmount: normalizedAmount,
         currencyId: input.currencyId,
         backUrl,
       });
@@ -507,8 +631,9 @@ const billingRouter = router({
             checkout_url: subscription.init_point ?? null,
             payer_email: payerEmail,
             reason: input.reason,
-            amount: input.transactionAmount,
+            amount: normalizedAmount,
             currency_id: input.currencyId,
+            feature_keys: uniqueFeatureKeys,
           },
           updated_at: now,
         })
@@ -521,8 +646,9 @@ const billingRouter = router({
               checkout_url: subscription.init_point ?? null,
               payer_email: payerEmail,
               reason: input.reason,
-              amount: input.transactionAmount,
+              amount: normalizedAmount,
               currency_id: input.currencyId,
+              feature_keys: uniqueFeatureKeys,
             },
             updated_at: sql<Date>`CURRENT_TIMESTAMP`,
           }),
@@ -534,13 +660,13 @@ const billingRouter = router({
         .values({
           tenant_id: ctx.tenantId,
           subscription_status: "active",
-          features_enabled: ["mercadopago"],
+          features_enabled: uniqueFeatureKeys,
           updated_at: now,
         })
         .onConflict((oc) =>
           oc.column("tenant_id").doUpdateSet({
             subscription_status: "active",
-            features_enabled: ["mercadopago"],
+            features_enabled: uniqueFeatureKeys,
             updated_at: sql<Date>`CURRENT_TIMESTAMP`,
           }),
         )
@@ -554,6 +680,8 @@ const billingRouter = router({
         subscriptionId: subscription.id,
         status: subscription.status,
         initPoint: subscription.init_point ?? null,
+        amount: normalizedAmount,
+        featureKeys: uniqueFeatureKeys,
       };
     }),
 });

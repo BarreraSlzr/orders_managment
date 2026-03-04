@@ -1,7 +1,14 @@
 "use client";
 
+import { ReceiptFooter } from "@/components/Receipt/ReceiptFooter";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTRPC } from "@/lib/trpc/react";
+import { formatPrice } from "@/lib/utils/formatPrice";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
 
 interface MpBillingActivationStepProps {
   data: Record<string, unknown>;
@@ -16,9 +23,89 @@ export function MpBillingActivationStep({
   linkedEmail,
   onChange,
 }: MpBillingActivationStepProps) {
+  const trpc = useTRPC();
+  const catalogQuery = useQuery(trpc.mercadopago.billing.featureCatalog.queryOptions());
   const reason = typeof data.reason === "string" ? data.reason : "Orders Management — Plan Mensual";
-  const amount = typeof data.transactionAmount === "number" ? String(data.transactionAmount) : "299";
-  const currencyId = typeof data.currencyId === "string" ? data.currencyId : "MXN";
+  const selectedFeatureKeys = Array.isArray(data.featureKeys)
+    ? (data.featureKeys as string[])
+    : [];
+  const catalog = catalogQuery.data;
+  const currencyId = typeof data.currencyId === "string"
+    ? data.currencyId
+    : (catalog?.currencyId ?? "MXN");
+
+  const total = useMemo(() => {
+    if (!catalog) return 0;
+    const selected = new Set(selectedFeatureKeys);
+    return catalog.features.reduce((sum, row) => {
+      if (!selected.has(row.key)) return sum;
+      return sum + row.monthlyPrice;
+    }, 0);
+  }, [catalog, selectedFeatureKeys]);
+
+  useEffect(() => {
+    if (!catalog) return;
+
+    const selected = selectedFeatureKeys.filter((key) =>
+      catalog.features.some((feature) => feature.key === key),
+    );
+
+    const nextSelected = selected.length > 0
+      ? selected
+      : (() => {
+          const defaults = catalog.features
+            .filter((feature) => feature.status === "active" || feature.status === "trial")
+            .map((feature) => feature.key);
+
+          if (defaults.length > 0) return defaults;
+
+          const mpFeature = catalog.features.find((feature) => feature.key === "mercadopago_sync");
+          return mpFeature ? [mpFeature.key] : [];
+        })();
+
+    const nextTotal = catalog.features.reduce((sum, feature) => {
+      return nextSelected.includes(feature.key) ? sum + feature.monthlyPrice : sum;
+    }, 0);
+
+    const currentAmount = typeof data.transactionAmount === "number" ? data.transactionAmount : 0;
+    const shouldUpdateSelection = nextSelected.join("|") !== selectedFeatureKeys.join("|");
+    const shouldUpdateAmount = currentAmount !== nextTotal;
+    const shouldUpdateCurrency = currencyId !== catalog.currencyId;
+
+    if (shouldUpdateSelection || shouldUpdateAmount || shouldUpdateCurrency) {
+      onChange({
+        data: {
+          featureKeys: nextSelected,
+          transactionAmount: nextTotal,
+          currencyId: catalog.currencyId,
+        },
+      });
+    }
+  }, [catalog, currencyId, data.transactionAmount, onChange, selectedFeatureKeys]);
+
+  const toggleFeature = (featureKey: string, checked: boolean) => {
+    if (!catalog) return;
+
+    const current = new Set(selectedFeatureKeys);
+    if (checked) {
+      current.add(featureKey);
+    } else {
+      current.delete(featureKey);
+    }
+
+    const nextSelected = Array.from(current);
+    const nextTotal = catalog.features.reduce((sum, feature) => {
+      return current.has(feature.key) ? sum + feature.monthlyPrice : sum;
+    }, 0);
+
+    onChange({
+      data: {
+        featureKeys: nextSelected,
+        transactionAmount: nextTotal,
+        currencyId: catalog.currencyId,
+      },
+    });
+  };
 
   return (
     <div className="space-y-5">
@@ -53,27 +140,83 @@ export function MpBillingActivationStep({
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="billing-amount">Monto</Label>
+          <Label htmlFor="billing-currency">Currency ID</Label>
           <Input
-            id="billing-amount"
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(e) => onChange({ data: { transactionAmount: Number(e.target.value || 0) } })}
-            placeholder="299"
+            id="billing-currency"
+            value={currencyId}
+            onChange={(e) => onChange({ data: { currencyId: e.target.value.toUpperCase() } })}
+            placeholder="MXN"
           />
         </div>
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="billing-currency">Currency ID</Label>
-        <Input
-          id="billing-currency"
-          value={currencyId}
-          onChange={(e) => onChange({ data: { currencyId: e.target.value.toUpperCase() } })}
-          placeholder="MXN"
-        />
-      </div>
+      <Card className="font-mono">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Plan mensual por funcionalidades</CardTitle>
+          <p className="text-xs text-slate-500">
+            Selecciona lo que quieres pagar este mes. El total se calcula con lo marcado.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {catalogQuery.isLoading ? (
+            <div className="rounded-md border border-dashed p-3 text-xs text-slate-500">
+              Cargando funcionalidades...
+            </div>
+          ) : catalogQuery.isError ? (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+              No se pudo cargar el catálogo de funcionalidades.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-md border">
+              <table className="w-full min-w-[640px] text-xs">
+                <thead className="bg-slate-50 text-slate-600 uppercase tracking-wide">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Pagar</th>
+                    <th className="px-3 py-2 text-left">Funcionalidad</th>
+                    <th className="px-3 py-2 text-left">Estado actual</th>
+                    <th className="px-3 py-2 text-right">Mensual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(catalog?.features ?? []).map((feature) => {
+                    const isChecked = selectedFeatureKeys.includes(feature.key);
+                    const statusLabel =
+                      feature.status === "active"
+                        ? "Activa"
+                        : feature.status === "trial"
+                          ? `Trial (${feature.trialDaysRemaining} días)`
+                          : feature.status === "expired"
+                            ? "Trial expirado"
+                            : "Sin activar";
+
+                    return (
+                      <tr key={feature.key} className="border-t">
+                        <td className="px-3 py-2">
+                          <Checkbox
+                            checked={isChecked}
+                            onCheckedChange={(checked) =>
+                              toggleFeature(feature.key, Boolean(checked))
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-slate-900">{feature.label}</td>
+                        <td className="px-3 py-2 text-slate-600">{statusLabel}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatPrice(feature.monthlyPrice)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="border-t border-dashed pt-2">
+            <ReceiptFooter label="TOTAL MENSUAL:" orderTotal={total} />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

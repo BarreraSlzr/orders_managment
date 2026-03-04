@@ -410,10 +410,14 @@ export default function OnboardingRunnerPageClient({
     }
 
     if (workflowDefinition.id === "configure-mp-billing") {
+      const selectedFeatureKeys = Array.isArray(data.featureKeys)
+        ? (data.featureKeys as string[])
+        : [];
       const result = await mpBillingActivateMutation.mutateAsync({
         reason: String(data.reason || "Orders Management — Plan Mensual"),
         transactionAmount: Number(data.transactionAmount || 0),
         currencyId: String(data.currencyId || "MXN"),
+        featureKeys: selectedFeatureKeys,
       });
 
       setCompletion({
@@ -425,6 +429,7 @@ export default function OnboardingRunnerPageClient({
           { label: "Plan ID", value: result.planId },
           { label: "Subscription ID", value: result.subscriptionId },
           { label: "Status", value: result.status },
+          { label: "Features", value: selectedFeatureKeys.join(", ") || "—" },
           { label: "Checkout", value: result.initPoint || "—" },
         ],
       });
@@ -556,6 +561,12 @@ export default function OnboardingRunnerPageClient({
               {
                 label: "Payer Email",
                 value: mpCredentialsQuery.data?.contactEmail ?? "No vinculado en Settings",
+              },
+              {
+                label: "Features",
+                value: Array.isArray(data.featureKeys)
+                  ? (data.featureKeys as string[]).join(", ")
+                  : "—",
               },
               { label: "Monto", value: String(data.transactionAmount || "") },
               { label: "Moneda", value: String(data.currencyId || "") },

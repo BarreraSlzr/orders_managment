@@ -1383,6 +1383,38 @@ ON CONFLICT (key) DO NOTHING;
   },
 };
 
+// ── v22: feature monthly pricing ───────────────────────────────────────────
+
+const migration022: Migration = {
+  version: 22,
+  description:
+    "Add monthly_price to features and seed billing pricing for feature-based subscriptions",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+ALTER TABLE features
+ADD COLUMN IF NOT EXISTS monthly_price NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+UPDATE features
+SET monthly_price = CASE key
+  WHEN 'sales_history_extended' THEN 49
+  WHEN 'mercadopago_sync' THEN 299
+  WHEN 'multi_manager_users' THEN 99
+  WHEN 'payment_method_advanced' THEN 59
+  WHEN 'quick_add_product' THEN 39
+  WHEN 'order_expenses' THEN 69
+  WHEN 'product_composition' THEN 79
+  ELSE monthly_price
+END;
+`
+      )
+    );
+
+    console.info("[v22] features.monthly_price added and seeded.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1407,4 +1439,5 @@ export const allMigrations: Migration[] = [
   migration019,
   migration020,
   migration021,
+  migration022,
 ];

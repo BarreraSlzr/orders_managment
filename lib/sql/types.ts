@@ -280,6 +280,7 @@ export interface FeaturesTable {
   id: Generated<string>;
   key: FeatureKey;
   trial_days: number;
+  monthly_price: number;
   created_at: ColumnType<Date, string | undefined, never>;
 }
 

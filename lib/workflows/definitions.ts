@@ -199,6 +199,19 @@ export const configureMpBillingWorkflow: WorkflowDefinition = {
         reason: z.string().min(3, "Reason es requerido"),
         transactionAmount: z.number().positive("Monto inválido"),
         currencyId: z.string().min(3, "Currency ID inválido"),
+        featureKeys: z
+          .array(
+            z.enum([
+              "sales_history_extended",
+              "mercadopago_sync",
+              "multi_manager_users",
+              "payment_method_advanced",
+              "quick_add_product",
+              "order_expenses",
+              "product_composition",
+            ]),
+          )
+          .min(1, "Selecciona al menos una funcionalidad"),
       }),
     },
     {
