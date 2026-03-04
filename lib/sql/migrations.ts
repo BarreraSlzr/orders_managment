@@ -1313,6 +1313,76 @@ ADD COLUMN IF NOT EXISTS payment_access_token TEXT;
   },
 };
 
+// ── v21: feature-scoped trial flags domain ──────────────────────────────────
+
+const migration021: Migration = {
+  version: 21,
+  description:
+    "Add features, plan_features, feature_usage, feature_entitlements for tenant-scoped trial feature flags",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+CREATE TABLE IF NOT EXISTS features (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key        TEXT NOT NULL UNIQUE,
+  trial_days INTEGER NOT NULL DEFAULT 30 CHECK (trial_days >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS plan_features (
+  plan_code  TEXT NOT NULL,
+  feature_id UUID NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+  enabled    BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (plan_code, feature_id)
+);
+
+CREATE TABLE IF NOT EXISTS feature_usage (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id            TEXT NOT NULL,
+  feature_id           UUID NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+  initiated_by_user_id TEXT NOT NULL,
+  first_used_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, feature_id)
+);
+
+CREATE TABLE IF NOT EXISTS feature_entitlements (
+  tenant_id         TEXT NOT NULL,
+  feature_id        UUID NOT NULL REFERENCES features(id) ON DELETE CASCADE,
+  trial_started_at  TIMESTAMPTZ,
+  trial_ends_at     TIMESTAMPTZ,
+  granted_by_plan   BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, feature_id)
+);
+
+CREATE INDEX IF NOT EXISTS feature_entitlements_tenant_idx
+  ON feature_entitlements (tenant_id);
+
+CREATE INDEX IF NOT EXISTS feature_entitlements_trial_idx
+  ON feature_entitlements (trial_ends_at)
+  WHERE trial_ends_at IS NOT NULL;
+
+INSERT INTO features (key, trial_days)
+VALUES
+  ('sales_history_extended', 30),
+  ('mercadopago_sync', 30),
+  ('multi_manager_users', 30),
+  ('payment_method_advanced', 30),
+  ('quick_add_product', 30),
+  ('order_expenses', 30),
+  ('product_composition', 30)
+ON CONFLICT (key) DO NOTHING;
+`
+      )
+    );
+
+    console.info("[v21] Feature-scoped trial flags schema created and seeded.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1336,4 +1406,5 @@ export const allMigrations: Migration[] = [
   migration018,
   migration019,
   migration020,
+  migration021,
 ];
