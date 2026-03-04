@@ -85,6 +85,19 @@ function flattenItems(items: OrderItem[]): FlatRow[] {
   );
 }
 
+function getLatestActivityKey(item: OrderItem): number {
+  let latest = 0;
+
+  for (const orderItem of item.items) {
+    if (orderItem.id > latest) latest = orderItem.id;
+    for (const extra of orderItem.extras) {
+      if (extra.id > latest) latest = extra.id;
+    }
+  }
+
+  return latest;
+}
+
 function FlatItemRow({ row }: { row: FlatRow }) {
   const { selectedItemIds, toggleItemSelection } = useReceiptEdit();
   const isChecked = selectedItemIds.has(`${row.id}`);
@@ -141,7 +154,11 @@ function FlatItemRow({ row }: { row: FlatRow }) {
 
 export function ReceiptItems({ items, listProducts }: ReceiptItemsProps) {
   const { selectedItemIds } = useReceiptEdit();
-  const itemsArray = Array.from(items.values());
+  const itemsArray = Array.from(items.values()).sort((a, b) => {
+    const byActivity = getLatestActivityKey(b) - getLatestActivityKey(a);
+    if (byActivity !== 0) return byActivity;
+    return a.name.localeCompare(b.name);
+  });
 
   // ── edit-mode: flat list sorted unselected → selected with separator ──────
   if (listProducts) {
