@@ -11,6 +11,7 @@ import { Fragment } from "react";
 interface ReceiptItemsProps {
   items: OrderItemsView["products"];
   listProducts: boolean;
+  canOrderExpenses?: boolean;
 }
 
 function itemExtrasTotal(extras: { price: number }[]): number {
@@ -98,7 +99,13 @@ function getLatestActivityKey(item: OrderItem): number {
   return latest;
 }
 
-function FlatItemRow({ row }: { row: FlatRow }) {
+function FlatItemRow({
+  row,
+  canOrderExpenses,
+}: {
+  row: FlatRow;
+  canOrderExpenses: boolean;
+}) {
   const { selectedItemIds, toggleItemSelection } = useReceiptEdit();
   const isChecked = selectedItemIds.has(`${row.id}`);
   const extrasPrice = itemExtrasTotal(row.extras);
@@ -137,7 +144,9 @@ function FlatItemRow({ row }: { row: FlatRow }) {
               ))}
             </div>
           )}
-          <ExtrasToggle orderItemId={row.id} currentExtras={row.extras} />
+          {canOrderExpenses && (
+            <ExtrasToggle orderItemId={row.id} currentExtras={row.extras} />
+          )}
         </div>
       </div>
       <div className="flex flex-col items-end">
@@ -152,7 +161,11 @@ function FlatItemRow({ row }: { row: FlatRow }) {
   );
 }
 
-export function ReceiptItems({ items, listProducts }: ReceiptItemsProps) {
+export function ReceiptItems({
+  items,
+  listProducts,
+  canOrderExpenses = true,
+}: ReceiptItemsProps) {
   const { selectedItemIds } = useReceiptEdit();
   const itemsArray = Array.from(items.values()).sort((a, b) => {
     const byActivity = getLatestActivityKey(b) - getLatestActivityKey(a);
@@ -169,13 +182,21 @@ export function ReceiptItems({ items, listProducts }: ReceiptItemsProps) {
     return (
       <div className="flex flex-col gap-4">
         {unselected.map((row) => (
-          <FlatItemRow key={row.id} row={row} />
+          <FlatItemRow
+            key={row.id}
+            row={row}
+            canOrderExpenses={canOrderExpenses}
+          />
         ))}
         {selected.length > 0 && (
           <>
             <hr className="border-dashed border-gray-400 my-1" />
             {selected.map((row) => (
-              <FlatItemRow key={row.id} row={row} />
+              <FlatItemRow
+                key={row.id}
+                row={row}
+                canOrderExpenses={canOrderExpenses}
+              />
             ))}
           </>
         )}

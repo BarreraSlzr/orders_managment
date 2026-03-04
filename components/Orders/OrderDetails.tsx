@@ -7,16 +7,22 @@ import { Button } from "../ui/button";
 export default function OrderDetails({
   order: selectedOrder,
   editMode = false,
+  canOrderExpenses = true,
 }: {
   order: OrderItemsView;
   editMode?: boolean;
+  canOrderExpenses?: boolean;
 }) {
   return (
     <div
       className="relative h-full min-h-0 overflow-visible"
       data-testid={TEST_IDS.ORDER_DETAILS.ROOT}
     >
-      <Receipt data={selectedOrder} editMode={editMode} />
+      <Receipt
+        data={selectedOrder}
+        editMode={editMode}
+        canOrderExpenses={canOrderExpenses}
+      />
       <Button
         className="absolute right-2 top-2 z-40 h-8 w-8 rounded-full border border-slate-200 bg-white/95 p-0 text-slate-700 shadow-sm hover:bg-white"
         variant="ghost"

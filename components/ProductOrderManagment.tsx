@@ -21,6 +21,7 @@ import TagList from "./Tag/List";
 interface ProductOrderManagmentProps {
   featureFlags?: {
     canQuickAddProduct?: boolean;
+    canOrderExpenses?: boolean;
   };
 }
 
@@ -30,6 +31,7 @@ export default function ProductOrderManagment({
   const { visibleProducts, visibleTags } = useProductsFilter();
   const { isAdmin, role, tenantName, username, session } = useAdminStatus();
   const canQuickAddProduct = featureFlags?.canQuickAddProduct ?? true;
+  const canOrderExpenses = featureFlags?.canOrderExpenses ?? true;
   
   // Use nuqs for settings modal state
   // Accepts: false (closed), true (open default tab), or "<tabName>" (open specific tab)
@@ -126,13 +128,13 @@ export default function ProductOrderManagment({
           products={visibleProducts}
           canQuickAddProduct={canQuickAddProduct}
         />
-        <Actions />
+        <Actions canOrderExpenses={canOrderExpenses} />
       </div>
     </main>
   );
 }
 
-const Actions = () => {
+const Actions = ({ canOrderExpenses }: { canOrderExpenses?: boolean }) => {
   const { currentProduct, handleEditProduct } = useProducts();
 
   // Disable scroll on body when modal is open
@@ -174,7 +176,7 @@ const Actions = () => {
   return (
     <div className="sticky bottom-4 flex justify-between items-end">
       <TagsSheet />
-      <OpenOrderSheet />
+      <OpenOrderSheet canOrderExpenses={canOrderExpenses} />
     </div>
   );
 };

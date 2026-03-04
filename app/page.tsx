@@ -14,6 +14,7 @@ export default async function Page() {
   };
 
   let canQuickAddProduct = true;
+  let canOrderExpenses = true;
 
   try {
     const cookieStore = await cookies();
@@ -27,10 +28,15 @@ export default async function Page() {
           tenantId: session.tenant_id,
           feature: "quick_add_product",
         });
+        canOrderExpenses = await peekFeatureAccess({
+          tenantId: session.tenant_id,
+          feature: "order_expenses",
+        });
       }
     }
   } catch {
     canQuickAddProduct = true;
+    canOrderExpenses = true;
   }
 
   return (
@@ -41,6 +47,7 @@ export default async function Page() {
             <ProductOrderManagment
               featureFlags={{
                 canQuickAddProduct,
+                canOrderExpenses,
               }}
             />
           </OrderItemsProductsProvider>

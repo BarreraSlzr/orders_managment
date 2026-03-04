@@ -19,6 +19,7 @@ import { ReceiptItems } from "./ReceiptItems";
 interface ReceiptProps {
   data: OrderItemsView;
   editMode?: boolean;
+  canOrderExpenses?: boolean;
   serverInfo?: {
     servedBy: string;
     time: string;
@@ -29,8 +30,9 @@ interface ReceiptProps {
 
 function ReceiptForm({
   serverInfo,
+  canOrderExpenses,
   children,
-}: PropsWithChildren<Pick<ReceiptProps, "serverInfo">>) {
+}: PropsWithChildren<Pick<ReceiptProps, "serverInfo" | "canOrderExpenses">>) {
   const {
     order,
     items,
@@ -135,7 +137,11 @@ function ReceiptForm({
               <hr className="border-dashed border-gray-400 mt-1"/>
             </div>
             <div className="px-3 pb-2 pt-2">
-              <ReceiptItems items={items} listProducts={editMode} />
+              <ReceiptItems
+                items={items}
+                listProducts={editMode}
+                canOrderExpenses={canOrderExpenses}
+              />
             </div>
           </div>
 
@@ -172,12 +178,18 @@ function ReceiptForm({
 export default function Receipt({
   data,
   editMode,
+  canOrderExpenses,
   serverInfo,
   children,
 }: PropsWithChildren<ReceiptProps>) {
   return (
     <ReceiptEditProvider data={data} defaultEditMode={editMode}>
-      <ReceiptForm serverInfo={serverInfo}>{children}</ReceiptForm>
+      <ReceiptForm
+        serverInfo={serverInfo}
+        canOrderExpenses={canOrderExpenses}
+      >
+        {children}
+      </ReceiptForm>
     </ReceiptEditProvider>
   );
 }

@@ -31,20 +31,24 @@ import Link from "next/link";
 import { parseAsString, useQueryState } from "nuqs";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { ItemSelectorContent } from "../Inventory/ItemSelector";
-import { OrderButton } from "./OrderButton";
-import { OrdersSheetLayout } from "./OrdersSheetLayout";
 import OrderStatus from "../Orders/OrderControls";
 import OrderDetails from "../Orders/OrderDetails";
 import OrdersList from "../Orders/OrderList";
 import { OrderSummary } from "../OrderSummary";
 import { Card } from "../ui/card";
 import { Spinner } from "../ui/spinner";
+import { OrderButton } from "./OrderButton";
+import { OrdersSheetLayout } from "./OrdersSheetLayout";
 
 // ───────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function OpenOrderSheet() {
+export function OpenOrderSheet({
+  canOrderExpenses = true,
+}: {
+  canOrderExpenses?: boolean;
+}) {
   const {
     currentOrder,
     selectedOrderIds,
@@ -82,9 +86,12 @@ export function OpenOrderSheet() {
     trpc.inventory.transactions.upsert.mutationOptions(),
   );
   const dailyGastosQuery = useQuery(
-    trpc.inventory.transactions.dailyGastos.queryOptions({
-      date: selectedDate,
-    }),
+    {
+      ...trpc.inventory.transactions.dailyGastos.queryOptions({
+        date: selectedDate,
+      }),
+      enabled: canOrderExpenses,
+    },
   );
   const dailyGastosTotal = (dailyGastosQuery.data ?? []).reduce(
     (sum, row) => sum + row.total_cost,
@@ -95,7 +102,10 @@ export function OpenOrderSheet() {
     0,
   );
   const gastosByDateQuery = useQuery(
-    trpc.inventory.transactions.byDate.queryOptions({ date: selectedDate }),
+    {
+      ...trpc.inventory.transactions.byDate.queryOptions({ date: selectedDate }),
+      enabled: canOrderExpenses,
+    },
   );
   const deleteGastoMutation = useMutation(
     trpc.inventory.transactions.delete.mutationOptions(),
@@ -247,7 +257,7 @@ export function OpenOrderSheet() {
     ? "multi"
     : currentOrder
       ? "single"
-      : gastoOpen
+      : canOrderExpenses && gastoOpen
         ? "gasto"
         : "idle";
 
@@ -415,7 +425,7 @@ export function OpenOrderSheet() {
                   ))
                 )}
                 {/* ── Gastos del día ── */}
-                {dailyGastosCount > 0 && (
+                {canOrderExpenses && dailyGastosCount > 0 && (
                   <div className="rounded border border-red-200 bg-red-50 overflow-hidden">
                     <button
                       onClick={() => setGastosListExpanded((v) => !v)}
@@ -588,7 +598,10 @@ export function OpenOrderSheet() {
                   />
                 )}
                 <div className="animate-slide-up min-h-0 overflow-hidden">
-                  <OrderDetails order={currentOrder} />
+                  <OrderDetails
+                    order={currentOrder}
+                    canOrderExpenses={canOrderExpenses}
+                  />
                 </div>
               </>
             ) : viewMode === "gasto" ? (
@@ -631,7 +644,7 @@ export function OpenOrderSheet() {
                   }}
                 />
               </div>
-            ) : (
+            ) : canOrderExpenses ? (
               /* ── Idle strip ──────────────────────────────── */
               <button
                 onClick={() => setGastoOpen(true)}
@@ -645,7 +658,7 @@ export function OpenOrderSheet() {
                   Agregar gasto
                 </span>
               </button>
-            )}
+            ) : null}
             </div>
           </OrdersSheetLayout.Bottom>
         </OrdersSheetLayout>
