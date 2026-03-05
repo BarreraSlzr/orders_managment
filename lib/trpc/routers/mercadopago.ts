@@ -73,6 +73,134 @@ const featureKeySchema = z.enum([
   "product_composition",
 ]);
 
+async function resolveDiscountCode(params: {
+  tenantId: string;
+  discountCode: string;
+  baseAmount: number;
+  selectedFeatureKeys: FeatureKey[];
+}): Promise<{
+  codeId: string;
+  code: string;
+  kind: "amount_off" | "feature_unlock";
+  appliedAmount: number;
+  unlockFeatureKeys: FeatureKey[];
+  unlockDays: number;
+}> {
+  const normalizedCode = params.discountCode.trim().toUpperCase();
+  if (!normalizedCode) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Discount code inválido.",
+    });
+  }
+
+  const row = await getDb()
+    .selectFrom("discount_codes")
+    .select([
+      "id",
+      "code",
+      "kind",
+      "amount_type",
+      "amount_value",
+      "unlock_days",
+      "feature_keys",
+      "active",
+      "starts_at",
+      "ends_at",
+      "max_redemptions",
+      "redeemed_count",
+    ])
+    .where(sql`UPPER(code)`, "=", normalizedCode)
+    .executeTakeFirst();
+
+  if (!row || !row.active) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Discount code no existe o está inactivo.",
+    });
+  }
+
+  const nowMs = Date.now();
+  const startsMs = row.starts_at ? new Date(row.starts_at).getTime() : null;
+  const endsMs = row.ends_at ? new Date(row.ends_at).getTime() : null;
+
+  if (typeof startsMs === "number" && startsMs > nowMs) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Discount code aún no está vigente.",
+    });
+  }
+
+  if (typeof endsMs === "number" && endsMs < nowMs) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Discount code expirado.",
+    });
+  }
+
+  if (
+    typeof row.max_redemptions === "number"
+    && row.max_redemptions > 0
+    && row.redeemed_count >= row.max_redemptions
+  ) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Discount code sin redenciones disponibles.",
+    });
+  }
+
+  const alreadyRedeemed = await getDb()
+    .selectFrom("discount_redemptions")
+    .select("id")
+    .where("discount_code_id", "=", row.id)
+    .where("tenant_id", "=", params.tenantId)
+    .executeTakeFirst();
+
+  if (alreadyRedeemed) {
+    throw new TRPCError({
+      code: "PRECONDITION_FAILED",
+      message: "Este tenant ya usó este discount code.",
+    });
+  }
+
+  if (row.kind === "amount_off") {
+    if (!row.amount_type || typeof row.amount_value !== "number") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Discount code de monto está mal configurado.",
+      });
+    }
+
+    const amount =
+      row.amount_type === "percentage"
+        ? (params.baseAmount * row.amount_value) / 100
+        : row.amount_value;
+
+    return {
+      codeId: row.id,
+      code: row.code,
+      kind: row.kind,
+      appliedAmount: Math.max(0, Number(amount)),
+      unlockFeatureKeys: [],
+      unlockDays: 0,
+    };
+  }
+
+  const unlockFeatures = (row.feature_keys?.length
+    ? row.feature_keys
+    : params.selectedFeatureKeys) as FeatureKey[];
+  const unlockDays = row.unlock_days ?? 30;
+
+  return {
+    codeId: row.id,
+    code: row.code,
+    kind: row.kind,
+    appliedAmount: 0,
+    unlockFeatureKeys: unlockFeatures,
+    unlockDays,
+  };
+}
+
 function getActorUserId(session: Record<string, unknown> | null): string {
   const userId = session && typeof session.sub === "string" ? session.sub : "";
   if (!userId) {
@@ -491,6 +619,7 @@ const billingRouter = router({
         transactionAmount: z.number().positive(),
         currencyId: z.string().min(3),
         featureKeys: z.array(featureKeySchema).min(1),
+        discountCode: z.string().trim().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -560,10 +689,21 @@ const billingRouter = router({
         0,
       );
 
-      if (normalizedAmount <= 0) {
+      const discount = input.discountCode
+        ? await resolveDiscountCode({
+            tenantId: ctx.tenantId,
+            discountCode: input.discountCode,
+            baseAmount: normalizedAmount,
+            selectedFeatureKeys: uniqueFeatureKeys,
+          })
+        : null;
+
+      const finalAmount = Math.max(0, normalizedAmount - (discount?.appliedAmount ?? 0));
+
+      if (finalAmount <= 0) {
         throw new TRPCError({
           code: "PRECONDITION_FAILED",
-          message: "Selecciona al menos una funcionalidad para activar billing.",
+          message: "El total final debe ser mayor a 0 para activar billing.",
         });
       }
 
@@ -603,7 +743,7 @@ const billingRouter = router({
       const plan = await createPreapprovalPlan({
         accessToken: normalizedBillingAccessToken,
         reason: input.reason,
-        transactionAmount: normalizedAmount,
+        transactionAmount: finalAmount,
         currencyId: input.currencyId,
         backUrl,
       });
@@ -631,9 +771,13 @@ const billingRouter = router({
             checkout_url: subscription.init_point ?? null,
             payer_email: payerEmail,
             reason: input.reason,
-            amount: normalizedAmount,
+            amount: finalAmount,
+            amount_before_discount: normalizedAmount,
             currency_id: input.currencyId,
             feature_keys: uniqueFeatureKeys,
+            discount_code: discount?.code ?? null,
+            discount_kind: discount?.kind ?? null,
+            discount_amount: discount?.appliedAmount ?? 0,
           },
           updated_at: now,
         })
@@ -646,14 +790,78 @@ const billingRouter = router({
               checkout_url: subscription.init_point ?? null,
               payer_email: payerEmail,
               reason: input.reason,
-              amount: normalizedAmount,
+              amount: finalAmount,
+              amount_before_discount: normalizedAmount,
               currency_id: input.currencyId,
               feature_keys: uniqueFeatureKeys,
+              discount_code: discount?.code ?? null,
+              discount_kind: discount?.kind ?? null,
+              discount_amount: discount?.appliedAmount ?? 0,
             },
             updated_at: sql<Date>`CURRENT_TIMESTAMP`,
           }),
         )
         .execute();
+
+      if (discount) {
+        await getDb()
+          .insertInto("discount_redemptions")
+          .values({
+            discount_code_id: discount.codeId,
+            tenant_id: ctx.tenantId,
+            subscription_id: subscription.id,
+            kind: discount.kind,
+            amount_applied: discount.appliedAmount || null,
+            feature_keys: discount.unlockFeatureKeys.length > 0 ? discount.unlockFeatureKeys : null,
+            unlock_starts_at:
+              discount.kind === "feature_unlock" ? sql`now()` : null,
+            unlock_ends_at:
+              discount.kind === "feature_unlock"
+                ? sql`now() + (${discount.unlockDays} * interval '1 day')`
+                : null,
+            metadata: {
+              code: discount.code,
+              unlockDays: discount.unlockDays,
+            },
+          })
+          .execute();
+
+        await getDb()
+          .updateTable("discount_codes")
+          .set({
+            redeemed_count: sql`discount_codes.redeemed_count + 1`,
+            updated_at: sql`now()`,
+          })
+          .where("id", "=", discount.codeId)
+          .execute();
+
+        if (discount.kind === "feature_unlock" && discount.unlockFeatureKeys.length > 0) {
+          const unlockRows = await getDb()
+            .selectFrom("features")
+            .select(["id", "key"])
+            .where("key", "in", discount.unlockFeatureKeys)
+            .execute();
+
+          for (const feature of unlockRows) {
+            await getDb()
+              .insertInto("feature_entitlements")
+              .values({
+                tenant_id: ctx.tenantId,
+                feature_id: feature.id,
+                trial_started_at: sql`now()`,
+                trial_ends_at: sql`now() + (${discount.unlockDays} * interval '1 day')`,
+                granted_by_plan: false,
+              })
+              .onConflict((oc) =>
+                oc.columns(["tenant_id", "feature_id"]).doUpdateSet({
+                  trial_ends_at: sql`GREATEST(COALESCE(feature_entitlements.trial_ends_at, now()), now() + (${discount.unlockDays} * interval '1 day'))`,
+                  updated_at: sql`now()`,
+                }),
+              )
+              .execute();
+          }
+        }
+      }
 
       await getDb()
         .insertInto("tenant_entitlements")
@@ -680,7 +888,10 @@ const billingRouter = router({
         subscriptionId: subscription.id,
         status: subscription.status,
         initPoint: subscription.init_point ?? null,
-        amount: normalizedAmount,
+        amount: finalAmount,
+        amountBeforeDiscount: normalizedAmount,
+        discountCode: discount?.code ?? null,
+        discountApplied: discount?.appliedAmount ?? 0,
         featureKeys: uniqueFeatureKeys,
       };
     }),

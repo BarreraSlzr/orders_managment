@@ -309,6 +309,41 @@ export interface FeatureEntitlementsTable {
   updated_at: ColumnType<Date, string | undefined, Date | undefined>;
 }
 
+export type DiscountKind = "amount_off" | "feature_unlock";
+export type DiscountAmountType = "percentage" | "fixed";
+
+export interface DiscountCodesTable {
+  id: Generated<string>;
+  code: string;
+  kind: DiscountKind;
+  amount_type: ColumnType<DiscountAmountType | null, DiscountAmountType | null | undefined, DiscountAmountType | null | undefined>;
+  amount_value: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+  unlock_days: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+  feature_keys: ColumnType<string[] | null, string[] | null | undefined, string[] | null | undefined>;
+  active: boolean;
+  starts_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  ends_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  max_redemptions: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+  redeemed_count: number;
+  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
+  updated_at: ColumnType<Date, string | undefined, Date | undefined>;
+}
+
+export interface DiscountRedemptionsTable {
+  id: Generated<string>;
+  discount_code_id: string;
+  tenant_id: string;
+  subscription_id: ColumnType<string | null, string | null | undefined, string | null | undefined>;
+  kind: DiscountKind;
+  amount_applied: ColumnType<number | null, number | null | undefined, number | null | undefined>;
+  feature_keys: ColumnType<string[] | null, string[] | null | undefined, string[] | null | undefined>;
+  unlock_starts_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  unlock_ends_at: ColumnType<Date | null, Date | null | undefined, Date | null | undefined>;
+  metadata: ColumnType<Record<string, unknown> | null, Record<string, unknown> | null | undefined, Record<string, unknown> | null | undefined>;
+  created_at: ColumnType<Date, string | undefined, never>;
+}
+
 // ─── Platform alerts ─────────────────────────────────────────────────────────
 
 export type AlertType = "claim" | "payment" | "mp_connect" | "subscription" | "trial" | "changelog" | "system";
@@ -378,6 +413,8 @@ export interface Database {
   plan_features: PlanFeaturesTable;
   feature_usage: FeatureUsageTable;
   feature_entitlements: FeatureEntitlementsTable;
+  discount_codes: DiscountCodesTable;
+  discount_redemptions: DiscountRedemptionsTable;
   platform_alerts: PlatformAlertsTable;
   // suppliers: SuppliersTable;
   // suppliers_item: SuppliersItemTable;

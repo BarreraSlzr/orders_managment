@@ -1415,6 +1415,65 @@ END;
   },
 };
 
+// ── v23: discount codes + redemption ledger ───────────────────────────────
+
+const migration023: Migration = {
+  version: 23,
+  description:
+    "Add discount_codes and discount_redemptions for billing discounts and temporary feature unlocks",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+CREATE TABLE IF NOT EXISTS discount_codes (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  code            TEXT NOT NULL UNIQUE,
+  kind            TEXT NOT NULL CHECK (kind IN ('amount_off', 'feature_unlock')),
+  amount_type     TEXT NULL CHECK (amount_type IN ('percentage', 'fixed')),
+  amount_value    NUMERIC(12,2) NULL,
+  unlock_days     INTEGER NULL,
+  feature_keys    TEXT[] NULL,
+  active          BOOLEAN NOT NULL DEFAULT TRUE,
+  starts_at       TIMESTAMPTZ NULL,
+  ends_at         TIMESTAMPTZ NULL,
+  max_redemptions INTEGER NULL,
+  redeemed_count  INTEGER NOT NULL DEFAULT 0,
+  metadata        JSONB NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS discount_codes_active_idx
+  ON discount_codes (active, starts_at, ends_at);
+
+CREATE TABLE IF NOT EXISTS discount_redemptions (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  discount_code_id UUID NOT NULL REFERENCES discount_codes(id) ON DELETE CASCADE,
+  tenant_id        TEXT NOT NULL,
+  subscription_id  TEXT NULL,
+  kind             TEXT NOT NULL CHECK (kind IN ('amount_off', 'feature_unlock')),
+  amount_applied   NUMERIC(12,2) NULL,
+  feature_keys     TEXT[] NULL,
+  unlock_starts_at TIMESTAMPTZ NULL,
+  unlock_ends_at   TIMESTAMPTZ NULL,
+  metadata         JSONB NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (discount_code_id, tenant_id, subscription_id)
+);
+
+CREATE INDEX IF NOT EXISTS discount_redemptions_tenant_idx
+  ON discount_redemptions (tenant_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS discount_redemptions_code_idx
+  ON discount_redemptions (discount_code_id, created_at DESC);
+`
+      )
+    );
+
+    console.info("[v23] discount code tables created.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1440,4 +1499,5 @@ export const allMigrations: Migration[] = [
   migration020,
   migration021,
   migration022,
+  migration023,
 ];
