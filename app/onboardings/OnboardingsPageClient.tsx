@@ -11,7 +11,7 @@ import { useAdminStatus } from "@/hooks/useAdminStatus";
 import { useTRPC } from "@/lib/trpc/react";
 import { getAvailableWorkflows } from "@/lib/workflows/definitions";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, CreditCard, Loader2, Pencil, Plus, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowRight, BarChart3, CheckCircle2, CreditCard, Loader2, Pencil, Plus, RefreshCw, XCircle } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -163,6 +163,29 @@ export default function OnboardingsPageClient({
               isError={mpEnvStatusQuery.isError || mpEnvStatusQuery.data?.ok === false}
               onRetry={() => void mpEnvStatusQuery.refetch()}
             />
+            <div className="rounded-2xl border bg-white/90 p-5">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-emerald-600" />
+                <span className="text-xs uppercase tracking-[0.18em] text-slate-400">
+                  Billing Ops
+                </span>
+              </div>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">
+                Billings + discounts
+              </h2>
+              <p className="mt-2 text-sm text-slate-600">
+                Administra descuentos y revisa uso por tenant para análisis de facturación.
+              </p>
+              <div className="mt-4">
+                <Link
+                  href="/onboardings/admin-billing"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-900 px-3 py-1 text-xs font-semibold text-slate-900 transition hover:bg-slate-900 hover:text-white"
+                >
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  Abrir dashboard
+                </Link>
+              </div>
+            </div>
           </div>
         </section>
       )}

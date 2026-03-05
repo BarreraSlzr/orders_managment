@@ -199,6 +199,7 @@ export const configureMpBillingWorkflow: WorkflowDefinition = {
         reason: z.string().min(3, "Reason es requerido"),
         transactionAmount: z.number().positive("Monto inválido"),
         currencyId: z.string().min(3, "Currency ID inválido"),
+        discountCode: z.string().trim().max(64).optional(),
         featureKeys: z
           .array(
             z.enum([

@@ -20,6 +20,29 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { adminProcedure, publicProcedure, router } from "../init";
 
+const featureKeySchema = z.enum([
+  "sales_history_extended",
+  "mercadopago_sync",
+  "multi_manager_users",
+  "payment_method_advanced",
+  "quick_add_product",
+  "order_expenses",
+  "product_composition",
+]);
+
+const discountCodeSchema = z.object({
+  code: z.string().trim().min(3).max(64),
+  kind: z.enum(["amount_off", "feature_unlock"]),
+  amountType: z.enum(["percentage", "fixed"]).optional(),
+  amountValue: z.number().min(0).optional(),
+  unlockDays: z.number().int().min(1).max(365).optional(),
+  featureKeys: z.array(featureKeySchema).optional(),
+  active: z.boolean().optional(),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime().optional(),
+  maxRedemptions: z.number().int().min(1).optional(),
+});
+
 async function logAdminAccess(params: {
   action: string;
   adminId?: string;
@@ -835,6 +858,249 @@ export const adminRouter = router({
         status: subscription.status,
         initPoint: subscription.init_point ?? null,
       };
+    }),
+
+  billingTenantsDashboard: adminProcedure
+    .input(z.object({ tenantId: z.string().uuid().optional() }).optional())
+    .query(async ({ input, ctx }) => {
+      await logAdminAccess({
+        action: "billingTenantsDashboard",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        metadata: { tenantId: input?.tenantId ?? null },
+      });
+
+      const tenantsQuery = getDb()
+        .selectFrom("tenants")
+        .leftJoin("tenant_entitlements", "tenant_entitlements.tenant_id", "tenants.id")
+        .select([
+          "tenants.id",
+          "tenants.name",
+          "tenant_entitlements.subscription_status",
+          "tenant_entitlements.features_enabled",
+          "tenant_entitlements.updated_at",
+        ])
+        .orderBy("tenants.name", "asc");
+
+      const tenants = input?.tenantId
+        ? await tenantsQuery.where("tenants.id", "=", input.tenantId).execute()
+        : await tenantsQuery.execute();
+
+      const targetTenantIds = tenants.map((tenant) => tenant.id);
+      if (targetTenantIds.length === 0) {
+        return { tenants: [], summary: { totalTenants: 0, withSubscription: 0 } };
+      }
+
+      const subscriptions = await getDb()
+        .selectFrom("tenant_subscriptions")
+        .select([
+          "tenant_id",
+          "external_subscription_id",
+          "status",
+          "current_period_end",
+          "metadata",
+          "updated_at",
+        ])
+        .where("tenant_id", "in", targetTenantIds)
+        .where("provider", "=", "mercadopago")
+        .orderBy("updated_at", "desc")
+        .execute();
+
+      const usage = await getDb()
+        .selectFrom("feature_usage")
+        .innerJoin("features", "features.id", "feature_usage.feature_id")
+        .select([
+          "feature_usage.tenant_id",
+          "features.key",
+          sql<number>`count(*)`.as("usage_count"),
+          sql<Date>`max(feature_usage.first_used_at)`.as("last_used_at"),
+        ])
+        .where("feature_usage.tenant_id", "in", targetTenantIds)
+        .groupBy(["feature_usage.tenant_id", "features.key"])
+        .execute();
+
+      const redemptions = await getDb()
+        .selectFrom("discount_redemptions")
+        .innerJoin("discount_codes", "discount_codes.id", "discount_redemptions.discount_code_id")
+        .select([
+          "discount_redemptions.tenant_id",
+          "discount_redemptions.created_at",
+          "discount_redemptions.kind",
+          "discount_redemptions.amount_applied",
+          "discount_redemptions.feature_keys",
+          "discount_redemptions.unlock_ends_at",
+          "discount_codes.code",
+        ])
+        .where("discount_redemptions.tenant_id", "in", targetTenantIds)
+        .orderBy("discount_redemptions.created_at", "desc")
+        .execute();
+
+      const latestSubscriptionByTenant = new Map<string, (typeof subscriptions)[number]>();
+      for (const sub of subscriptions) {
+        if (!latestSubscriptionByTenant.has(sub.tenant_id)) {
+          latestSubscriptionByTenant.set(sub.tenant_id, sub);
+        }
+      }
+
+      const usageByTenant = new Map<string, typeof usage>();
+      for (const row of usage) {
+        const bucket = usageByTenant.get(row.tenant_id) ?? [];
+        bucket.push(row);
+        usageByTenant.set(row.tenant_id, bucket);
+      }
+
+      const redemptionsByTenant = new Map<string, typeof redemptions>();
+      for (const row of redemptions) {
+        const bucket = redemptionsByTenant.get(row.tenant_id) ?? [];
+        bucket.push(row);
+        redemptionsByTenant.set(row.tenant_id, bucket);
+      }
+
+      const payload = tenants.map((tenant) => {
+        const latestSub = latestSubscriptionByTenant.get(tenant.id) ?? null;
+        return {
+          id: tenant.id,
+          name: tenant.name,
+          entitlement: {
+            subscriptionStatus: tenant.subscription_status ?? "none",
+            featuresEnabled: tenant.features_enabled ?? [],
+            updatedAt: tenant.updated_at ?? null,
+          },
+          subscription: latestSub
+            ? {
+                id: latestSub.external_subscription_id,
+                status: latestSub.status,
+                currentPeriodEnd: latestSub.current_period_end,
+                updatedAt: latestSub.updated_at,
+                metadata: latestSub.metadata ?? null,
+              }
+            : null,
+          usage: (usageByTenant.get(tenant.id) ?? []).map((row) => ({
+            key: row.key,
+            usageCount: Number(row.usage_count),
+            lastUsedAt: row.last_used_at,
+          })),
+          discounts: (redemptionsByTenant.get(tenant.id) ?? []).map((row) => ({
+            code: row.code,
+            kind: row.kind,
+            amountApplied: row.amount_applied,
+            featureKeys: row.feature_keys,
+            unlockEndsAt: row.unlock_ends_at,
+            createdAt: row.created_at,
+          })),
+        };
+      });
+
+      return {
+        tenants: payload,
+        summary: {
+          totalTenants: payload.length,
+          withSubscription: payload.filter((tenant) => tenant.subscription).length,
+        },
+      };
+    }),
+
+  discountCodesList: adminProcedure.query(async ({ ctx }) => {
+    await logAdminAccess({
+      action: "discountCodesList",
+      adminId: ctx.session?.sub,
+      role: ctx.session?.role,
+      tenantId: ctx.session?.tenant_id,
+    });
+
+    return getDb()
+      .selectFrom("discount_codes")
+      .selectAll()
+      .orderBy("created_at", "desc")
+      .execute();
+  }),
+
+  discountCodeUpsert: adminProcedure
+    .input(discountCodeSchema)
+    .mutation(async ({ input, ctx }) => {
+      const code = input.code.trim().toUpperCase();
+      const isAmountOff = input.kind === "amount_off";
+      const isFeatureUnlock = input.kind === "feature_unlock";
+
+      if (isAmountOff && (!input.amountType || typeof input.amountValue !== "number")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Amount discounts require amountType and amountValue.",
+        });
+      }
+
+      if (isFeatureUnlock && typeof input.unlockDays !== "number") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Feature unlock discounts require unlockDays.",
+        });
+      }
+
+      await logAdminAccess({
+        action: "discountCodeUpsert",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        metadata: { code, kind: input.kind },
+      });
+
+      const row = await getDb()
+        .insertInto("discount_codes")
+        .values({
+          code,
+          kind: input.kind,
+          amount_type: isAmountOff ? (input.amountType ?? null) : null,
+          amount_value: isAmountOff ? (input.amountValue ?? null) : null,
+          unlock_days: isFeatureUnlock ? (input.unlockDays ?? null) : null,
+          feature_keys: isFeatureUnlock ? (input.featureKeys ?? null) : null,
+          active: input.active ?? true,
+          starts_at: input.startsAt ?? null,
+          ends_at: input.endsAt ?? null,
+          max_redemptions: input.maxRedemptions ?? null,
+          updated_at: getIsoTimestamp(),
+        })
+        .onConflict((oc) =>
+          oc.column("code").doUpdateSet({
+            kind: input.kind,
+            amount_type: isAmountOff ? (input.amountType ?? null) : null,
+            amount_value: isAmountOff ? (input.amountValue ?? null) : null,
+            unlock_days: isFeatureUnlock ? (input.unlockDays ?? null) : null,
+            feature_keys: isFeatureUnlock ? (input.featureKeys ?? null) : null,
+            active: input.active ?? true,
+            starts_at: input.startsAt ?? null,
+            ends_at: input.endsAt ?? null,
+            max_redemptions: input.maxRedemptions ?? null,
+            updated_at: getIsoTimestamp(),
+          }),
+        )
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      return row;
+    }),
+
+  discountCodeSetActive: adminProcedure
+    .input(z.object({ id: z.string().uuid(), active: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      await logAdminAccess({
+        action: "discountCodeSetActive",
+        adminId: ctx.session?.sub,
+        role: ctx.session?.role,
+        tenantId: ctx.session?.tenant_id,
+        metadata: input,
+      });
+
+      await getDb()
+        .updateTable("discount_codes")
+        .set({
+          active: input.active,
+          updated_at: getIsoTimestamp(),
+        })
+        .where("id", "=", input.id)
+        .execute();
+
+      return { ok: true as const };
     }),
 
   /**

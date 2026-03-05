@@ -418,6 +418,10 @@ export default function OnboardingRunnerPageClient({
         transactionAmount: Number(data.transactionAmount || 0),
         currencyId: String(data.currencyId || "MXN"),
         featureKeys: selectedFeatureKeys,
+        discountCode:
+          typeof data.discountCode === "string" && data.discountCode.trim()
+            ? data.discountCode.trim()
+            : undefined,
       });
 
       setCompletion({
@@ -430,6 +434,7 @@ export default function OnboardingRunnerPageClient({
           { label: "Subscription ID", value: result.subscriptionId },
           { label: "Status", value: result.status },
           { label: "Features", value: selectedFeatureKeys.join(", ") || "—" },
+          { label: "Discount", value: (result.discountCode as string | null) ?? "—" },
           { label: "Checkout", value: result.initPoint || "—" },
         ],
       });
@@ -567,6 +572,13 @@ export default function OnboardingRunnerPageClient({
                 value: Array.isArray(data.featureKeys)
                   ? (data.featureKeys as string[]).join(", ")
                   : "—",
+              },
+              {
+                label: "Discount",
+                value:
+                  typeof data.discountCode === "string" && data.discountCode.trim()
+                    ? data.discountCode
+                    : "—",
               },
               { label: "Monto", value: String(data.transactionAmount || "") },
               { label: "Moneda", value: String(data.currencyId || "") },

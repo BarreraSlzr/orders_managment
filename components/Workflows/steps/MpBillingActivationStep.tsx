@@ -26,6 +26,7 @@ export function MpBillingActivationStep({
   const trpc = useTRPC();
   const catalogQuery = useQuery(trpc.mercadopago.billing.featureCatalog.queryOptions());
   const reason = typeof data.reason === "string" ? data.reason : "Orders Management — Plan Mensual";
+  const discountCode = typeof data.discountCode === "string" ? data.discountCode : "";
   const selectedFeatureKeys = Array.isArray(data.featureKeys)
     ? (data.featureKeys as string[])
     : [];
@@ -148,6 +149,18 @@ export function MpBillingActivationStep({
             placeholder="MXN"
           />
         </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="billing-discount">Discount code (opcional)</Label>
+        <Input
+          id="billing-discount"
+          value={discountCode}
+          onChange={(e) =>
+            onChange({ data: { discountCode: e.target.value.toUpperCase() } })
+          }
+          placeholder="EJ: WELCOME10"
+        />
       </div>
 
       <Card className="font-mono">
