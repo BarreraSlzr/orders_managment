@@ -201,12 +201,47 @@ async function resolveDiscountCode(params: {
   };
 }
 
+async function resolveFeatureAmount(params: {
+  featureKeys: FeatureKey[];
+}): Promise<{ amount: number; priceByKey: Map<FeatureKey, number> }> {
+  const uniqueFeatureKeys = Array.from(new Set(params.featureKeys));
+  const pricedFeatures = await getDb()
+    .selectFrom("features")
+    .select(["key", "monthly_price"])
+    .where("key", "in", uniqueFeatureKeys)
+    .execute();
+
+  const priceByKey = new Map<FeatureKey, number>(
+    pricedFeatures.map((feature) => [
+      feature.key,
+      Number(feature.monthly_price) || BILLING_FEATURE_PRICING_FALLBACK[feature.key],
+    ]),
+  );
+
+  const amount = uniqueFeatureKeys.reduce(
+    (sum, key) =>
+      sum +
+      (priceByKey.get(key) ?? BILLING_FEATURE_PRICING_FALLBACK[key] ?? 0),
+    0,
+  );
+
+  return { amount, priceByKey };
+}
+
 function getActorUserId(session: Record<string, unknown> | null): string {
   const userId = session && typeof session.sub === "string" ? session.sub : "";
   if (!userId) {
     throw new TRPCError({ code: "UNAUTHORIZED" });
   }
   return userId;
+}
+
+function getSanitizedDiscountPreviewMessage(error: TRPCError): string {
+  if (error.code === "BAD_REQUEST") {
+    return "Discount code inválido.";
+  }
+
+  return "Discount code inválido o no disponible para este tenant.";
 }
 
 async function assertMercadoPagoSyncFeature(params: {
@@ -538,6 +573,86 @@ const paymentRouter = router({
 // ─── Billing sub-router ───────────────────────────────────────────────────────
 
 const billingRouter = router({
+  previewDiscount: managerProcedure
+    .input(
+      z.object({
+        featureKeys: z.array(featureKeySchema).min(1),
+        discountCode: z.string().trim().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const uniqueFeatureKeys = Array.from(new Set(input.featureKeys));
+      const base = await resolveFeatureAmount({ featureKeys: uniqueFeatureKeys });
+      const baseAmount = base.amount;
+
+      if (!input.discountCode?.trim()) {
+        return {
+          valid: true,
+          message: null,
+          baseAmount,
+          discountApplied: 0,
+          finalAmount: baseAmount,
+          kind: null,
+          unlockFeatureKeys: [] as FeatureKey[],
+          unlockDays: 0,
+        };
+      }
+
+      try {
+        const discount = await resolveDiscountCode({
+          tenantId: ctx.tenantId,
+          discountCode: input.discountCode,
+          baseAmount,
+          selectedFeatureKeys: uniqueFeatureKeys,
+        });
+
+        const finalAmount = Math.max(0, baseAmount - (discount.appliedAmount ?? 0));
+        if (finalAmount <= 0) {
+          return {
+            valid: false,
+            message: "El descuento deja el total en 0. Ajusta selección o código.",
+            baseAmount,
+            discountApplied: discount.appliedAmount,
+            finalAmount,
+            kind: discount.kind,
+            unlockFeatureKeys: discount.unlockFeatureKeys,
+            unlockDays: discount.unlockDays,
+          };
+        }
+
+        return {
+          valid: true,
+          message: null,
+          baseAmount,
+          discountApplied: discount.appliedAmount,
+          finalAmount,
+          kind: discount.kind,
+          unlockFeatureKeys: discount.unlockFeatureKeys,
+          unlockDays: discount.unlockDays,
+        };
+      } catch (error) {
+        if (error instanceof TRPCError) {
+          console.warn("[billing.previewDiscount] discount validation rejected", {
+            code: error.code,
+            tenantId: ctx.tenantId,
+          });
+
+          return {
+            valid: false,
+            message: getSanitizedDiscountPreviewMessage(error),
+            baseAmount,
+            discountApplied: 0,
+            finalAmount: baseAmount,
+            kind: null,
+            unlockFeatureKeys: [] as FeatureKey[],
+            unlockDays: 0,
+          };
+        }
+
+        throw error;
+      }
+    }),
+
   featureCatalog: managerProcedure.query(async ({ ctx }) => {
     const features = await getDb()
       .selectFrom("features")
@@ -671,23 +786,9 @@ const billingRouter = router({
         "https://orders.internetfriends.xyz";
       const backUrl = `${origin}/onboardings/configure-mp-billing`;
       const uniqueFeatureKeys = Array.from(new Set(input.featureKeys));
-      const pricedFeatures = await getDb()
-        .selectFrom("features")
-        .select(["key", "monthly_price"])
-        .where("key", "in", uniqueFeatureKeys)
-        .execute();
-
-      const priceByKey = new Map<FeatureKey, number>(
-        pricedFeatures.map((feature) => [
-          feature.key,
-          Number(feature.monthly_price) || BILLING_FEATURE_PRICING_FALLBACK[feature.key],
-        ]),
-      );
-
-      const normalizedAmount = uniqueFeatureKeys.reduce(
-        (sum, key) => sum + (priceByKey.get(key) ?? BILLING_FEATURE_PRICING_FALLBACK[key] ?? 0),
-        0,
-      );
+      const normalizedAmount = (await resolveFeatureAmount({
+        featureKeys: uniqueFeatureKeys,
+      })).amount;
 
       const discount = input.discountCode
         ? await resolveDiscountCode({

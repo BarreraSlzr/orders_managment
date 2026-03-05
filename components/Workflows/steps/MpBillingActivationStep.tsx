@@ -44,6 +44,25 @@ export function MpBillingActivationStep({
     }, 0);
   }, [catalog, selectedFeatureKeys]);
 
+  const previewQuery = useQuery({
+    ...trpc.mercadopago.billing.previewDiscount.queryOptions({
+      featureKeys: selectedFeatureKeys as Array<
+        | "sales_history_extended"
+        | "mercadopago_sync"
+        | "multi_manager_users"
+        | "payment_method_advanced"
+        | "quick_add_product"
+        | "order_expenses"
+        | "product_composition"
+      >,
+      discountCode: discountCode.trim() ? discountCode.trim() : undefined,
+    }),
+    enabled: selectedFeatureKeys.length > 0,
+  });
+
+  const finalTotal = previewQuery.data?.finalAmount ?? total;
+  const discountApplied = previewQuery.data?.discountApplied ?? 0;
+
   useEffect(() => {
     if (!catalog) return;
 
@@ -171,6 +190,27 @@ export function MpBillingActivationStep({
           </p>
         </CardHeader>
         <CardContent className="space-y-2">
+          {discountCode.trim() && previewQuery.isLoading && (
+            <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              Validando discount code...
+            </div>
+          )}
+          {discountCode.trim() && previewQuery.data?.valid === false && (
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {previewQuery.data.message}
+            </div>
+          )}
+          {discountCode.trim() && previewQuery.data?.valid === true && discountApplied > 0 && (
+            <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+              Descuento aplicado: -{formatPrice(discountApplied)}
+            </div>
+          )}
+          {discountCode.trim() && previewQuery.data?.valid === true && previewQuery.data?.kind === "feature_unlock" && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+              Feature unlock por {previewQuery.data.unlockDays} días ({previewQuery.data.unlockFeatureKeys.join(", ") || "selección actual"}).
+            </div>
+          )}
+
           {catalogQuery.isLoading ? (
             <div className="rounded-md border border-dashed p-3 text-xs text-slate-500">
               Cargando funcionalidades...
@@ -226,7 +266,10 @@ export function MpBillingActivationStep({
           )}
 
           <div className="border-t border-dashed pt-2">
-            <ReceiptFooter label="TOTAL MENSUAL:" orderTotal={total} />
+            {discountApplied > 0 && (
+              <ReceiptFooter label="SUBTOTAL:" orderTotal={total} />
+            )}
+            <ReceiptFooter label="TOTAL MENSUAL:" orderTotal={finalTotal} />
           </div>
         </CardContent>
       </Card>

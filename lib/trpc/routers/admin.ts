@@ -1022,6 +1022,8 @@ export const adminRouter = router({
       const code = input.code.trim().toUpperCase();
       const isAmountOff = input.kind === "amount_off";
       const isFeatureUnlock = input.kind === "feature_unlock";
+      const startsAt = input.startsAt ? new Date(input.startsAt) : null;
+      const endsAt = input.endsAt ? new Date(input.endsAt) : null;
 
       if (isAmountOff && (!input.amountType || typeof input.amountValue !== "number")) {
         throw new TRPCError({
@@ -1055,10 +1057,10 @@ export const adminRouter = router({
           unlock_days: isFeatureUnlock ? (input.unlockDays ?? null) : null,
           feature_keys: isFeatureUnlock ? (input.featureKeys ?? null) : null,
           active: input.active ?? true,
-          starts_at: input.startsAt ?? null,
-          ends_at: input.endsAt ?? null,
+          redeemed_count: 0,
+          starts_at: startsAt,
+          ends_at: endsAt,
           max_redemptions: input.maxRedemptions ?? null,
-          updated_at: getIsoTimestamp(),
         })
         .onConflict((oc) =>
           oc.column("code").doUpdateSet({
@@ -1068,10 +1070,10 @@ export const adminRouter = router({
             unlock_days: isFeatureUnlock ? (input.unlockDays ?? null) : null,
             feature_keys: isFeatureUnlock ? (input.featureKeys ?? null) : null,
             active: input.active ?? true,
-            starts_at: input.startsAt ?? null,
-            ends_at: input.endsAt ?? null,
+            starts_at: startsAt,
+            ends_at: endsAt,
             max_redemptions: input.maxRedemptions ?? null,
-            updated_at: getIsoTimestamp(),
+            updated_at: sql<Date>`CURRENT_TIMESTAMP`,
           }),
         )
         .returningAll()
@@ -1095,7 +1097,7 @@ export const adminRouter = router({
         .updateTable("discount_codes")
         .set({
           active: input.active,
-          updated_at: getIsoTimestamp(),
+          updated_at: sql<Date>`CURRENT_TIMESTAMP`,
         })
         .where("id", "=", input.id)
         .execute();
