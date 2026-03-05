@@ -73,6 +73,28 @@ const featureKeySchema = z.enum([
   "product_composition",
 ]);
 
+const DISCOUNT_PREVIEW_RATE_LIMIT = {
+  windowMs: 60_000,
+  maxRequests: 180,
+};
+
+let discountPreviewHits: number[] = [];
+
+function assertGlobalDiscountPreviewRateLimit(): void {
+  const now = Date.now();
+  const minTs = now - DISCOUNT_PREVIEW_RATE_LIMIT.windowMs;
+  discountPreviewHits = discountPreviewHits.filter((ts) => ts >= minTs);
+
+  if (discountPreviewHits.length >= DISCOUNT_PREVIEW_RATE_LIMIT.maxRequests) {
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message: "Too many discount preview requests. Try again in a minute.",
+    });
+  }
+
+  discountPreviewHits.push(now);
+}
+
 async function resolveDiscountCode(params: {
   tenantId: string;
   discountCode: string;
@@ -581,6 +603,8 @@ const billingRouter = router({
       }),
     )
     .query(async ({ ctx, input }) => {
+      assertGlobalDiscountPreviewRateLimit();
+
       const uniqueFeatureKeys = Array.from(new Set(input.featureKeys));
       const base = await resolveFeatureAmount({ featureKeys: uniqueFeatureKeys });
       const baseAmount = base.amount;
