@@ -1474,6 +1474,124 @@ CREATE INDEX IF NOT EXISTS discount_redemptions_code_idx
   },
 };
 
+// ── v24: bootstrap one-year feature unlock for existing tenants ───────────
+
+const migration024: Migration = {
+  version: 24,
+  description:
+    "Seed one-year feature unlock discount redemptions for all current tenants and extend feature entitlements",
+  async up() {
+    await db.executeQuery(
+      CompiledQuery.raw(
+        `
+WITH upsert_code AS (
+  INSERT INTO discount_codes (
+    code,
+    kind,
+    unlock_days,
+    feature_keys,
+    active,
+    starts_at,
+    ends_at,
+    metadata
+  )
+  VALUES (
+    'ALL_FEATURES_1Y',
+    'feature_unlock',
+    365,
+    (SELECT ARRAY_AGG(key ORDER BY key) FROM features),
+    FALSE,
+    now(),
+    now() + interval '1 year',
+    jsonb_build_object(
+      'source', 'migration024',
+      'purpose', 'bootstrap current tenants with 1y feature unlock'
+    )
+  )
+  ON CONFLICT (code) DO UPDATE SET
+    unlock_days = EXCLUDED.unlock_days,
+    feature_keys = EXCLUDED.feature_keys,
+    starts_at = EXCLUDED.starts_at,
+    ends_at = EXCLUDED.ends_at,
+    updated_at = now()
+  RETURNING id
+),
+selected_code AS (
+  SELECT id FROM upsert_code
+  UNION ALL
+  SELECT id FROM discount_codes WHERE code = 'ALL_FEATURES_1Y'
+  LIMIT 1
+),
+all_features AS (
+  SELECT ARRAY_AGG(key ORDER BY key) AS keys FROM features
+),
+inserted_redemptions AS (
+  INSERT INTO discount_redemptions (
+    discount_code_id,
+    tenant_id,
+    subscription_id,
+    kind,
+    feature_keys,
+    unlock_starts_at,
+    unlock_ends_at,
+    metadata
+  )
+  SELECT
+    sc.id,
+    t.id,
+    'migration_bootstrap_20260304',
+    'feature_unlock',
+    af.keys,
+    now(),
+    now() + interval '1 year',
+    jsonb_build_object('source', 'migration024')
+  FROM tenants t
+  CROSS JOIN selected_code sc
+  CROSS JOIN all_features af
+  ON CONFLICT (discount_code_id, tenant_id, subscription_id) DO NOTHING
+  RETURNING id
+),
+touch_code AS (
+  UPDATE discount_codes
+  SET
+    redeemed_count = (
+      SELECT COUNT(*)
+      FROM discount_redemptions dr
+      WHERE dr.discount_code_id = discount_codes.id
+    ),
+    updated_at = now()
+  WHERE id = (SELECT id FROM selected_code)
+  RETURNING id
+)
+INSERT INTO feature_entitlements (
+  tenant_id,
+  feature_id,
+  trial_started_at,
+  trial_ends_at,
+  granted_by_plan
+)
+SELECT
+  t.id,
+  f.id,
+  now(),
+  now() + interval '1 year',
+  FALSE
+FROM tenants t
+CROSS JOIN features f
+ON CONFLICT (tenant_id, feature_id) DO UPDATE SET
+  trial_ends_at = GREATEST(
+    COALESCE(feature_entitlements.trial_ends_at, now()),
+    now() + interval '1 year'
+  ),
+  updated_at = now();
+`
+      )
+    );
+
+    console.info("[v24] bootstrap one-year feature unlock redemptions seeded for existing tenants.");
+  },
+};
+
 // ── Export all migrations ────────────────────────────────────────────────────
 
 export const allMigrations: Migration[] = [
@@ -1500,4 +1618,5 @@ export const allMigrations: Migration[] = [
   migration021,
   migration022,
   migration023,
+  migration024,
 ];
